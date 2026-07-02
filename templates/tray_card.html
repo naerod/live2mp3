@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Oswald", sans-serif;
+    background: #ffffff; color: #f2f2f2;
+    width: 210mm; height: 297mm;
+  }
+  /* Planche A4, J-card centré en haut */
+  .sheet { position: relative; width: 210mm; height: 297mm; padding-top: 20mm; }
+  .jcard {
+    position: relative; margin: 0 auto;
+    width: 150mm;      /* 6.5 + 137 + 6.5 = 150 mm */
+    height: 118mm;
+    display: flex;
+    background: #0a0a0a;
+    outline: 0.2mm dashed #888;   /* traits de coupe */
+  }
+  .jcard::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    opacity: .12; background-image: radial-gradient(#fff .5px, transparent .6px);
+    background-size: 3px 3px;
+  }
+  .spine {
+    width: 6.5mm; height: 100%;
+    border-left: 0.2mm dotted #d81f18;   /* ligne de pli */
+    border-right: 0.2mm dotted #d81f18;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Anton", sans-serif; text-transform: uppercase;
+    font-size: 7pt; color: #d81f18; letter-spacing: 1px;
+    background: #0d0f13;
+  }
+  .back-panel {
+    width: 137mm; height: 100%; padding: 6mm 7mm;
+    display: flex; flex-direction: column;
+  }
+  .head { border-bottom: 1px solid #26282f; padding-bottom: 3mm; margin-bottom: 3mm; }
+  .head .tour { font-family: "Anton", sans-serif; text-transform: uppercase;
+    color: #d81f18; font-size: 12pt; line-height: 1; }
+  .head .album { font-family: "Pirata One", serif; font-size: 18pt; line-height: 1;
+    margin-top: 1mm; }
+  .head .sub { font-size: 8pt; color: #8893f2; margin-top: 1.5mm; }
+  .tracklist {
+    flex: 1; columns: 2; column-gap: 8mm; font-size: 8.5pt; color: #dfe0e6;
+  }
+  .tracklist ol { list-style: none; counter-reset: t; }
+  .tracklist li { counter-increment: t; break-inside: avoid; margin-bottom: 1.2mm;
+    line-height: 1.25; }
+  .tracklist li::before { content: counter(t, decimal-leading-zero) "  ";
+    color: #8893f2; font-family: "Oswald", monospace; }
+  .foot { border-top: 1px solid #26282f; padding-top: 2mm; margin-top: 2mm;
+    font-size: 6.5pt; color: #6b6f7a; }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="jcard">
+      <div class="spine">{{ album.artist }}</div>
+      <div class="back-panel">
+        <div class="head">
+          {% if album.festival %}<div class="tour">{{ album.festival }}</div>{% endif %}
+          <div class="album">{{ album.title }}</div>
+          <div class="sub">{{ album.artist }} — {{ album.venue }} — {{ album.date }}</div>
+        </div>
+        <div class="tracklist">
+          <ol>
+            {% for t in tracks %}<li>{{ t.title }}</li>{% endfor %}
+          </ol>
+        </div>
+        <div class="foot">{{ track_count }} titres · Live · live2mp3</div>
+      </div>
+      <div class="spine">{{ album.title }}</div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: 120mm 120mm; margin: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 120mm; height: 240mm; }
+  @font-face { font-family: "AntonFB"; src: local("Anton"); }
+  body {
+    font-family: "Oswald", "Anton", sans-serif;
+    background: #0d0f13;
+    color: #f2f2f2;
+  }
+  .panel {
+    width: 120mm; height: 120mm; position: relative; overflow: hidden;
+    background: #0a0a0a;
+    page-break-after: always;
+  }
+  /* Grain */
+  .panel::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    opacity: .12;
+    background-image: radial-gradient(#fff 0.5px, transparent 0.6px);
+    background-size: 3px 3px;
+  }
+  /* --- Recto : cover fournie ou fallback typo --- */
+  .front-cover {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .fallback {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; justify-content: center;
+    align-items: center; text-align: center; padding: 14mm;
+    background: radial-gradient(circle at 50% 30%, #1a1c22, #0d0f13 70%);
+  }
+  .fallback .tour {
+    font-family: "Anton", sans-serif; text-transform: uppercase;
+    font-size: 22pt; letter-spacing: 1px; color: #d81f18; line-height: 1;
+  }
+  .fallback .album {
+    font-family: "Pirata One", serif; font-size: 30pt; margin: 6mm 0;
+    color: #f2f2f2; line-height: 1;
+  }
+  .fallback .artist { font-size: 15pt; letter-spacing: 3px;
+    text-transform: uppercase; color: #8893f2; }
+  .fallback .meta { font-size: 9pt; margin-top: 8mm; color: #9aa; }
+  /* --- Verso : infos album --- */
+  .back { padding: 12mm 11mm; display: flex; flex-direction: column;
+    height: 100%; }
+  .back .tour {
+    font-family: "Anton", sans-serif; text-transform: uppercase;
+    color: #d81f18; font-size: 15pt; letter-spacing: .5px; line-height: 1;
+  }
+  .back .album {
+    font-family: "Pirata One", serif; font-size: 24pt; margin: 3mm 0 5mm;
+    line-height: 1.05;
+  }
+  .back .venue { font-size: 10pt; color: #cfd0d8; line-height: 1.5; }
+  .back .venue .accent { color: #8893f2; }
+  .back .spacer { flex: 1; }
+  .back .foot { font-size: 7.5pt; color: #6b6f7a; border-top: 1px solid #26282f;
+    padding-top: 3mm; }
+</style>
+</head>
+<body>
+  <!-- RECTO -->
+  <div class="panel">
+    {% if cover_data_uri %}
+      <img class="front-cover" src="{{ cover_data_uri }}" alt="cover">
+    {% else %}
+      <div class="fallback">
+        {% if album.festival %}<div class="tour">{{ album.festival }}</div>{% endif %}
+        <div class="album">{{ album.title }}</div>
+        <div class="artist">{{ album.artist }}</div>
+        <div class="meta">{{ album.venue }}<br>{{ album.date }}</div>
+      </div>
+    {% endif %}
+  </div>
+  <!-- VERSO -->
+  <div class="panel">
+    <div class="back">
+      {% if album.festival %}<div class="tour">{{ album.festival }}</div>{% endif %}
+      <div class="album">{{ album.title }}</div>
+      <div class="venue">
+        <span class="accent">{{ album.artist }}</span><br>
+        {{ album.venue }}<br>
+        {{ album.date }}
+      </div>
+      <div class="spacer"></div>
+      <div class="foot">{{ track_count }} titres · Live recording · live2mp3</div>
+    </div>
+  </div>
+</body>
+</html>
