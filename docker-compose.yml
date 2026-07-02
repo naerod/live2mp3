@@ -1,0 +1,39 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  app:
+    build: .
+    image: live2mp3:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8000:8000"   # exposé localement ; Nginx allowliste Tailscale
+    volumes:
+      - projects:/app/projects
+      - ./templates:/app/templates
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    image: live2mp3:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    command: python -m backend.worker
+    volumes:
+      - projects:/app/projects
+      - ./templates:/app/templates
+    depends_on:
+      - redis
+
+volumes:
+  projects:
+  redis-data:

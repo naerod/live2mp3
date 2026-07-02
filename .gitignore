@@ -1,0 +1,17 @@
+# Secrets — jamais committés
+.env
+*.txt
+
+# Données lourdes / générées
+projects/
+build/
+source/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Divers
+node_modules/
+*.log
