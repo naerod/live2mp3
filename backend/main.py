@@ -25,8 +25,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import catalogue, jobs
-from .auth import require_gestionnaire, require_user
+from .auth import require_gestionnaire, require_user, roles
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
+
+# Labels dérivés automatiquement de la disponibilité média (non éditables).
+DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
 
 BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
@@ -93,6 +96,12 @@ def get_catalogue() -> list[dict]:
     return catalogue.list_albums()
 
 
+@app.get("/api/me")
+def me(identity: dict = Depends(roles)) -> dict:
+    """État de connexion + rôles (soft-auth via nginx). Jamais d'erreur."""
+    return identity
+
+
 @app.get("/cover/{slug}")
 def get_cover(slug: str) -> FileResponse:
     path = PROJECTS_DIR / slug / "manifest.yaml"
@@ -124,6 +133,28 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
     return out
 
 
+# Routes spécifiques AVANT la route générique {kind} (sinon "cover" y matche).
+@app.get("/download/{slug}/cover")
+def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
+    if not cover or not cover.exists():
+        raise HTTPException(404, "pas de pochette")
+    return FileResponse(cover, filename=f"{slug}-cover{cover.suffix}")
+
+
+@app.get("/download/{slug}/traycard")
+def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    tc = PROJECTS_DIR / slug / "artwork" / "tray_card.pdf"
+    if not tc.exists():
+        raise HTTPException(404, "pas de tray card")
+    return FileResponse(tc, filename=f"{slug}-traycard.pdf",
+                        media_type="application/pdf")
+
+
 @app.get("/download/{slug}/{kind}")
 def download_media(slug: str, kind: str,
                    identity: dict = Depends(require_user)) -> FileResponse:
@@ -137,6 +168,50 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
+# --- Gestion d'album (niveau gestionnaire) --------------------------------
+@app.get("/api/albums/{slug}")
+def album_detail(slug: str,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    album = m.data.get("album", {})
+    cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    return {
+        "slug": slug,
+        "album": album,
+        "labels": list(album.get("labels", []) or []),
+        "derived_labels": [l for l in cat.get("labels", []) if l in DERIVED_LABELS],
+        "all_labels": catalogue.all_labels(),
+        "has_cover": cat.get("has_cover", False),
+        "has_traycard": cat.get("has_traycard", False),
+        "has_mp3": cat.get("has_mp3", False),
+        "has_mp4": cat.get("has_mp4", False),
+        "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
+    }
+
+
+@app.put("/api/albums/{slug}/labels")
+def update_labels(slug: str, payload: dict,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    seen, clean = set(), []
+    for raw in payload.get("labels", []):
+        l = str(raw).strip()
+        if not l or l.lower() in DERIVED_LABELS:   # les dérivés ne se stockent pas
+            continue
+        if l.lower() not in seen:
+            seen.add(l.lower())
+            clean.append(l)
+    m.data.setdefault("album", {})["labels"] = clean
+    m.save()
+    return {"ok": True, "labels": clean}
+
+
 # --- Outil (niveau gestionnaire) ------------------------------------------
 @app.get("/app", response_class=HTMLResponse)
 def tool(identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
@@ -144,6 +219,15 @@ def tool(identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
     if idx.exists():
         return HTMLResponse(idx.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>live2mp3 — outil</h1>")
+
+
+@app.get("/app/album/{slug}", response_class=HTMLResponse)
+def album_admin_page(slug: str,
+                     identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
+    page = FRONTEND / "album.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — gestion album</h1>")
 
 
 @app.post("/api/jobs")

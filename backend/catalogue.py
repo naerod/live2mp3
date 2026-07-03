@@ -33,6 +33,7 @@ def list_albums() -> list[dict]:
             continue  # rien de publiable encore
         cover_rel = album.get("cover")
         has_cover = bool(cover_rel and (pdir / cover_rel).exists())
+        has_traycard = (pdir / "artwork" / "tray_card.pdf").exists()
         albums.append({
             "slug": pdir.name,
             "artist": album.get("artist", ""),
@@ -44,6 +45,7 @@ def list_albums() -> list[dict]:
             "has_mp3": has_mp3,
             "has_mp4": has_mp4,
             "has_cover": has_cover,
+            "has_traycard": has_traycard,
             "labels": _labels(album, has_mp3, has_mp4),
         })
     return albums

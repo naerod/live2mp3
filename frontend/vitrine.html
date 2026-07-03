@@ -29,8 +29,16 @@
   .count{color:var(--muted);font-size:12.5px;margin-left:auto}
   .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
     gap:18px;margin-top:18px}
-  .album{background:var(--card);border:1px solid var(--border);border-radius:16px;
-    overflow:hidden;display:flex;flex-direction:column}
+  .album{position:relative;background:var(--card);border:1px solid var(--border);
+    border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+  .gear{position:absolute;top:10px;right:10px;width:34px;height:34px;
+    display:flex;align-items:center;justify-content:center;border-radius:9px;
+    background:rgba(13,15,19,.72);color:#fff;border:1px solid rgba(255,255,255,.18);
+    opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s,background .15s;
+    text-decoration:none;backdrop-filter:blur(2px)}
+  .gear .material-symbols-outlined{font-size:19px}
+  .album:hover .gear{opacity:1;transform:none}
+  .gear:hover{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .cover{aspect-ratio:1;background:#0a0a0a center/cover no-repeat;
     display:flex;align-items:center;justify-content:center}
   .cover .material-symbols-outlined{font-size:64px;color:var(--accent);opacity:.5}
@@ -41,8 +49,10 @@
   .album .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px 0}
   .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-  .album .btns{display:flex;gap:8px;padding:12px 16px 16px}
-  .album .btns a{flex:1;justify-content:center;margin:0}
+  .album .btns{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px 16px}
+  .album .btns a{flex:1 1 calc(50% - 4px);justify-content:center;margin:0;
+    height:34px;font-size:12.5px}
+  .album .btns a .material-symbols-outlined{font-size:16px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
 </style>
@@ -51,7 +61,7 @@
 <header>
   <div class="brand"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</div>
   <div class="tools">
-    <a id="tool-link" class="icon-btn" href="/app"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
+    <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
     <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
@@ -95,13 +105,15 @@ langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en"
 
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
-      ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`},
+      ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`,
+      cover:"Pochette",traycard:"Tray card",manage:"Gérer cet album"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
-      ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`}
+      ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
+      cover:"Cover",traycard:"Tray card",manage:"Manage this album"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
-let ALBUMS=[], selected=new Set();
+let ALBUMS=[], selected=new Set(), ME={authenticated:false,is_gestionnaire:false};
 
 function norm(s){return (s||"").toString().toLowerCase()
   .normalize("NFD").replace(/[̀-ͯ]/g,"");}
@@ -128,9 +140,17 @@ function render(){
     const cover=a.has_cover?`style="background-image:url('/cover/${a.slug}')"`:"";
     const icon=a.has_cover?"":'<span class="material-symbols-outlined">album</span>';
     const tags=(a.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
-    const mp3=a.has_mp3?`<a class="primary" href="/download/${a.slug}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`:"";
-    const mp4=a.has_mp4?`<a href="/download/${a.slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`:"";
+    let btns="";
+    if(ME.authenticated){                       // téléchargements = connectés uniquement
+      if(a.has_mp3) btns+=`<a class="primary" href="/download/${a.slug}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`;
+      if(a.has_mp4) btns+=`<a href="/download/${a.slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
+      if(a.has_cover) btns+=`<a href="/download/${a.slug}/cover"><span class="material-symbols-outlined">image</span> ${T[L()].cover}</a>`;
+      if(a.has_traycard) btns+=`<a href="/download/${a.slug}/traycard"><span class="material-symbols-outlined">description</span> ${T[L()].traycard}</a>`;
+    }
+    const gear=ME.is_gestionnaire
+      ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
     return `<div class="album">
+      ${gear}
       <div class="cover" ${cover}>${icon}</div>
       <div class="body">
         <div class="title">${a.title||a.slug}</div>
@@ -139,7 +159,7 @@ function render(){
         <div class="meta">${a.tracks} ${T[L()].titres}</div>
       </div>
       ${tags?`<div class="tags">${tags}</div>`:""}
-      <div class="btns">${mp3}${mp4}</div>
+      ${btns?`<div class="btns">${btns}</div>`:""}
     </div>`;}).join("");
 }
 
@@ -162,6 +182,10 @@ function updateCount(){const n=ALBUMS.filter(matches).length;
 document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
 
 async function load(){
+  try{ ME=await (await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
+  // header : Connexion masquée si connecté ; Outil visible seulement gestionnaire
+  document.getElementById("login").style.display=ME.authenticated?"none":"";
+  document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
   ALBUMS=await (await fetch("/api/catalogue")).json();
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");

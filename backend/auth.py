@@ -58,3 +58,21 @@ def require_gestionnaire(
     if _is_super(groups) or GROUP_GESTIONNAIRE in groups:
         return {"username": x_authentik_username, "groups": groups}
     raise HTTPException(403, "accès outil requis (live2mp3-gestionnaire)")
+
+
+def roles(
+    x_authentik_username: str | None = Header(default=None),
+    x_authentik_groups: str | None = Header(default=None),
+) -> dict:
+    """État de connexion et rôles (sans lever d'erreur) — pour /api/me."""
+    groups = _groups(x_authentik_groups)
+    is_super = _is_super(groups)
+    is_gest = is_super or GROUP_GESTIONNAIRE in groups
+    is_user = is_gest or GROUP_USER in groups
+    return {
+        "authenticated": bool(x_authentik_username) and is_user,
+        "username": x_authentik_username,
+        "is_user": is_user,
+        "is_gestionnaire": is_gest,
+        "is_admin": is_super,
+    }

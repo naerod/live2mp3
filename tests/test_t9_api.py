@@ -133,3 +133,48 @@ def test_download_requires_user(client):
     assert c.get(f"/download/{slug}/mp3").status_code == 401           # anonyme
     assert c.get(f"/download/{slug}/mp3", headers=USER).status_code == 200
     assert c.get(f"/download/{slug}/mp3", headers=GEST).status_code == 200
+
+
+def test_me_anonymous_vs_roles(client):
+    c, _ = client
+    anon = c.get("/api/me").json()
+    assert anon["authenticated"] is False and anon["is_gestionnaire"] is False
+    g = c.get("/api/me", headers=GEST).json()
+    assert g["authenticated"] and g["is_gestionnaire"] and g["is_user"]
+    u = c.get("/api/me", headers=USER).json()
+    assert u["authenticated"] and u["is_user"] and not u["is_gestionnaire"]
+
+
+def test_labels_update_gestionnaire(client):
+    c, projects = client
+    payload = {"album": {"artist": "Lab", "title": "Alb", "date": "2026-05-05",
+                         "labels": ["concert"]},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    # anonyme interdit
+    assert c.put(f"/api/albums/{slug}/labels", json={"labels": ["x"]}).status_code == 401
+    assert c.put(f"/api/albums/{slug}/labels", json={"labels": ["x"]},
+                 headers=USER).status_code == 403
+    # gestionnaire : "audio" (dérivé) est filtré
+    r = c.put(f"/api/albums/{slug}/labels", headers=GEST,
+              json={"labels": ["festival", "high quality", "audio"]})
+    assert r.status_code == 200
+    labels = r.json()["labels"]
+    assert "festival" in labels and "high quality" in labels
+    assert "audio" not in labels
+    d = c.get(f"/api/albums/{slug}", headers=GEST).json()
+    assert set(d["labels"]) == {"festival", "high quality"}
+
+
+def test_cover_download_requires_user(client, tmp_path):
+    c, projects = client
+    payload = {"album": {"artist": "Cov", "title": "Alb", "date": "2026-06-06",
+                         "cover": "artwork/c.png"},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    art = projects / slug / "artwork"; art.mkdir(parents=True, exist_ok=True)
+    (art / "c.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    assert c.get(f"/download/{slug}/cover").status_code == 401
+    assert c.get(f"/download/{slug}/cover", headers=USER).status_code == 200
