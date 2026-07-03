@@ -8,11 +8,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+GEST = {"X-authentik-username": "g", "X-authentik-groups": "live2mp3-gestionnaire"}
+USER = {"X-authentik-username": "u", "X-authentik-groups": "live2mp3-user"}
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from backend import main, manifest
+    from backend import catalogue, main, manifest
     monkeypatch.setattr(manifest, "PROJECTS_DIR", tmp_path)
     monkeypatch.setattr(main, "PROJECTS_DIR", tmp_path)
+    monkeypatch.setattr(catalogue, "PROJECTS_DIR", tmp_path)
     return TestClient(main.app), tmp_path
 
 
@@ -42,7 +47,7 @@ def test_create_job_and_pipeline(client):
         ],
         "target": "data_disc",
     }
-    r = c.post("/api/jobs", json=payload)
+    r = c.post("/api/jobs", json=payload, headers=GEST)
     assert r.status_code == 200
     slug = r.json()["slug"]
     assert slug == "test-artist-2026-01-01"
@@ -50,14 +55,14 @@ def test_create_job_and_pipeline(client):
     _seed_master(projects / slug)
 
     # manifest lisible via API
-    m = c.get(f"/api/jobs/{slug}/manifest").json()
+    m = c.get(f"/api/jobs/{slug}/manifest", headers=GEST).json()
     assert len(m["tracks"]) == 4
 
     # lancement render + collecte SSE
-    r = c.post(f"/api/jobs/{slug}/render", params={"media": "audio"})
+    r = c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
     assert r.status_code == 200
 
-    with c.stream("GET", f"/api/jobs/{slug}/events") as resp:
+    with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
         stages_done = set()
         completed = False
         for line in resp.iter_lines():
@@ -82,16 +87,49 @@ def test_markers_update_locks(client):
         "tracks": [{"n": 1, "title": "A"}, {"n": 2, "title": "B"}],
         "target": "audio_cd",
     }
-    slug = c.post("/api/jobs", json=payload).json()["slug"]
-    r = c.put(f"/api/jobs/{slug}/markers", json={
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    r = c.put(f"/api/jobs/{slug}/markers", headers=GEST, json={
         "tracks": {"1": {"start": 0.0, "end": 10.0},
                    "2": {"start": 10.0, "end": 20.0}}, "lock": True})
     assert r.status_code == 200
-    m = c.get(f"/api/jobs/{slug}/manifest").json()
+    m = c.get(f"/api/jobs/{slug}/manifest", headers=GEST).json()
     assert m["tracks"][0]["locked"] is True
     assert m["tracks"][0]["start"] == 0.0
 
 
 def test_manifest_404(client):
     c, _ = client
-    assert c.get("/api/jobs/nope/manifest").status_code == 404
+    assert c.get("/api/jobs/nope/manifest", headers=GEST).status_code == 404
+
+
+def test_vitrine_public(client):
+    c, _ = client
+    r = c.get("/")
+    assert r.status_code == 200
+    r = c.get("/api/catalogue")
+    assert r.status_code == 200 and isinstance(r.json(), list)
+
+
+def test_tool_requires_gestionnaire(client):
+    c, _ = client
+    assert c.get("/app").status_code == 401                 # non connecté
+    assert c.get("/app", headers=USER).status_code == 403    # user pas gestionnaire
+    assert c.get("/app", headers=GEST).status_code == 200
+
+
+def test_download_requires_user(client):
+    c, projects = client
+    payload = {"album": {"artist": "DL", "title": "Alb", "date": "2026-03-03"},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    _seed_master(projects / slug)
+    c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
+    # attendre le rendu
+    with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data:") and json.loads(line[5:].strip())["status"] == "complete":
+                break
+    assert c.get(f"/download/{slug}/mp3").status_code == 401           # anonyme
+    assert c.get(f"/download/{slug}/mp3", headers=USER).status_code == 200
+    assert c.get(f"/download/{slug}/mp3", headers=GEST).status_code == 200

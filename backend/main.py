@@ -6,14 +6,16 @@ un thread. La progression est publiée par projet et relue via SSE.
 """
 from __future__ import annotations
 
+import io
 import json
 import queue
 import threading
 import time
+import zipfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -22,7 +24,8 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import jobs
+from . import catalogue, jobs
+from .auth import require_gestionnaire, require_user
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
 
 BASE = Path(__file__).resolve().parent.parent
@@ -75,17 +78,77 @@ class JobIn(BaseModel):
     source_url: str = ""
 
 
-# --- Routes ---------------------------------------------------------------
+# --- Routes publiques (vitrine) -------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
-    idx = FRONTEND / "index.html"
-    if idx.exists():
-        return HTMLResponse(idx.read_text(encoding="utf-8"))
+def vitrine() -> HTMLResponse:
+    page = FRONTEND / "vitrine.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>live2mp3</h1>")
 
 
+@app.get("/api/catalogue")
+def get_catalogue() -> list[dict]:
+    """Liste publique des albums disponibles."""
+    return catalogue.list_albums()
+
+
+@app.get("/cover/{slug}")
+def get_cover(slug: str) -> FileResponse:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    cover_rel = m.data.get("album", {}).get("cover")
+    if not cover_rel:
+        raise HTTPException(404, "pas de pochette")
+    cover = PROJECTS_DIR / slug / cover_rel
+    if not cover.exists():
+        raise HTTPException(404, "pochette absente")
+    return FileResponse(cover)
+
+
+# --- Téléchargements (niveau user) ----------------------------------------
+def _zip_media(project_dir: Path, kind: str) -> Path:
+    """Construit (et met en cache) un zip des MP3 ou MP4 d'un album."""
+    sub = "audio" if kind == "mp3" else "video"
+    src = project_dir / "build" / sub
+    if not src.exists() or not any(src.glob(f"*.{kind}")):
+        raise HTTPException(404, f"aucun {kind} pour cet album")
+    out = project_dir / "build" / f"download_{kind}.zip"
+    newest = max((f.stat().st_mtime for f in src.glob(f"*.{kind}")), default=0)
+    if not out.exists() or out.stat().st_mtime < newest:
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(src.glob(f"*.{kind}")):
+                z.write(f, f.name)
+    return out
+
+
+@app.get("/download/{slug}/{kind}")
+def download_media(slug: str, kind: str,
+                   identity: dict = Depends(require_user)) -> FileResponse:
+    if kind not in ("mp3", "mp4"):
+        raise HTTPException(400, "type invalide (mp3|mp4)")
+    project_dir = PROJECTS_DIR / slug
+    if not (project_dir / "manifest.yaml").exists():
+        raise HTTPException(404, "album introuvable")
+    zip_path = _zip_media(project_dir, kind)
+    return FileResponse(zip_path, filename=f"{slug}-{kind}.zip",
+                        media_type="application/zip")
+
+
+# --- Outil (niveau gestionnaire) ------------------------------------------
+@app.get("/app", response_class=HTMLResponse)
+def tool(identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
+    idx = FRONTEND / "index.html"
+    if idx.exists():
+        return HTMLResponse(idx.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — outil</h1>")
+
+
 @app.post("/api/jobs")
-def create_job(job: JobIn) -> dict[str, Any]:
+def create_job(job: JobIn,
+               identity: dict = Depends(require_gestionnaire)) -> dict[str, Any]:
     m = new_manifest(
         job.album.model_dump(exclude_none=True),
         [t.model_dump(exclude_none=True) for t in job.tracks],
@@ -98,7 +161,8 @@ def create_job(job: JobIn) -> dict[str, Any]:
 
 
 @app.get("/api/jobs/{slug}/manifest")
-def get_manifest(slug: str) -> dict:
+def get_manifest(slug: str,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
         raise HTTPException(404, "projet introuvable")
@@ -106,7 +170,8 @@ def get_manifest(slug: str) -> dict:
 
 
 @app.put("/api/jobs/{slug}/markers")
-def update_markers(slug: str, payload: dict) -> dict:
+def update_markers(slug: str, payload: dict,
+                   identity: dict = Depends(require_gestionnaire)) -> dict:
     """Écrit les timecodes validés depuis l'UI Peaks.js et verrouille."""
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
@@ -137,7 +202,8 @@ def _run_render_bg(slug: str, media: str, gap: float) -> None:
 
 
 @app.post("/api/jobs/{slug}/render")
-def start_render(slug: str, media: str = "audio", gap: float = 2.0) -> dict:
+def start_render(slug: str, media: str = "audio", gap: float = 2.0,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
     project_dir = PROJECTS_DIR / slug
     if not (project_dir / "manifest.yaml").exists():
         raise HTTPException(404, "projet introuvable")
@@ -149,7 +215,8 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0) -> dict:
 
 
 @app.get("/api/jobs/{slug}/events")
-def events(slug: str) -> StreamingResponse:
+def events(slug: str,
+           identity: dict = Depends(require_gestionnaire)) -> StreamingResponse:
     """Flux SSE de progression."""
     def gen():
         for ev in _progress_last.get(slug, []):
@@ -170,7 +237,8 @@ def events(slug: str) -> StreamingResponse:
 
 
 @app.get("/api/jobs/{slug}/bundle")
-def download_bundle(slug: str) -> FileResponse:
+def download_bundle(slug: str,
+                    identity: dict = Depends(require_gestionnaire)) -> FileResponse:
     path = PROJECTS_DIR / slug / "build" / "bundle.zip"
     if not path.exists():
         raise HTTPException(404, "bundle non généré")
@@ -179,7 +247,8 @@ def download_bundle(slug: str) -> FileResponse:
 
 
 @app.get("/api/jobs/{slug}/waveform.dat")
-def waveform(slug: str) -> FileResponse:
+def waveform(slug: str,
+             identity: dict = Depends(require_gestionnaire)) -> FileResponse:
     path = PROJECTS_DIR / slug / "source" / "waveform.dat"
     if not path.exists():
         raise HTTPException(404, "waveform absente")

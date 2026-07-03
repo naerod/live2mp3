@@ -33,3 +33,18 @@ il suffit d'écraser templates/front_insert.html et templates/tray_card.html
 ## D6 — Whisper : détection GPU auto (point d'arrêt C géré en autonomie)
 `nvidia-smi` détecté → large-v3 sur GPU ; sinon fallback CPU `medium`.
 Choix logué, pas de blocage en mode autonome.
+
+## D7 — Bascule accès public + SSO Authentik (2026-07-03)
+Changement de cap assumé par le propriétaire vs brief initial ("Tailscale only,
+pas d'exposition") : l'app est désormais **publique** sur `live2mp3.naerod.com`
+(Cloudflare Tunnel), protégée par **Authentik** (SSO OIDC/forward-auth).
+- Moteur d'auth centralisé = **Authentik** (server+worker+postgres+redis, CT110).
+- `auth.naerod.com` (login public), `admin.naerod.com` (admin, superuser only),
+  gérés par l'UI native Authentik — pas de hub custom (bouton depuis hub/admin).
+- Rôles = groupes Authentik : `live2mp3-user` (download), `live2mp3-gestionnaire`
+  (outil + IA), superuser (tout). Vitrine `/` publique.
+- nginx forward-auth : `/` public ; `/app`, `/api/jobs`, `/download` derrière
+  `auth_request` vers l'outpost embarqué. L'app applique le rôle fin via les
+  en-têtes `X-authentik-groups` (non spoofables, posés par nginx depuis la
+  sous-requête d'auth ; neutralisés sur les routes publiques).
+- Ajout d'un site futur = 1 application/provider Authentik + ~5 lignes nginx.

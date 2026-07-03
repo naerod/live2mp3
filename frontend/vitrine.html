@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live2mp3 — albums live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  .hero{padding:34px 0 10px}
+  .hero h1{font-size:30px;margin:0 0 6px}
+  .hero p{color:var(--muted);margin:0}
+  .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+    gap:18px;margin-top:22px}
+  .album{background:var(--card);border:1px solid var(--border);border-radius:16px;
+    overflow:hidden;display:flex;flex-direction:column}
+  .cover{aspect-ratio:1;background:#0a0a0a center/cover no-repeat;
+    display:flex;align-items:center;justify-content:center}
+  .cover .material-symbols-outlined{font-size:64px;color:var(--accent);opacity:.5}
+  .album .body{padding:14px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .album .title{font-weight:700;font-size:16px;line-height:1.2}
+  .album .artist{color:var(--accent);font-size:13px}
+  .album .meta{color:var(--muted);font-size:12px}
+  .album .btns{display:flex;gap:8px;padding:0 16px 16px}
+  .album .btns a{flex:1;justify-content:center;margin-top:8px;padding:9px}
+  .empty{margin-top:40px;text-align:center;color:var(--muted)}
+  .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
+  .login-cta{display:flex;align-items:center;gap:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="material-symbols-outlined">album</span> live2mp3</div>
+  <div class="tools">
+    <a id="tool-link" class="icon-btn" href="/app"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
+    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
+    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
+    <button id="theme" class="icon-btn"><span class="material-symbols-outlined">dark_mode</span></button>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1 data-i18n="hero_title">Nos albums live</h1>
+    <p data-i18n="hero_sub">Captations de concerts découpées, taguées et prêtes à écouter.</p>
+  </div>
+  <div id="albums" class="albums"></div>
+  <div id="empty" class="empty hidden">
+    <span class="material-symbols-outlined">library_music</span>
+    <div data-i18n="empty">Aucun album pour le moment.</div>
+  </div>
+</main>
+
+<script src="/static/i18n.js"></script>
+<script>
+// thème + langue (réutilise le socle)
+const themeBtn=document.getElementById("theme");
+function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem("l2m-theme",t);
+  themeBtn.querySelector(".material-symbols-outlined").textContent=t==="dark"?"dark_mode":"light_mode";}
+setTheme(localStorage.getItem("l2m-theme")||"dark");
+themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+const langBtn=document.getElementById("lang");
+function setLang(l){localStorage.setItem("l2m-lang",l);
+  document.getElementById("lang-label").textContent=l.toUpperCase();
+  if(window.applyI18n)applyI18n(l);}
+setLang(localStorage.getItem("l2m-lang")||"fr");
+langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
+
+const T={fr:{empty:"Aucun album pour le moment.",titres:"titres"},
+         en:{empty:"No album yet.",titres:"tracks"}};
+function lang(){return localStorage.getItem("l2m-lang")||"fr";}
+
+async function load(){
+  const albums=await (await fetch("/api/catalogue")).json();
+  const wrap=document.getElementById("albums");
+  if(!albums.length){document.getElementById("empty").classList.remove("hidden");return;}
+  wrap.innerHTML=albums.map(a=>{
+    const cover=a.has_cover?`style="background-image:url('/cover/${a.slug}')"`:"";
+    const icon=a.has_cover?"":'<span class="material-symbols-outlined">album</span>';
+    const mp3=a.has_mp3?`<a class="primary" href="/download/${a.slug}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`:"";
+    const mp4=a.has_mp4?`<a href="/download/${a.slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`:"";
+    return `<div class="album">
+      <div class="cover" ${cover}>${icon}</div>
+      <div class="body">
+        <div class="title">${a.title||a.slug}</div>
+        <div class="artist">${a.artist||""}</div>
+        <div class="meta">${[a.venue,a.date].filter(Boolean).join(" · ")}</div>
+        <div class="meta">${a.tracks} ${T[lang()].titres}</div>
+      </div>
+      <div class="btns">${mp3}${mp4}</div>
+    </div>`;}).join("");
+}
+load();
+</script>
+</body>
+</html>
