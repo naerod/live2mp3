@@ -11,25 +11,40 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
-  .hero{padding:34px 0 10px}
+  .hero{padding:30px 0 6px}
   .hero h1{font-size:30px;margin:0 0 6px}
   .hero p{color:var(--muted);margin:0}
-  .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
-    gap:18px;margin-top:22px}
+  .toolbar{margin:20px 0 6px;display:flex;flex-direction:column;gap:12px}
+  .search{position:relative}
+  .search .material-symbols-outlined{position:absolute;left:12px;top:50%;
+    transform:translateY(-50%);color:var(--muted);font-size:20px;pointer-events:none}
+  .search input{width:100%;padding:12px 14px 12px 42px;font-size:14px}
+  .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+    border-radius:999px;border:1px solid var(--border);background:var(--card);
+    color:var(--muted);font-size:12.5px;font-weight:500;cursor:pointer;
+    transition:all .15s;white-space:nowrap}
+  .chip:hover{border-color:var(--accent);color:var(--fg)}
+  .chip.active{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
+  .count{color:var(--muted);font-size:12.5px;margin-left:auto}
+  .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+    gap:18px;margin-top:18px}
   .album{background:var(--card);border:1px solid var(--border);border-radius:16px;
     overflow:hidden;display:flex;flex-direction:column}
   .cover{aspect-ratio:1;background:#0a0a0a center/cover no-repeat;
     display:flex;align-items:center;justify-content:center}
   .cover .material-symbols-outlined{font-size:64px;color:var(--accent);opacity:.5}
-  .album .body{padding:14px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .album .body{padding:14px 16px 6px;display:flex;flex-direction:column;gap:4px;flex:1}
   .album .title{font-weight:700;font-size:16px;line-height:1.2}
   .album .artist{color:var(--accent);font-size:13px}
   .album .meta{color:var(--muted);font-size:12px}
-  .album .btns{display:flex;gap:8px;padding:0 16px 16px}
-  .album .btns a{flex:1;justify-content:center;margin-top:8px;padding:9px}
+  .album .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px 0}
+  .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
+    background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+  .album .btns{display:flex;gap:8px;padding:12px 16px 16px}
+  .album .btns a{flex:1;justify-content:center;margin:0}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
-  .login-cta{display:flex;align-items:center;gap:6px}
 </style>
 </head>
 <body>
@@ -48,16 +63,25 @@
     <h1 data-i18n="hero_title">Nos albums live</h1>
     <p data-i18n="hero_sub">Captations de concerts découpées, taguées et prêtes à écouter.</p>
   </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <span class="material-symbols-outlined">search</span>
+      <input id="q" type="search" autocomplete="off"
+             placeholder="Rechercher par titre, artiste, lieu, date…">
+    </div>
+    <div class="filters" id="filters"></div>
+  </div>
+
   <div id="albums" class="albums"></div>
   <div id="empty" class="empty hidden">
     <span class="material-symbols-outlined">library_music</span>
-    <div data-i18n="empty">Aucun album pour le moment.</div>
+    <div id="empty-msg">Aucun album pour le moment.</div>
   </div>
 </main>
 
 <script src="/static/i18n.js"></script>
 <script>
-// thème + langue (réutilise le socle)
 const themeBtn=document.getElementById("theme");
 function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem("l2m-theme",t);
   themeBtn.querySelector(".material-symbols-outlined").textContent=t==="dark"?"dark_mode":"light_mode";}
@@ -66,21 +90,44 @@ themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"l
 const langBtn=document.getElementById("lang");
 function setLang(l){localStorage.setItem("l2m-lang",l);
   document.getElementById("lang-label").textContent=l.toUpperCase();
-  if(window.applyI18n)applyI18n(l);}
-setLang(localStorage.getItem("l2m-lang")||"fr");
+  if(window.applyI18n)applyI18n(l);render();updateCount();}
 langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
-const T={fr:{empty:"Aucun album pour le moment.",titres:"titres"},
-         en:{empty:"No album yet.",titres:"tracks"}};
-function lang(){return localStorage.getItem("l2m-lang")||"fr";}
+const T={
+  fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
+      ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`},
+  en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
+      ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`}
+};
+function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
-async function load(){
-  const albums=await (await fetch("/api/catalogue")).json();
+let ALBUMS=[], selected=new Set();
+
+function norm(s){return (s||"").toString().toLowerCase()
+  .normalize("NFD").replace(/[̀-ͯ]/g,"");}
+
+function matches(a){
+  const q=norm(document.getElementById("q").value);
+  const hay=norm([a.title,a.artist,a.venue,a.festival,a.date].join(" "));
+  if(q && !hay.includes(q)) return false;
+  for(const lab of selected){ if(!(a.labels||[]).map(norm).includes(norm(lab))) return false; }
+  return true;
+}
+
+function render(){
+  document.getElementById("q").placeholder=T[L()].ph;
   const wrap=document.getElementById("albums");
-  if(!albums.length){document.getElementById("empty").classList.remove("hidden");return;}
-  wrap.innerHTML=albums.map(a=>{
+  const shown=ALBUMS.filter(matches);
+  const empty=document.getElementById("empty");
+  if(!ALBUMS.length){empty.classList.remove("hidden");
+    document.getElementById("empty-msg").textContent=T[L()].empty;wrap.innerHTML="";return;}
+  if(!shown.length){empty.classList.remove("hidden");
+    document.getElementById("empty-msg").textContent=T[L()].noresult;wrap.innerHTML="";}
+  else empty.classList.add("hidden");
+  wrap.innerHTML=shown.map(a=>{
     const cover=a.has_cover?`style="background-image:url('/cover/${a.slug}')"`:"";
     const icon=a.has_cover?"":'<span class="material-symbols-outlined">album</span>';
+    const tags=(a.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
     const mp3=a.has_mp3?`<a class="primary" href="/download/${a.slug}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`:"";
     const mp4=a.has_mp4?`<a href="/download/${a.slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`:"";
     return `<div class="album">
@@ -89,10 +136,35 @@ async function load(){
         <div class="title">${a.title||a.slug}</div>
         <div class="artist">${a.artist||""}</div>
         <div class="meta">${[a.venue,a.date].filter(Boolean).join(" · ")}</div>
-        <div class="meta">${a.tracks} ${T[lang()].titres}</div>
+        <div class="meta">${a.tracks} ${T[L()].titres}</div>
       </div>
+      ${tags?`<div class="tags">${tags}</div>`:""}
       <div class="btns">${mp3}${mp4}</div>
     </div>`;}).join("");
+}
+
+function buildFilters(){
+  const all=[...new Set(ALBUMS.flatMap(a=>a.labels||[]))]
+    .sort((x,y)=>x.localeCompare(y,undefined,{sensitivity:"base"}));
+  const box=document.getElementById("filters");
+  box.innerHTML=all.map(l=>`<span class="chip" data-label="${l}">${l}</span>`).join("")
+    +`<span class="count" id="count"></span>`;
+  box.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
+    const l=c.dataset.label;
+    if(selected.has(l)){selected.delete(l);c.classList.remove("active");}
+    else{selected.add(l);c.classList.add("active");}
+    render();updateCount();
+  });
+}
+function updateCount(){const n=ALBUMS.filter(matches).length;
+  const el=document.getElementById("count");if(el)el.textContent=T[L()].count(n);}
+
+document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
+
+async function load(){
+  ALBUMS=await (await fetch("/api/catalogue")).json();
+  buildFilters();
+  setLang(localStorage.getItem("l2m-lang")||"fr");
 }
 load();
 </script>

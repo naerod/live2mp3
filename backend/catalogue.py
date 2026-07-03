@@ -44,5 +44,37 @@ def list_albums() -> list[dict]:
             "has_mp3": has_mp3,
             "has_mp4": has_mp4,
             "has_cover": has_cover,
+            "labels": _labels(album, has_mp3, has_mp4),
         })
     return albums
+
+
+def _labels(album: dict, has_mp3: bool, has_mp4: bool) -> list[str]:
+    """Labels de l'album : ceux du manifest + dérivés de la disponibilité média."""
+    labels = list(album.get("labels", []) or [])
+    if has_mp3 and has_mp4:
+        media = "audio + vidéo"
+    elif has_mp4:
+        media = "vidéo"
+    elif has_mp3:
+        media = "audio"
+    else:
+        media = None
+    if media and media not in labels:
+        labels.insert(0, media)
+    # dédoublonne en gardant l'ordre
+    seen, out = set(), []
+    for l in labels:
+        k = l.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(l)
+    return out
+
+
+def all_labels() -> list[str]:
+    """Union triée de tous les labels du catalogue (pour les filtres)."""
+    s: set[str] = set()
+    for a in list_albums():
+        s.update(a.get("labels", []))
+    return sorted(s, key=str.lower)
