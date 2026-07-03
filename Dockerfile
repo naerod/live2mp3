@@ -13,7 +13,7 @@ RUN git clone --depth 1 https://github.com/bbc/audiowaveform.git /src \
     && cp audiowaveform /usr/local/bin/
 
 # ---- Stage 2 : runtime ----------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg genisoimage chromium \
