@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Disque "album" façon vinyle, couleur accent live2mp3 -->
+  <circle cx="16" cy="16" r="13" fill="none" stroke="#8893f2" stroke-width="3.2"/>
+  <circle cx="16" cy="16" r="7.5" fill="none" stroke="#8893f2" stroke-width="1.4" opacity="0.55"/>
+  <circle cx="16" cy="16" r="3.4" fill="#8893f2"/>
+</svg>
