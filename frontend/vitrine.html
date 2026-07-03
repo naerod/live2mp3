@@ -30,7 +30,12 @@
   .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
     gap:18px;margin-top:18px}
   .album{position:relative;background:var(--card);border:1px solid var(--border);
-    border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+    border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  .album:hover{transform:translateY(-6px);border-color:var(--accent);
+    box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
+  .album:hover .cover{transform:scale(1.03)}
+  .cover{transition:transform .25s ease}
   .gear{position:absolute;top:10px;right:10px;width:34px;height:34px;
     display:flex;align-items:center;justify-content:center;border-radius:9px;
     background:rgba(13,15,19,.72);color:#fff;border:1px solid rgba(255,255,255,.18);
@@ -55,6 +60,37 @@
   .album .btns a .material-symbols-outlined{font-size:16px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
+  /* Modale détail */
+  .overlay{position:fixed;inset:0;background:rgba(6,7,10,.66);backdrop-filter:blur(3px);
+    display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;
+    overflow:auto;z-index:50;opacity:0;transition:opacity .18s}
+  .overlay.show{opacity:1}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:18px;
+    width:100%;max-width:720px;overflow:hidden;transform:translateY(10px);
+    transition:transform .2s}
+  .overlay.show .modal{transform:none}
+  .modal-head{display:flex;gap:18px;padding:20px;border-bottom:1px solid var(--border)}
+  .modal-head .cv{width:120px;height:120px;border-radius:12px;flex-shrink:0;
+    background:#0a0a0a center/cover no-repeat;display:flex;align-items:center;justify-content:center}
+  .modal-head .cv .material-symbols-outlined{font-size:48px;color:var(--accent);opacity:.5}
+  .modal-head h2{margin:0 0 4px;font-size:20px}
+  .modal-head .m{color:var(--muted);font-size:13px;margin-bottom:8px}
+  .modal-head .tags{display:flex;flex-wrap:wrap;gap:5px}
+  .modal .x{position:absolute;top:14px;right:14px}
+  .modal-body{padding:20px;max-height:56vh;overflow:auto}
+  .modal-body h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--muted);margin:0 0 10px}
+  .setlist{list-style:none;padding:0;margin:0 0 22px}
+  .setlist li{display:flex;align-items:center;gap:10px;padding:7px 0;
+    border-bottom:1px solid var(--border);font-size:14px}
+  .setlist li .n{color:var(--accent);font-variant-numeric:tabular-nums;min-width:22px}
+  .setlist li .tt{flex:1}
+  .setlist li a{color:var(--muted);display:flex}
+  .setlist li a:hover{color:var(--accent)}
+  .dlgrid{display:flex;flex-wrap:wrap;gap:8px}
+  .dlgrid a{margin:0;height:36px;font-size:13px}
+  .lock-note{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;
+    background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
 </style>
 </head>
 <body>
@@ -90,6 +126,11 @@
   </div>
 </main>
 
+<div id="overlay" class="overlay hidden"><div class="modal" style="position:relative">
+  <button class="icon-btn icon-only x" id="modal-close"><span class="material-symbols-outlined">close</span></button>
+  <div id="modal-content"></div>
+</div></div>
+
 <script src="/static/i18n.js"></script>
 <script>
 const themeBtn=document.getElementById("theme");
@@ -106,10 +147,14 @@ langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en"
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
       ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`,
-      cover:"Pochette",traycard:"Tray card",manage:"Gérer cet album"},
+      cover:"Pochette",traycard:"Tray card",manage:"Gérer cet album",
+      setlist:"Setlist",downloads:"Téléchargements",full:"Album complet (MP3)",
+      dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",login:"Connexion"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
-      cover:"Cover",traycard:"Tray card",manage:"Manage this album"}
+      cover:"Cover",traycard:"Tray card",manage:"Manage this album",
+      setlist:"Setlist",downloads:"Downloads",full:"Full album (MP3)",
+      dltrack:"Download this track",lockdl:"Log in to download",login:"Log in"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
@@ -149,7 +194,7 @@ function render(){
     }
     const gear=ME.is_gestionnaire
       ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
-    return `<div class="album">
+    return `<div class="album" data-slug="${a.slug}">
       ${gear}
       <div class="cover" ${cover}>${icon}</div>
       <div class="body">
@@ -180,6 +225,61 @@ function updateCount(){const n=ALBUMS.filter(matches).length;
   const el=document.getElementById("count");if(el)el.textContent=T[L()].count(n);}
 
 document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
+
+// --- Modale détail ---
+const overlay=document.getElementById("overlay");
+function closeModal(){overlay.classList.remove("show");
+  setTimeout(()=>overlay.classList.add("hidden"),180);}
+document.getElementById("modal-close").onclick=closeModal;
+overlay.onclick=e=>{if(e.target===overlay)closeModal();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+
+document.getElementById("albums").addEventListener("click",e=>{
+  if(e.target.closest("a,button")) return;          // liens/écrou : pas de modale
+  const card=e.target.closest(".album");
+  if(card) openDetail(card.dataset.slug);
+});
+
+async function openDetail(slug){
+  const d=await (await fetch(`/api/catalogue/${slug}`)).json();
+  const t=T[L()], a=d.album||{};
+  const cover=d.has_cover?`style="background-image:url('/cover/${slug}')"`:"";
+  const icon=d.has_cover?"":'<span class="material-symbols-outlined">album</span>';
+  const tags=(d.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
+  const set=(d.tracks||[]).map(tr=>{
+    const dl=(ME.authenticated&&tr.dl)
+      ?`<a href="/download/${slug}/track/${tr.n}" title="${t.dltrack}"><span class="material-symbols-outlined">download</span></a>`:"";
+    return `<li><span class="n">${String(tr.n).padStart(2,"0")}</span><span class="tt">${tr.title}</span>${dl}</li>`;
+  }).join("");
+  let dl="";
+  if(ME.authenticated){
+    if(d.has_mp3) dl+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t.full}</a>`;
+    if(d.has_mp4) dl+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
+    if(d.has_cover) dl+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
+    if(d.has_traycard) dl+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
+    dl=`<div class="dlgrid">${dl}</div>`;
+  } else {
+    dl=`<div class="lock-note"><span class="material-symbols-outlined">lock</span>${t.lockdl}
+        <a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span> ${t.login}</a></div>`;
+  }
+  document.getElementById("modal-content").innerHTML=`
+    <div class="modal-head">
+      <div class="cv" ${cover}>${icon}</div>
+      <div>
+        <h2>${a.title||slug}</h2>
+        <div class="m">${[a.artist,a.venue,a.date].filter(Boolean).join(" · ")}</div>
+        <div class="tags">${tags}</div>
+      </div>
+    </div>
+    <div class="modal-body">
+      <h3>${t.setlist}</h3>
+      <ul class="setlist">${set}</ul>
+      <h3>${t.downloads}</h3>
+      ${dl}
+    </div>`;
+  overlay.classList.remove("hidden");
+  requestAnimationFrame(()=>overlay.classList.add("show"));
+}
 
 async function load(){
   try{ ME=await (await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }

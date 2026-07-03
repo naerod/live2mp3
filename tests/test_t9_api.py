@@ -178,3 +178,40 @@ def test_cover_download_requires_user(client, tmp_path):
     (art / "c.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     assert c.get(f"/download/{slug}/cover").status_code == 401
     assert c.get(f"/download/{slug}/cover", headers=USER).status_code == 200
+
+
+def test_catalogue_detail_public(client, tmp_path):
+    c, projects = client
+    payload = {"album": {"artist": "Det", "title": "Alb", "date": "2026-07-07"},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True},
+                          {"n": 2, "title": "B", "start": 3.0, "end": 6.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    _seed_master(projects / slug)
+    c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
+    with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data:") and json.loads(line[5:].strip())["status"] == "complete":
+                break
+    d = c.get(f"/api/catalogue/{slug}").json()          # public, pas d'auth
+    assert d["album"]["artist"] == "Det"
+    assert [t["title"] for t in d["tracks"]] == ["A", "B"]
+    assert all(t["dl"] for t in d["tracks"])
+
+
+def test_track_download_requires_user(client, tmp_path):
+    c, projects = client
+    payload = {"album": {"artist": "Trk", "title": "Alb", "date": "2026-08-08"},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    _seed_master(projects / slug)
+    c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
+    with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data:") and json.loads(line[5:].strip())["status"] == "complete":
+                break
+    assert c.get(f"/download/{slug}/track/1").status_code == 401
+    r = c.get(f"/download/{slug}/track/1", headers=USER)
+    assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
+    assert c.get(f"/download/{slug}/track/9", headers=USER).status_code == 404

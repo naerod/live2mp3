@@ -102,6 +102,47 @@ def me(identity: dict = Depends(roles)) -> dict:
     return identity
 
 
+def _track_file(project_dir: Path, n: int) -> Path | None:
+    """Retrouve le MP3 d'une piste (préfixe numéro : '01_…' ou '01 - …')."""
+    src = project_dir / "build" / "audio"
+    if not src.exists():
+        return None
+    import re
+    pat = re.compile(rf"^0*{int(n)}(?=\D)")
+    for f in sorted(src.glob("*.mp3")):
+        if pat.match(f.name):
+            return f
+    return None
+
+
+@app.get("/api/catalogue/{slug}")
+def catalogue_detail(slug: str) -> dict:
+    """Fiche publique d'un album : métadonnées, labels, setlist (titres)."""
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    project_dir = PROJECTS_DIR / slug
+    cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    tracks = []
+    for t in m.tracks:
+        tracks.append({
+            "n": t.get("n"),
+            "title": t.get("title"),
+            "dl": _track_file(project_dir, t.get("n")) is not None,
+        })
+    return {
+        "slug": slug,
+        "album": m.data.get("album", {}),
+        "labels": cat.get("labels", []),
+        "has_cover": cat.get("has_cover", False),
+        "has_traycard": cat.get("has_traycard", False),
+        "has_mp3": cat.get("has_mp3", False),
+        "has_mp4": cat.get("has_mp4", False),
+        "tracks": tracks,
+    }
+
+
 @app.get("/cover/{slug}")
 def get_cover(slug: str) -> FileResponse:
     path = PROJECTS_DIR / slug / "manifest.yaml"
@@ -134,6 +175,18 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
 
 
 # Routes spécifiques AVANT la route générique {kind} (sinon "cover" y matche).
+@app.get("/download/{slug}/track/{n}")
+def download_track(slug: str, n: int,
+                   identity: dict = Depends(require_user)) -> FileResponse:
+    project_dir = PROJECTS_DIR / slug
+    if not (project_dir / "manifest.yaml").exists():
+        raise HTTPException(404, "album introuvable")
+    f = _track_file(project_dir, n)
+    if not f:
+        raise HTTPException(404, "piste introuvable")
+    return FileResponse(f, filename=f.name, media_type="audio/mpeg")
+
+
 @app.get("/download/{slug}/cover")
 def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
     path = PROJECTS_DIR / slug / "manifest.yaml"
