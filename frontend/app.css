@@ -13,11 +13,17 @@ body{margin:0;background:var(--bg);color:var(--fg);
 header{display:flex;justify-content:space-between;align-items:center;
   padding:14px 22px;border-bottom:1px solid var(--border);}
 .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:20px}
-.brand .material-symbols-outlined{color:var(--accent)}
+.brand .material-symbols-outlined{color:var(--accent);font-size:22px}
 .tools{display:flex;gap:8px}
-.icon-btn{display:flex;align-items:center;gap:4px;background:var(--card);
+.icon-btn{display:inline-flex;align-items:center;gap:6px;background:var(--card);
   color:var(--fg);border:1px solid var(--border);border-radius:10px;
-  padding:6px 10px;cursor:pointer;font-family:inherit}
+  padding:7px 12px;cursor:pointer;font-family:inherit;font-size:13px;
+  font-weight:500;line-height:1;text-decoration:none;transition:background .15s,border-color .15s}
+.icon-btn:hover{background:var(--bg);border-color:var(--accent)}
+.icon-btn .material-symbols-outlined{font-size:18px;
+  font-variation-settings:'opsz' 20,'wght' 400,'GRAD' 0,'FILL' 0}
+/* liens : pas de soulignement (standard moderne) */
+a{text-decoration:none;color:inherit}
 main{max-width:900px;margin:28px auto;padding:0 18px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;
   padding:24px;margin-bottom:20px}
