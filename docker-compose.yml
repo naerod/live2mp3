@@ -1,38 +1,53 @@
 services:
   redis:
     image: redis:7-alpine
+    container_name: live2mp3-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    networks:
+      - internal
 
   app:
     build: .
     image: live2mp3:latest
+    container_name: live2mp3-app
     restart: unless-stopped
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
-    ports:
-      - "127.0.0.1:8000:8000"   # exposé localement ; Nginx allowliste Tailscale
+      REDIS_URL: redis://live2mp3-redis:6379/0
     volumes:
       - projects:/app/projects
       - ./templates:/app/templates
+    networks:
+      - internal
+      - web          # réseau partagé apps_web -> joignable par nginx
     depends_on:
       - redis
 
   worker:
     build: .
     image: live2mp3:latest
+    container_name: live2mp3-worker
     restart: unless-stopped
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://live2mp3-redis:6379/0
     command: python -m backend.worker
     volumes:
       - projects:/app/projects
       - ./templates:/app/templates
+    networks:
+      - internal
     depends_on:
       - redis
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    external: true
+    name: apps_web
 
 volumes:
   projects:
