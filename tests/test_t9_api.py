@@ -221,3 +221,11 @@ def test_healthz(client):
     c, _ = client
     assert c.get("/healthz").json() == {"ok": True}
     assert c.head("/healthz").status_code == 200
+
+
+def test_version(client):
+    c, _ = client
+    v = c.get("/api/version").json()
+    assert v["version"] == "1.0.0"
+    assert v["env"] in ("prod", "preprod")
+    assert "commit" in v

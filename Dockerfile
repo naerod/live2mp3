@@ -32,6 +32,7 @@ RUN pip install -r requirements.txt yt-dlp
 COPY backend/ backend/
 COPY frontend/ frontend/
 COPY templates/ templates/
+COPY VERSION .
 
 ENV CHROMIUM_BIN=/usr/bin/chromium
 EXPOSE 8000

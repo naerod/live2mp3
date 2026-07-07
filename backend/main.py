@@ -81,10 +81,23 @@ class JobIn(BaseModel):
     source_url: str = ""
 
 
-# --- Santé (public, GET + HEAD pour le hub) -------------------------------
+# --- Santé & version (public) ---------------------------------------------
+import os
+
+APP_ENV = os.environ.get("APP_ENV", "prod")
+GIT_COMMIT = os.environ.get("GIT_COMMIT", "")[:7]
+_vfile = BASE / "VERSION"
+APP_VERSION = _vfile.read_text().strip() if _vfile.exists() else "0.0.0"
+
+
 @app.api_route("/healthz", methods=["GET", "HEAD"])
 def healthz() -> dict:
     return {"ok": True}
+
+
+@app.get("/api/version")
+def version() -> dict:
+    return {"version": APP_VERSION, "env": APP_ENV, "commit": GIT_COMMIT}
 
 
 # --- Routes publiques (vitrine) -------------------------------------------

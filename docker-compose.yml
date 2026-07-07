@@ -1,7 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: live2mp3-redis
+    container_name: live2mp3${ENV_SUFFIX}-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
@@ -10,12 +10,14 @@ services:
 
   app:
     build: .
-    image: live2mp3:latest
-    container_name: live2mp3-app
+    image: live2mp3${ENV_SUFFIX}:latest
+    container_name: live2mp3${ENV_SUFFIX}-app
     restart: unless-stopped
     env_file: .env
     environment:
-      REDIS_URL: redis://live2mp3-redis:6379/0
+      REDIS_URL: redis://live2mp3${ENV_SUFFIX}-redis:6379/0
+      APP_ENV: ${APP_ENV:-prod}
+      GIT_COMMIT: ${GIT_COMMIT:-}
     volumes:
       - projects:/app/projects
       - ./templates:/app/templates
@@ -27,12 +29,14 @@ services:
 
   worker:
     build: .
-    image: live2mp3:latest
-    container_name: live2mp3-worker
+    image: live2mp3${ENV_SUFFIX}:latest
+    container_name: live2mp3${ENV_SUFFIX}-worker
     restart: unless-stopped
     env_file: .env
     environment:
-      REDIS_URL: redis://live2mp3-redis:6379/0
+      REDIS_URL: redis://live2mp3${ENV_SUFFIX}-redis:6379/0
+      APP_ENV: ${APP_ENV:-prod}
+      GIT_COMMIT: ${GIT_COMMIT:-}
     command: python -m backend.worker
     volumes:
       - projects:/app/projects
@@ -51,4 +55,6 @@ networks:
 
 volumes:
   projects:
+    name: live2mp3${ENV_SUFFIX}_projects
   redis-data:
+    name: live2mp3${ENV_SUFFIX}_redis-data

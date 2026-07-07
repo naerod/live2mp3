@@ -60,6 +60,10 @@
   .album .btns a .material-symbols-outlined{font-size:16px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
+  .foot{margin:36px 0 14px;text-align:center;color:var(--muted);font-size:12px}
+  .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
+    border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums}
+  .foot .env-preprod{color:var(--run);border-color:var(--run)}
   /* Modale détail */
   .overlay{position:fixed;inset:0;background:rgba(6,7,10,.66);backdrop-filter:blur(3px);
     display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;
@@ -124,6 +128,8 @@
     <span class="material-symbols-outlined">library_music</span>
     <div id="empty-msg">Aucun album pour le moment.</div>
   </div>
+
+  <div class="foot" id="foot"></div>
 </main>
 
 <div id="overlay" class="overlay hidden"><div class="modal" style="position:relative">
@@ -281,7 +287,18 @@ async function openDetail(slug){
   requestAnimationFrame(()=>overlay.classList.add("show"));
 }
 
+async function loadVersion(){
+  try{
+    const v=await (await fetch("/api/version")).json();
+    const cls=v.env==="prod"?"":"env-preprod";
+    const commit=v.commit?` · ${v.commit}`:"";
+    document.getElementById("foot").innerHTML=
+      `<span class="badge ${cls}">v${v.version} · ${v.env}${commit}</span>`;
+  }catch(e){}
+}
+
 async function load(){
+  loadVersion();
   try{ ME=await (await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
   // header : Connexion masquée si connecté ; Outil visible seulement gestionnaire
   document.getElementById("login").style.display=ME.authenticated?"none":"";
