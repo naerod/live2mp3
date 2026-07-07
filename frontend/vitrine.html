@@ -68,6 +68,7 @@
   .overlay{position:fixed;inset:0;background:rgba(6,7,10,.66);backdrop-filter:blur(3px);
     display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;
     overflow:auto;z-index:50;opacity:0;transition:opacity .18s}
+  .overlay.hidden{display:none}   /* sinon le calque transparent capture tous les clics */
   .overlay.show{opacity:1}
   .modal{background:var(--card);border:1px solid var(--border);border-radius:18px;
     width:100%;max-width:720px;overflow:hidden;transform:translateY(10px);
