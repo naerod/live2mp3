@@ -1,23 +1,13 @@
 # STATUS — live2mp3
 
-## make verify : 50 passed, 0 failed
-T1-T10 (manifest, render, tags, artwork, waveform/silence, DeepSeek réel,
-data_disc, audio_cd, API+SSE+gating, bundle).
+## Environnements (prod + preprod)
+| Env | URL | Branche | Accès |
+|-----|-----|---------|-------|
+| prod | https://live2mp3.naerod.com | main | vitrine publique + downloads (user) + outil (gestionnaire) |
+| preprod | https://preprod-live2mp3.naerod.com | preprod | Authentik gestionnaire/admin (domaine entier) |
 
-## Déploiement CT110 — EN LIGNE (public + SSO)
-- App : `/opt/apps/live2mp3` (app+worker+redis), image live2mp3:latest.
-- SSO : `/opt/apps/authentik` (Authentik server+worker+postgres+redis).
-- URLs publiques (Cloudflare Tunnel) :
-  - https://live2mp3.naerod.com  — vitrine publique + outil/downloads gatés
-  - https://auth.naerod.com       — login SSO (portail utilisateur)
-  - https://admin.naerod.com      — admin Authentik (superuser)
-- Rôles : anonyme (vitrine) / live2mp3-user (download) / live2mp3-gestionnaire
-  (outil+IA) / superuser (tout + gestion des accès).
-- Vérifs live : vitrine 200 public, /app -> redirection login auth.naerod.com,
-  admin API -> 403 sans auth, catalogue public 200.
+- Versionning : VERSION (semver) + /api/version + badge footer + tags git ; promotion via deploy-prod.
+- make verify : 60 tests T1-T10 + auth/vitrine/labels/détail/version.
+- Hub : ligne live2mp3 (prod + preprod, health dots verts) dans hub.naerod.com.
 
-## Reste (manuel / suite)
-- 1er login navigateur : dorian (mdp temporaire Bitwarden) -> changer dans /if/user/.
-- Ajouter des utilisateurs via admin.naerod.com (UI Authentik).
-- SESSION_SECRET de l'auth-service historique (hub/preprods) : à durcir + migrer
-  vers Authentik (Phase ultérieure).
+Voir DEPLOY.md pour le workflow complet.
