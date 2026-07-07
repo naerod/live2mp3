@@ -81,6 +81,12 @@ class JobIn(BaseModel):
     source_url: str = ""
 
 
+# --- Santé (public, GET + HEAD pour le hub) -------------------------------
+@app.api_route("/healthz", methods=["GET", "HEAD"])
+def healthz() -> dict:
+    return {"ok": True}
+
+
 # --- Routes publiques (vitrine) -------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def vitrine() -> HTMLResponse:

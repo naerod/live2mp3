@@ -215,3 +215,9 @@ def test_track_download_requires_user(client, tmp_path):
     r = c.get(f"/download/{slug}/track/1", headers=USER)
     assert r.status_code == 200 and r.headers["content-type"] == "audio/mpeg"
     assert c.get(f"/download/{slug}/track/9", headers=USER).status_code == 404
+
+
+def test_healthz(client):
+    c, _ = client
+    assert c.get("/healthz").json() == {"ok": True}
+    assert c.head("/healthz").status_code == 200
