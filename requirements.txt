@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+rq
+redis
+pyyaml
+mutagen
+requests
+python-multipart
+jinja2
+pytest
+faster-whisper
+httpx

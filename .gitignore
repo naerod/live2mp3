@@ -1,6 +1,7 @@
 # Secrets — jamais committés
 .env
 *.txt
+!requirements.txt
 
 # Données lourdes / générées
 projects/
