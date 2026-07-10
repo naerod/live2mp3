@@ -335,8 +335,9 @@ function matches(a){
 
 const NEW_DAYS=21;
 function isNew(a){
-  if(!a.imported_at) return false;
-  return (Date.now()-new Date(a.imported_at).getTime())/(864e5)<=NEW_DAYS;
+  const ref=a.drive_added_at||a.imported_at;
+  if(!ref) return false;
+  return (Date.now()-new Date(ref).getTime())/(864e5)<=NEW_DAYS;
 }
 
 function albumCard(a){

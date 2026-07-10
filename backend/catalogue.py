@@ -54,6 +54,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "labels": _labels(album, has_mp3, has_mp4),
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
+            "drive_added_at": meta.get("drive_added_at", ""),
             "published": published,
         })
 
