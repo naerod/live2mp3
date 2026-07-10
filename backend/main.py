@@ -105,6 +105,10 @@ class TracksEditIn(BaseModel):
     tracks: list[TrackEditIn]
 
 
+class PublishIn(BaseModel):
+    published: bool
+
+
 # --- Santé & version (public) ---------------------------------------------
 import os
 
@@ -134,11 +138,10 @@ def vitrine() -> HTMLResponse:
 
 
 @app.get("/api/catalogue")
-def get_catalogue(sort: str = "date_concert") -> list[dict]:
-    """Liste publique des albums disponibles.
-    sort: date_concert | date_import | artist | title
-    """
-    return catalogue.list_albums(sort=sort)
+def get_catalogue(sort: str = "date_concert", identity: dict = Depends(roles)) -> list[dict]:
+    """Liste des albums. Gestionnaires voient les brouillons, public non."""
+    include_drafts = identity.get("is_gestionnaire", False)
+    return catalogue.list_albums(sort=sort, include_drafts=include_drafts)
 
 
 @app.get("/api/me")
@@ -317,6 +320,7 @@ def album_detail(slug: str,
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
+        "published": m.data.get("published", True),
         "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
     }
 
@@ -591,6 +595,21 @@ def update_labels(slug: str, payload: dict,
     m.data.setdefault("album", {})["labels"] = clean
     m.save()
     return {"ok": True, "labels": clean}
+
+
+# --- Publication ---
+
+
+@app.patch("/api/albums/{slug}/published")
+def set_published(slug: str, payload: PublishIn,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    m.data["published"] = payload.published
+    m.save(path)
+    return {"ok": True, "published": payload.published}
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------

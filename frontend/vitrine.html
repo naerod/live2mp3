@@ -53,6 +53,13 @@
     background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
   .new-badge .material-symbols-outlined{font-size:12px}
+  .draft-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
+    gap:3px;padding:3px 8px 3px 5px;border-radius:7px;
+    background:rgba(220,60,60,.85);color:#fff;font-size:10.5px;font-weight:700;
+    letter-spacing:.03em;text-transform:uppercase;pointer-events:none;
+    backdrop-filter:blur(3px)}
+  .draft-badge .material-symbols-outlined{font-size:12px}
+  .album.unpublished{opacity:.6;outline:2px dashed rgba(220,60,60,.5);outline-offset:2px}
   .gear{position:absolute;top:10px;right:10px;z-index:2;width:34px;height:34px;
     display:flex;align-items:center;justify-content:center;border-radius:9px;
     background:rgba(13,15,19,.72);color:#fff;border:1px solid rgba(255,255,255,.18);
@@ -328,8 +335,9 @@ function matches(a){
 
 const NEW_DAYS=21;
 function isNew(a){
-  if(!a.imported_at) return false;
-  return (Date.now()-new Date(a.imported_at).getTime())/(864e5)<=NEW_DAYS;
+  const ref=a.drive_added_at||a.imported_at;
+  if(!ref) return false;
+  return (Date.now()-new Date(ref).getTime())/(864e5)<=NEW_DAYS;
 }
 
 function albumCard(a){
@@ -345,14 +353,17 @@ function albumCard(a){
     ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
+  const draftBadge=a.published===false&&ME.is_gestionnaire
+    ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${L()==="fr"?"Brouillon":"Draft"}</span>`:"";
   let importedHtml="";
   if(a.imported_by){
     const d=formatImportDate(a.imported_at);
     importedHtml=`<div class="imported"><span class="material-symbols-outlined">upload</span>${T[L()].imported_by(a.imported_by,d)}</div>`;
   }
   const showArtist=currentSort!=="artist";
-  return `<div class="album" data-slug="${a.slug}">
+  return `<div class="album${a.published===false?" unpublished":""}" data-slug="${a.slug}">
     ${gear}
+    ${draftBadge}
     ${newBadge}
     <div class="cover">${coverHtml(a)}</div>
     <div class="body">

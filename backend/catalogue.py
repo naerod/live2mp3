@@ -15,7 +15,7 @@ def _has_files(d: Path, ext: str) -> bool:
     return d.exists() and any(d.glob(f"*.{ext}"))
 
 
-def list_albums(sort: str = "date_concert") -> list[dict]:
+def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> list[dict]:
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
         return albums
@@ -26,6 +26,9 @@ def list_albums(sort: str = "date_concert") -> list[dict]:
         try:
             m = Manifest.load(manifest)
         except Exception:
+            continue
+        published = m.data.get("published", True)
+        if not published and not include_drafts:
             continue
         album = m.data.get("album", {})
         has_mp3 = _has_files(pdir / "build" / "audio", "mp3")
@@ -51,6 +54,8 @@ def list_albums(sort: str = "date_concert") -> list[dict]:
             "labels": _labels(album, has_mp3, has_mp4),
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
+            "drive_added_at": meta.get("drive_added_at", ""),
+            "published": published,
         })
 
     # Tri

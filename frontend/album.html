@@ -73,6 +73,8 @@
   .dl{display:flex;flex-wrap:wrap;gap:8px}
   .dl a{margin:0;height:34px;font-size:12.5px}
   .save-row{display:flex;gap:8px;align-items:center;margin-top:12px}
+  .publish-row{display:flex;gap:12px;align-items:center;margin-top:12px}
+  .publish-status{font-size:12.5px;color:var(--muted);flex:1}
   .save-row button{margin:0}
   @keyframes disk-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
   @keyframes check-pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
@@ -164,6 +166,14 @@
           <button class="primary" id="save-labels"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-labels">Enregistrer</span></button>
         </div>
       </div>
+      <!-- Publication -->
+      <div class="sec">
+        <h2 id="t-publish-h">Publication</h2>
+        <div class="publish-row">
+          <span class="publish-status" id="publish-status"></span>
+          <button id="btn-publish"><span class="material-symbols-outlined">visibility</span><span id="t-btn-publish">Publier</span></button>
+        </div>
+      </div>
     </div>
   </div>
 </main>
@@ -185,7 +195,9 @@ const TT={
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
       new_track:"Nouveau titre…",add_label:"Ajouter un label…",
-      del_t:"Supprimer"},
+      del_t:"Supprimer",
+      publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
+      status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_festival:"Festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       save_meta:"Save",save_tracks:"Save tracks",save_labels:"Save",
@@ -193,11 +205,15 @@ const TT={
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
-      new_track:"New title…",add_label:"Add a label…",del_t:"Remove"}
+      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",
+      publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
+      status_pub:"Visible in the catalogue",status_draft:"Hidden from public"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
   const t=TT[L()];
+  if(document.getElementById("t-publish-h")){document.getElementById("t-publish-h").textContent=t.publish_h;}
+  refreshPublishBtn();
   document.getElementById("lang-label").textContent=L().toUpperCase();
   document.getElementById("t-back").textContent=t.back;
   document.getElementById("t-meta").textContent=t.meta;
@@ -224,6 +240,22 @@ document.getElementById("lang").onclick=()=>{
   localStorage.setItem("l2m-lang",L()==="fr"?"en":"fr");applyLang();};
 
 const SLUG=decodeURIComponent(location.pathname.split("/app/album/")[1]||"");
+let albumPublished=true;
+function refreshPublishBtn(){
+  const btn=document.getElementById("btn-publish");
+  if(!btn)return;
+  const t=TT[L()];
+  const ic=btn.querySelector(".material-symbols-outlined");
+  const lbl=document.getElementById("t-btn-publish");
+  const status=document.getElementById("publish-status");
+  if(albumPublished){
+    ic.textContent="visibility_off"; lbl.textContent=t.unpublish_btn;
+    btn.className=""; status.textContent=t.status_pub;
+  } else {
+    ic.textContent="visibility"; lbl.textContent=t.publish_btn;
+    btn.className="primary"; status.textContent=t.status_draft;
+  }
+}
 let DATA=null,labels=[],tracks=[];
 
 function toast(msg,err=false){
@@ -392,6 +424,17 @@ document.getElementById("traycard-file").addEventListener("change",async e=>{
   e.target.value="";
 });
 
+document.addEventListener("DOMContentLoaded",()=>{
+  document.getElementById("btn-publish").onclick=async()=>{
+    const newVal=!albumPublished;
+    const r=await fetch(`/api/albums/${SLUG}/published`,{
+      method:"PATCH",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({published:newVal})
+    });
+    if(r.ok){albumPublished=newVal;refreshPublishBtn();}
+  };
+});
+
 async function load(){
   DATA=await(await fetch(`/api/albums/${SLUG}`)).json();
   const a=DATA.album||{};
@@ -406,6 +449,7 @@ async function load(){
   labels=(DATA.labels||[]).slice();
   tracks=(DATA.tracks||[]).map(t=>({...t}));
   document.getElementById("suggest").innerHTML=(DATA.all_labels||[]).map(l=>`<option value="${l}">`).join("");
+  albumPublished=DATA.published!==false;
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
 }
 applyLang();load();
