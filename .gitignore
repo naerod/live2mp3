@@ -7,7 +7,6 @@
 projects/
 build/
 source/
-data/
 
 # Python
 __pycache__/

@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import Iterator
 
 _BASE = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.environ.get("L2M_DATA_DIR", str(_BASE / "data")))
+# Par défaut, on stocke sous le volume `projects` déjà monté (bind-mount partagé
+# sur les hôtes), dans un sous-dossier caché scoppé par environnement — évite
+# toute modification de docker-compose.yml. `.l2m-social/` est ignoré par le
+# scan du catalogue (aucun manifest.yaml). Surchargeable via `L2M_DATA_DIR`.
+_APP_ENV = os.environ.get("APP_ENV", "prod")
+_DEFAULT_DIR = _BASE / "projects" / ".l2m-social" / _APP_ENV
+DATA_DIR = Path(os.environ.get("L2M_DATA_DIR", str(_DEFAULT_DIR)))
 AVATARS_DIR = DATA_DIR / "avatars"
 DB_PATH = DATA_DIR / "live2mp3.db"
 
