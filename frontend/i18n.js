@@ -6,7 +6,7 @@ const I18N = {
     dvd_note:"DVD-Video est hors périmètre V1.",create:"Créer le projet",
     progress_title:"Traitement",editor_title:"Ajustement des coupes",
     express:"Valider et rendre",precision:"Mode précision",
-    done_title:"Terminé",download:"Télécharger le bundle"},
+    back:"Retour",done_title:"Terminé",download:"Télécharger le bundle"},
   en:{form_title:"New concert",artist:"Artist",album:"Album",date:"Date",
     venue:"Venue",festival:"Festival",target:"Disc type",
     data_disc:"Data disc (ISO)",audio_cd:"Audio CD (CUE+WAV)",
@@ -14,7 +14,7 @@ const I18N = {
     dvd_note:"DVD-Video is out of scope for V1.",create:"Create project",
     progress_title:"Processing",editor_title:"Adjust cuts",
     express:"Validate and render",precision:"Precision mode",
-    done_title:"Done",download:"Download bundle"}
+    back:"Back",done_title:"Done",download:"Download bundle"}
 };
 function applyI18n(lang){
   document.documentElement.lang=lang;
