@@ -4,6 +4,7 @@ rq
 redis
 pyyaml
 mutagen
+Pillow
 requests
 python-multipart
 jinja2

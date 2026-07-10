@@ -21,6 +21,7 @@ services:
     volumes:
       - projects:/app/projects
       - ./templates:/app/templates
+      - data:/app/data          # SQLite social (profils, favoris, commentaires) + avatars
     networks:
       - internal
       - web          # réseau partagé apps_web -> joignable par nginx
@@ -56,5 +57,7 @@ networks:
 volumes:
   projects:
     name: live2mp3${ENV_SUFFIX}_projects
+  data:
+    name: live2mp3${ENV_SUFFIX}_data
   redis-data:
     name: live2mp3${ENV_SUFFIX}_redis-data

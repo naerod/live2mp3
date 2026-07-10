@@ -165,6 +165,7 @@
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
+    <a id="profile-link" class="icon-btn" href="#" style="display:none"><span class="material-symbols-outlined">account_circle</span><span id="profile-label">Profil</span></a>
     <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
     <a id="logout" class="icon-btn" href="/outpost.goauthentik.io/sign_out" style="display:none"><span class="material-symbols-outlined">logout</span><span data-i18n="logout">Déconnexion</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
@@ -236,6 +237,7 @@
 </div>
 
 <script src="/static/i18n.js"></script>
+<script src="/static/social.js"></script>
 <script>
 // ── Thème ──────────────────────────────────────────────────────────────────
 const themeBtn=document.getElementById("theme");
@@ -251,6 +253,7 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   if(window.applyI18n)applyI18n(l);
   const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
   const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
+  const _pl=document.getElementById("profile-label");if(_pl)_pl.textContent=T[l].profile;
   if(ALBUMS.length)buildFilters();render();updateCount();}
 langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
@@ -263,7 +266,7 @@ const T={
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
       sort_artist:"Artiste",sort_title:"Titre",
-      logout:"Déconnexion",source:"Source",
+      logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années"},
@@ -275,7 +278,7 @@ const T={
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
       sort_artist:"Artist",sort_title:"Title",
-      logout:"Log out",source:"Source",
+      logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years"}
@@ -545,6 +548,7 @@ async function openDetail(slug){
         ${impHtml}
         ${sourceHtml}
         <div class="tags">${tags}</div>
+        <div id="modal-like" style="margin-top:12px"></div>
       </div>
     </div>
     <div class="modal-body">
@@ -552,9 +556,15 @@ async function openDetail(slug){
       ${dl}
       <h3>${t.setlist}</h3>
       <ul class="setlist">${set}</ul>
+      <div id="modal-social" style="margin-top:8px"></div>
     </div>`;
   overlay.classList.remove("hidden");
   requestAnimationFrame(()=>overlay.classList.add("show"));
+  // Like + commentaires (module social)
+  const likeEl=document.createElement("button");likeEl.className="soc-like";
+  document.getElementById("modal-like").appendChild(likeEl);
+  L2M.likeButton(likeEl,slug);
+  L2M.comments(document.getElementById("modal-social"),slug);
 }
 
 // ── Cover preview overlay ─────────────────────────────────────────────────
@@ -600,10 +610,17 @@ async function load(){
   document.getElementById("login").style.display=ME.authenticated?"none":"";
   document.getElementById("logout").style.display=ME.authenticated?"":"none";
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
+  const pl=document.getElementById("profile-link");
+  if(ME.authenticated&&ME.username){pl.href="/u/"+encodeURIComponent(ME.username);
+    pl.style.display="";document.getElementById("profile-label").textContent=T[L()].profile;}
+  else pl.style.display="none";
   const apiSort=currentSort==="artist"?"date_concert":currentSort;
   ALBUMS=await(await fetch(`/api/catalogue?sort=${apiSort}`)).json();
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
+  // Ouverture directe d'un album (?album=slug), ex. depuis une page profil
+  const wanted=new URLSearchParams(location.search).get("album");
+  if(wanted) openDetail(wanted);
 }
 load();
 </script>

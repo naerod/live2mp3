@@ -31,7 +31,9 @@ from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC, ID3NoHeaderError
 from . import catalogue, jobs
 from .auth import require_gestionnaire, require_user, roles
+from .db import init_db
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
+from .social import router as social_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -40,6 +42,14 @@ BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
 
 app = FastAPI(title="live2mp3", docs_url="/api/docs")
+
+# Système social (profils, favoris, commentaires) — routes /api/social, /u, /avatar.
+app.include_router(social_router)
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    init_db()
 
 # --- État de progression en mémoire (par slug) ----------------------------
 _progress_bus: dict[str, "queue.Queue[dict]"] = {}
