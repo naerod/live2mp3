@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>live2mp3 — albums live</title>
+<title>live2mp3 — nos albums</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
@@ -174,7 +174,7 @@
 
 <main>
   <div class="hero">
-    <h1 data-i18n="hero_title">Nos albums live</h1>
+    <h1 data-i18n="hero_title">Nos albums</h1>
     <p data-i18n="hero_sub">Captations de concerts découpées, taguées et prêtes à écouter.</p>
   </div>
 
@@ -248,7 +248,10 @@ themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"l
 const langBtn=document.getElementById("lang");
 function setLang(l){localStorage.setItem("l2m-lang",l);
   document.getElementById("lang-label").textContent=l.toUpperCase();
-  if(window.applyI18n)applyI18n(l);if(ALBUMS.length)buildFilters();render();updateCount();}
+  if(window.applyI18n)applyI18n(l);
+  const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
+  const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
+  if(ALBUMS.length)buildFilters();render();updateCount();}
 langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
 const T={
@@ -261,6 +264,7 @@ const T={
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
       sort_artist:"Artiste",sort_title:"Titre",
       logout:"Déconnexion",source:"Source",
+      hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
@@ -272,6 +276,7 @@ const T={
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
       sort_artist:"Artist",sort_title:"Title",
       logout:"Log out",source:"Source",
+      hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years"}
 };
@@ -430,9 +435,12 @@ function buildFilters(){
   selY.innerHTML=`<option value="">${t.all_years}</option>`+
     years.map(y=>`<option value="${y}"${filterYear===y?" selected":""}>${y}</option>`).join("");
   selY.onchange=()=>{filterYear=selY.value;updateClearBtn();render();updateCount();};
-  // Label chips
-  const all=[...new Set(ALBUMS.flatMap(a=>a.labels||[]))]
+  // Label chips — tags fixes + tags dynamiques des albums
+  const FIXED_TAGS=["live","unreleased","crossover"];
+  const dynamic=[...new Set(ALBUMS.flatMap(a=>a.labels||[]))]
+    .filter(l=>!FIXED_TAGS.map(t=>t.toLowerCase()).includes(l.toLowerCase()))
     .sort((x,y)=>x.localeCompare(y,undefined,{sensitivity:"base"}));
+  const all=[...FIXED_TAGS,...dynamic];
   const box=document.getElementById("filters");
   box.innerHTML=all.map(l=>`<span class="chip" data-label="${l}"${selected.has(l)?' class="chip active"':' class="chip"'}>${l}</span>`).join("");
   box.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{
