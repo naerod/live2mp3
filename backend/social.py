@@ -43,6 +43,7 @@ BODY_MAX = 4000
 REPLY_PAGE = 3          # réponses affichées d'emblée sous une racine
 TOP_PAGE = 20           # commentaires racine par page
 AVATAR_MAX_BYTES = 8 * 1024 * 1024
+MAX_LIKERS = 5          # avatars affichés dans la rangée de likes
 
 
 # --- Helpers ---------------------------------------------------------------
@@ -129,34 +130,63 @@ def _ensure_profile(conn: sqlite3.Connection, username: str) -> sqlite3.Row:
     ).fetchone()
 
 
-def _scores(conn: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
+def _comment_likes(
+    conn: sqlite3.Connection, ids: list[int], username: str | None = None
+) -> dict[int, dict]:
+    """Retourne dict[comment_id → {likes, liked, likers}] pour un lot d'ids."""
     if not ids:
         return {}
     qs = ",".join("?" * len(ids))
-    rows = conn.execute(
-        f"SELECT comment_id, COALESCE(SUM(value),0) AS s FROM comment_votes "
-        f"WHERE comment_id IN ({qs}) GROUP BY comment_id",
-        tuple(ids),
-    ).fetchall()
-    return {r["comment_id"]: r["s"] for r in rows}
-
-
-def _my_votes(conn: sqlite3.Connection, ids: list[int], username: str | None) -> dict[int, int]:
-    if not ids or not username:
-        return {}
-    qs = ",".join("?" * len(ids))
-    rows = conn.execute(
-        f"SELECT comment_id, value FROM comment_votes "
-        f"WHERE username=? AND comment_id IN ({qs})",
-        (username, *ids),
-    ).fetchall()
-    return {r["comment_id"]: r["value"] for r in rows}
+    counts = {
+        r["comment_id"]: r["n"]
+        for r in conn.execute(
+            f"SELECT comment_id, COUNT(*) AS n FROM comment_likes "
+            f"WHERE comment_id IN ({qs}) GROUP BY comment_id",
+            tuple(ids),
+        ).fetchall()
+    }
+    likers_by_id: dict[int, list[str]] = {i: [] for i in ids}
+    for cid in ids:
+        rows = conn.execute(
+            "SELECT username FROM comment_likes WHERE comment_id=? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (cid, MAX_LIKERS),
+        ).fetchall()
+        likers_by_id[cid] = [r["username"] for r in rows]
+    all_likers = {u for ul in likers_by_id.values() for u in ul}
+    profs = _profiles_map(conn, all_likers)
+    liked_set: set[int] = set()
+    if username:
+        liked_set = {
+            r["comment_id"]
+            for r in conn.execute(
+                f"SELECT comment_id FROM comment_likes "
+                f"WHERE username=? AND comment_id IN ({qs})",
+                (username, *ids),
+            ).fetchall()
+        }
+    out: dict[int, dict] = {}
+    for cid in ids:
+        out[cid] = {
+            "likes": counts.get(cid, 0),
+            "liked": cid in liked_set,
+            "likers": [
+                {
+                    "username": u,
+                    "display_name": profs.get(u, {}).get("display_name", u),
+                    "avatar": profs.get(u, {}).get("avatar", False),
+                }
+                for u in likers_by_id[cid]
+            ],
+        }
+    return out
 
 
 def _comment_dict(row: sqlite3.Row, profiles: dict[str, dict],
-                  scores: dict[int, int], my_votes: dict[int, int]) -> dict:
+                  likes_map: dict[int, dict]) -> dict:
     deleted = bool(row["deleted"])
     prof = profiles.get(row["username"], {"display_name": row["username"], "avatar": False})
+    ld = likes_map.get(row["id"], {"likes": 0, "liked": False, "likers": []})
     return {
         "id": row["id"],
         "username": None if deleted else row["username"],
@@ -167,8 +197,9 @@ def _comment_dict(row: sqlite3.Row, profiles: dict[str, dict],
         "deleted": deleted,
         "created_at": row["created_at"],
         "edited_at": row["edited_at"] or "",
-        "score": scores.get(row["id"], 0),
-        "my_vote": my_votes.get(row["id"], 0),
+        "likes": ld["likes"],
+        "liked": ld["liked"],
+        "likers": ld["likers"],
     }
 
 
@@ -180,10 +211,6 @@ class CommentIn(BaseModel):
 
 class CommentEditIn(BaseModel):
     body: str = Field(min_length=1, max_length=BODY_MAX)
-
-
-class VoteIn(BaseModel):
-    value: int  # -1, 0, +1
 
 
 class ProfileIn(BaseModel):
@@ -263,11 +290,11 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
             (username,),
         ).fetchall()
         ids = [r["id"] for r in crows]
-        scores = _scores(conn, ids)
-        my_votes = _my_votes(conn, ids, viewer)
+        likes_map = _comment_likes(conn, ids, viewer)
         comments = []
         for r in crows:
             alb = _album_label(r["slug"], cat_pub)
+            ld = likes_map.get(r["id"], {"likes": 0, "liked": False, "likers": []})
             comments.append({
                 "id": r["id"],
                 "slug": r["slug"],
@@ -276,8 +303,8 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
                 "body": r["body"],
                 "created_at": r["created_at"],
                 "edited_at": r["edited_at"] or "",
-                "score": scores.get(r["id"], 0),
-                "my_vote": my_votes.get(r["id"], 0),
+                "likes": ld["likes"],
+                "liked": ld["liked"],
                 "is_reply": r["parent_id"] is not None,
             })
 
@@ -431,14 +458,21 @@ def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TO
                   identity: dict = Depends(current_identity)) -> dict:
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
+    # Un commentaire racine supprimé n'est affiché que s'il a au moins une
+    # réponse non supprimée (préserver le contexte du fil).
+    _TOP_FILTER = """
+        slug=? AND parent_id IS NULL
+        AND (deleted=0 OR EXISTS (
+            SELECT 1 FROM comments r
+            WHERE r.parent_id=comments.id AND r.deleted=0
+        ))
+    """
     with get_conn() as conn:
         total = conn.execute(
-            "SELECT COUNT(*) AS n FROM comments WHERE slug=? AND parent_id IS NULL",
-            (slug,),
+            f"SELECT COUNT(*) AS n FROM comments WHERE {_TOP_FILTER}", (slug,)
         ).fetchone()["n"]
         tops = conn.execute(
-            "SELECT * FROM comments WHERE slug=? AND parent_id IS NULL",
-            (slug,),
+            f"SELECT * FROM comments WHERE {_TOP_FILTER}", (slug,)
         ).fetchall()
         top_ids = [r["id"] for r in tops]
 
@@ -455,8 +489,7 @@ def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TO
                 replies_by_top[r["parent_id"]].append(r)
 
         all_ids = top_ids + [r["id"] for rows in replies_by_top.values() for r in rows]
-        scores = _scores(conn, all_ids)
-        my_votes = _my_votes(conn, all_ids, viewer)
+        likes_map = _comment_likes(conn, all_ids, viewer)
         usernames = {r["username"] for r in tops}
         for rows in replies_by_top.values():
             usernames |= {r["username"] for r in rows}
@@ -466,16 +499,19 @@ def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TO
         if sort == "new":
             tops.sort(key=lambda r: r["created_at"], reverse=True)
         else:  # "top"
-            tops.sort(key=lambda r: (scores.get(r["id"], 0), r["created_at"]), reverse=True)
+            tops.sort(
+                key=lambda r: (likes_map.get(r["id"], {}).get("likes", 0), r["created_at"]),
+                reverse=True,
+            )
         tops_page = tops[offset:offset + limit]
 
         out = []
         for t in tops_page:
             replies = replies_by_top.get(t["id"], [])
-            item = _comment_dict(t, profiles, scores, my_votes)
+            item = _comment_dict(t, profiles, likes_map)
             item["reply_count"] = len(replies)
             item["replies"] = [
-                _comment_dict(r, profiles, scores, my_votes) for r in replies[:REPLY_PAGE]
+                _comment_dict(r, profiles, likes_map) for r in replies[:REPLY_PAGE]
             ]
             out.append(item)
     return {"sort": sort, "total": total, "offset": offset, "comments": out}
@@ -493,10 +529,9 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
             (comment_id, limit, offset),
         ).fetchall()
         ids = [r["id"] for r in rows]
-        scores = _scores(conn, ids)
-        my_votes = _my_votes(conn, ids, viewer)
+        likes_map = _comment_likes(conn, ids, viewer)
         profiles = _profiles_map(conn, {r["username"] for r in rows})
-        replies = [_comment_dict(r, profiles, scores, my_votes) for r in rows]
+        replies = [_comment_dict(r, profiles, likes_map) for r in rows]
     return {"replies": replies, "offset": offset}
 
 
@@ -530,7 +565,7 @@ def create_comment(slug: str, payload: CommentIn,
         new_id = cur.lastrowid
         row = conn.execute("SELECT * FROM comments WHERE id=?", (new_id,)).fetchone()
         profiles = _profiles_map(conn, {username})
-    return _comment_dict(row, profiles, {new_id: 0}, {new_id: 0})
+    return _comment_dict(row, profiles, {new_id: {"likes": 0, "liked": False, "likers": []}})
 
 
 @router.patch("/api/social/comments/{comment_id}")
@@ -551,10 +586,9 @@ def edit_comment(comment_id: int, payload: CommentEditIn,
             (body, _now(), comment_id),
         )
         row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
-        scores = _scores(conn, [comment_id])
-        my_votes = _my_votes(conn, [comment_id], username)
+        likes_map = _comment_likes(conn, [comment_id], username)
         profiles = _profiles_map(conn, {username})
-    return _comment_dict(row, profiles, scores, my_votes)
+    return _comment_dict(row, profiles, likes_map)
 
 
 @router.delete("/api/social/comments/{comment_id}")
@@ -574,13 +608,9 @@ def delete_comment(comment_id: int, identity: dict = Depends(require_user)) -> d
     return {"ok": True, "id": comment_id, "deleted": True}
 
 
-@router.post("/api/social/comments/{comment_id}/vote")
-def vote_comment(comment_id: int, payload: VoteIn,
-                 identity: dict = Depends(require_user)) -> dict:
+@router.post("/api/social/comments/{comment_id}/like")
+def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dict:
     username = identity["username"]
-    value = payload.value
-    if value not in (-1, 0, 1):
-        raise HTTPException(400, "vote invalide")
     with get_conn() as conn:
         row = conn.execute(
             "SELECT id, deleted FROM comments WHERE id=?", (comment_id,)
@@ -588,19 +618,21 @@ def vote_comment(comment_id: int, payload: VoteIn,
         if not row or row["deleted"]:
             raise HTTPException(404, "commentaire introuvable")
         _ensure_profile(conn, username)
-        if value == 0:
+        if conn.execute(
+            "SELECT 1 FROM comment_likes WHERE comment_id=? AND username=?",
+            (comment_id, username),
+        ).fetchone():
             conn.execute(
-                "DELETE FROM comment_votes WHERE comment_id=? AND username=?",
+                "DELETE FROM comment_likes WHERE comment_id=? AND username=?",
                 (comment_id, username),
             )
         else:
             conn.execute(
-                "INSERT INTO comment_votes(comment_id, username, value) VALUES(?,?,?) "
-                "ON CONFLICT(comment_id, username) DO UPDATE SET value=excluded.value",
-                (comment_id, username, value),
+                "INSERT INTO comment_likes(comment_id, username, created_at) VALUES(?,?,?)",
+                (comment_id, username, _now()),
             )
-        score = _scores(conn, [comment_id]).get(comment_id, 0)
-    return {"ok": True, "id": comment_id, "score": score, "my_vote": value}
+        ld = _comment_likes(conn, [comment_id], username)[comment_id]
+    return {"ok": True, "id": comment_id, **ld}
 
 
 # =====================================================================

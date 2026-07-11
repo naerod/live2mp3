@@ -202,6 +202,8 @@ const L2M = (function () {
       wireComposer(composeSlot.firstElementChild, async (body) => {
         const c = await api("POST", `/api/social/albums/${slug}/comments`, { body });
         c.reply_count = 0; c.replies = [];
+        const emptyEl = list.querySelector(".soc-empty");
+        if (emptyEl) emptyEl.remove();
         list.insertAdjacentHTML("afterbegin", commentHtml(c, c.id));
         total++;
       });
@@ -236,13 +238,26 @@ const L2M = (function () {
     loadPage();
 
     /* --- rendu --- */
-    function voteHtml(c) {
-      if (c.deleted) return `<div class="soc-vote"></div>`;
-      const cls = c.score > 0 ? "pos" : c.score < 0 ? "neg" : "";
-      return `<div class="soc-vote" data-cid="${c.id}" data-myvote="${c.my_vote}" data-score="${c.score}">
-        <button class="up${c.my_vote === 1 ? " on" : ""}" data-dir="1"><span class="material-symbols-outlined">arrow_upward</span></button>
-        <span class="soc-score ${cls}">${c.score}</span>
-        <button class="down${c.my_vote === -1 ? " on" : ""}" data-dir="-1"><span class="material-symbols-outlined">arrow_downward</span></button>
+    function commentLikeHtml(c) {
+      if (c.deleted) return `<div class="soc-clikes"></div>`;
+      const likers = c.likers || [];
+      const count = c.likes || 0;
+      const liked = c.liked || false;
+      const pills = likers.map((u) => {
+        if (u.avatar) {
+          return `<a class="soc-clika soc-avatar" href="/u/${encodeURIComponent(u.username)}" title="${esc(u.display_name)}"><img src="/avatar/${encodeURIComponent(u.username)}" alt="" loading="lazy"></a>`;
+        }
+        const h = hue(u.username);
+        return `<a class="soc-clika soc-avatar" href="/u/${encodeURIComponent(u.username)}" title="${esc(u.display_name)}" style="background:hsl(${h},32%,74%);color:#2c2e36">${esc((u.display_name || u.username || "?").slice(0, 1).toUpperCase())}</a>`;
+      }).join("");
+      const extra = count > likers.length ? `<span class="soc-clikes-more">+${count - likers.length}</span>` : "";
+      const likerRow = count > 0 ? `<div class="soc-cliker-row">${pills}${extra}</div>` : "";
+      const title = meData.authenticated ? (liked ? t("liked") : t("like")) : t("login_like");
+      return `<div class="soc-clikes" data-cid="${c.id}">
+        ${likerRow}
+        <button class="soc-clike-btn${liked ? " on" : ""}" data-act="clike" title="${esc(title)}">
+          <span class="material-symbols-outlined">favorite</span>
+        </button>
       </div>`;
     }
     function bodyHtml(c) {
@@ -274,11 +289,13 @@ const L2M = (function () {
             ? `<button class="soc-more" data-act="morereplies"><span class="material-symbols-outlined">expand_more</span> ${t("more_replies")}</button>` : ""
         }</div>` : "";
       return `<div class="soc-comment" data-cid="${c.id}" data-top="${topId}" data-user="${esc(c.username || "")}">
-        ${voteHtml(c)}
         <div class="soc-main">
           ${byline}
           ${bodyHtml(c)}
-          ${actionsHtml(c)}
+          <div class="soc-footer">
+            ${actionsHtml(c)}
+            ${commentLikeHtml(c)}
+          </div>
           <div class="soc-sub"></div>
           ${repliesBlock}
         </div>
@@ -291,21 +308,24 @@ const L2M = (function () {
       const node = btn.closest(".soc-comment"); if (!node) return;
       const cid = node.dataset.cid;
 
-      // Vote
-      const voteBox = btn.closest(".soc-vote");
-      if (voteBox) {
+      const act = btn.dataset.act;
+
+      // Like commentaire
+      if (act === "clike") {
         if (!meData.authenticated) { location.href = loginUrl(); return; }
-        const dir = parseInt(btn.dataset.dir, 10);
-        const cur = parseInt(voteBox.dataset.myvote, 10);
-        const val = cur === dir ? 0 : dir;
+        const likesEl = btn.closest(".soc-clikes");
+        btn.disabled = true;
         try {
-          const r = await api("POST", `/api/social/comments/${cid}/vote`, { value: val });
-          voteBox.outerHTML = voteHtml({ id: cid, score: r.score, my_vote: r.my_vote });
-        } catch (err) { if (err.status === 401) location.href = loginUrl(); }
+          const r = await api("POST", `/api/social/comments/${cid}/like`);
+          const tmp = document.createElement("div");
+          tmp.innerHTML = commentLikeHtml({ id: parseInt(cid, 10), deleted: false, likes: r.likes, liked: r.liked, likers: r.likers });
+          likesEl.replaceWith(tmp.firstElementChild);
+        } catch (err) {
+          btn.disabled = false;
+          if (err.status === 401) location.href = loginUrl();
+        }
         return;
       }
-
-      const act = btn.dataset.act;
       if (act === "reply") return openReply(node);
       if (act === "edit") return openEdit(node);
       if (act === "del") return doDelete(node);
@@ -350,10 +370,9 @@ const L2M = (function () {
       if (!confirm(t("confirm_del"))) return;
       try {
         await api("DELETE", `/api/social/comments/${node.dataset.cid}`);
-        node.querySelector(".soc-vote").innerHTML = "";
-        node.querySelector(".soc-main").querySelector(".soc-byline").innerHTML = `<span class="soc-dim">${t("deleted_c")}</span>`;
+        node.querySelector(".soc-main .soc-byline").innerHTML = `<span class="soc-dim">${t("deleted_c")}</span>`;
         node.querySelector(".soc-body").outerHTML = `<div class="soc-body deleted">${t("deleted_c")}</div>`;
-        const a = node.querySelector(".soc-actions"); if (a) a.remove();
+        const f = node.querySelector(".soc-footer"); if (f) f.remove();
       } catch (e) { /* silencieux */ }
     }
 
