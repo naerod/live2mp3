@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live2mp3 — profil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<style>
+  .prof-edit{display:none;flex-direction:column;gap:12px;margin-top:16px}
+  .prof-edit.open{display:flex}
+  .prof-edit .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .prof-avatar-edit{position:relative}
+  .prof-avatar-edit .cam{position:absolute;right:-4px;bottom:-4px;width:30px;height:30px;
+    border-radius:50%;background:var(--accent);color:#0d0f13;display:flex;align-items:center;
+    justify-content:center;cursor:pointer;border:2px solid var(--bg)}
+  .prof-avatar-edit .cam .material-symbols-outlined{font-size:17px}
+  .notfound{text-align:center;color:var(--muted);margin-top:60px}
+  .notfound .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+  <a class="back-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></a>
+  <div class="tools">
+    <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span id="t-tool">Outil</span></a>
+    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
+    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
+    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
+    <div id="usermenu" class="usermenu" style="display:none"></div>
+  </div>
+</header>
+
+<main id="main">
+  <div id="content"></div>
+</main>
+
+<script src="/static/social.js"></script>
+<script src="/static/profile.js"></script>
+</body>
+</html>

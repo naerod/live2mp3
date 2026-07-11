@@ -73,13 +73,13 @@
   .cover-generic{width:100%;height:100%;display:flex;align-items:center;
     justify-content:center;background:linear-gradient(135deg,#1a1c22 0%,#111318 100%)}
   .cover-generic svg{width:48%;height:48%;opacity:.55}
-  .album .body{padding:14px 16px 4px;display:flex;flex-direction:column;gap:3px;flex:1}
-  .album .title{font-weight:700;font-size:16px;line-height:1.2}
-  .album .artist{color:var(--accent);font-size:13px}
+  .album .body{padding:14px 16px 6px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .album .al-artist{color:var(--accent);font-size:18px;font-weight:700;line-height:1.15}
+  .album .al-title{font-weight:600;font-size:16px;line-height:1.2;color:var(--fg)}
+  .album .al-line{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
+  .album .al-line .material-symbols-outlined{font-size:15px;color:var(--muted)}
+  .album .al-poster{margin-top:8px}
   .album .meta{color:var(--muted);font-size:12px}
-  .album .imported{color:var(--muted);font-size:11px;opacity:.7;
-    display:flex;align-items:center;gap:4px;margin-top:2px}
-  .album .imported .material-symbols-outlined{font-size:13px}
   .album .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px 0}
   .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
@@ -108,12 +108,12 @@
     overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center}
   .modal-head .cv img{width:100%;height:100%;object-fit:cover;display:block}
   .modal-head .cv .cover-generic{width:100%;height:100%}
-  .modal-head h2{margin:0 0 4px;font-size:20px}
-  .modal-head .m{color:var(--muted);font-size:13px;margin-bottom:6px}
-  .modal-head .imp{color:var(--muted);font-size:12px;opacity:.7;
-    display:flex;align-items:center;gap:4px;margin-bottom:8px}
-  .modal-head .imp .material-symbols-outlined{font-size:14px}
-  .modal-head .tags{display:flex;flex-wrap:wrap;gap:5px}
+  .modal-head .mh-artist{color:var(--accent);font-size:22px;font-weight:700;line-height:1.15}
+  .modal-head .mh-title{margin:2px 0 12px;font-size:19px;font-weight:600;line-height:1.2;color:var(--fg)}
+  .modal-head .mh-line{display:flex;align-items:center;gap:8px;color:var(--fg);font-size:14px;margin-bottom:5px}
+  .modal-head .mh-line .material-symbols-outlined{font-size:18px;color:var(--muted)}
+  .modal-head .mh-poster{margin:10px 0}
+  .modal-head .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
   .modal .x{position:absolute;top:14px;right:14px}
   .modal-body{padding:20px;max-height:56vh;overflow:auto}
   .modal-body h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;
@@ -165,10 +165,10 @@
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
-    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
-    <a id="logout" class="icon-btn" href="/outpost.goauthentik.io/sign_out" style="display:none"><span class="material-symbols-outlined">logout</span><span data-i18n="logout">Déconnexion</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
+    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
+    <div id="usermenu" class="usermenu" style="display:none"></div>
   </div>
 </header>
 
@@ -236,6 +236,7 @@
 </div>
 
 <script src="/static/i18n.js"></script>
+<script src="/static/social.js"></script>
 <script>
 // ── Thème ──────────────────────────────────────────────────────────────────
 const themeBtn=document.getElementById("theme");
@@ -263,7 +264,7 @@ const T={
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
       sort_artist:"Artiste",sort_title:"Titre",
-      logout:"Déconnexion",source:"Source",
+      logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années"},
@@ -275,7 +276,7 @@ const T={
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
       sort_artist:"Artist",sort_title:"Title",
-      logout:"Log out",source:"Source",
+      logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years"}
@@ -360,28 +361,31 @@ function albumCard(a){
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
   const draftBadge=a.published===false&&ME.is_gestionnaire
     ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${L()==="fr"?"Brouillon":"Draft"}</span>`:"";
-  let importedHtml="";
-  if(a.imported_by){
-    const d=formatImportDate(a.imported_at);
-    importedHtml=`<div class="imported"><span class="material-symbols-outlined">upload</span>${T[L()].imported_by(a.imported_by,d)}</div>`;
-  }
   const showArtist=currentSort!=="artist";
+  const posterHtml=posterFor(a.imported_by);
   return `<div class="album${a.published===false?" unpublished":""}" data-slug="${a.slug}">
     ${gear}
     ${draftBadge}
     ${newBadge}
     <div class="cover">${coverHtml(a)}</div>
     <div class="body">
-      <div class="title">${a.title||a.slug}</div>
-      ${showArtist?`<div class="artist">${a.artist||""}</div>`:""}
-      ${a.venue?`<div class="meta">${a.venue}</div>`:""}
-      ${a.date?`<div class="date-pill"><span class="material-symbols-outlined">event</span>${a.date}</div>`:""}
-      <div class="meta">${a.tracks} ${T[L()].titres}</div>
-      ${importedHtml}
+      ${showArtist&&a.artist?`<div class="al-artist">${a.artist}</div>`:""}
+      <div class="al-title">${a.title||a.slug}</div>
+      ${a.date?`<div class="al-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
+      ${a.venue?`<div class="al-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
+      ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
     </div>
     ${tags?`<div class="tags">${tags}</div>`:""}
     ${btns?`<div class="btns">${btns}</div>`:""}
   </div>`;
+}
+
+// Avatar + pseudo du posteur (imported_by), résolu via POSTERS.
+let POSTERS={};
+function posterFor(username){
+  if(!username) return "";
+  const p=POSTERS[username]||{};
+  return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},T[L()].published_by);
 }
 
 function render(){
@@ -518,14 +522,8 @@ async function openDetail(slug){
     dl=`<div class="lock-note"><span class="material-symbols-outlined">lock</span>${t.lockdl}
         <a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span> ${t.login}</a></div>`;
   }
-  // mention import dans la modale
-  const impBy=d.imported_by||"";
-  const impAt=d.imported_at||"";
-  let impHtml="";
-  if(impBy){
-    const dd=formatImportDate(impAt);
-    impHtml=`<div class="imp"><span class="material-symbols-outlined">upload</span>${t.imported_by(impBy,dd)}</div>`;
-  }
+  // posteur de l'album (avatar + pseudo)
+  const posterHtml=posterFor(d.imported_by);
   // source du live
   const srcUrl=d.source_url||"";
   const srcLabel=d.source_label||"";
@@ -539,12 +537,15 @@ async function openDetail(slug){
   document.getElementById("modal-content").innerHTML=`
     <div class="modal-head">
       <div class="cv">${cvHtml}</div>
-      <div>
-        <h2>${a.title||slug}</h2>
-        <div class="m">${[a.artist,a.venue,a.date].filter(Boolean).join(" · ")}</div>
-        ${impHtml}
+      <div class="mh-info">
+        ${a.artist?`<div class="mh-artist">${a.artist}</div>`:""}
+        <h2 class="mh-title">${a.title||slug}</h2>
+        ${a.date?`<div class="mh-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
+        ${a.venue?`<div class="mh-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
+        ${posterHtml?`<div class="mh-poster">${posterHtml}</div>`:""}
         ${sourceHtml}
-        <div class="tags">${tags}</div>
+        ${tags?`<div class="tags">${tags}</div>`:""}
+        <div id="modal-like" style="margin-top:12px"></div>
       </div>
     </div>
     <div class="modal-body">
@@ -552,9 +553,15 @@ async function openDetail(slug){
       ${dl}
       <h3>${t.setlist}</h3>
       <ul class="setlist">${set}</ul>
+      <div id="modal-social" style="margin-top:8px"></div>
     </div>`;
   overlay.classList.remove("hidden");
   requestAnimationFrame(()=>overlay.classList.add("show"));
+  // Like + commentaires (module social)
+  const likeEl=document.createElement("button");likeEl.className="soc-like";
+  document.getElementById("modal-like").appendChild(likeEl);
+  L2M.likeButton(likeEl,slug);
+  L2M.comments(document.getElementById("modal-social"),slug);
 }
 
 // ── Cover preview overlay ─────────────────────────────────────────────────
@@ -597,13 +604,28 @@ async function load(){
   currentSort=savedSort;
   document.getElementById("sort-select").value=currentSort;
   try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
-  document.getElementById("login").style.display=ME.authenticated?"none":"";
-  document.getElementById("logout").style.display=ME.authenticated?"":"none";
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
+  // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
+  const um=document.getElementById("usermenu");
+  if(ME.authenticated){
+    ["login","lang","theme"].forEach(id=>document.getElementById(id).style.display="none");
+    um.style.display="";
+    const sm=await L2M.me();
+    L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},
+      {onChange:k=>{ if(k==="lang") setLang(L2M.getLang()); }});
+  }else{
+    um.style.display="none";
+    document.getElementById("login").style.display="";
+  }
   const apiSort=currentSort==="artist"?"date_concert":currentSort;
   ALBUMS=await(await fetch(`/api/catalogue?sort=${apiSort}`)).json();
+  // Profils des posteurs (avatars sur les cartes/fiches)
+  POSTERS=await L2M.profiles(ALBUMS.map(a=>a.imported_by));
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
+  // Ouverture directe d'un album (?album=slug), ex. depuis une page profil
+  const wanted=new URLSearchParams(location.search).get("album");
+  if(wanted) openDetail(wanted);
 }
 load();
 </script>

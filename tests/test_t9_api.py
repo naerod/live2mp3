@@ -226,6 +226,7 @@ def test_healthz(client):
 def test_version(client):
     c, _ = client
     v = c.get("/api/version").json()
-    assert v["version"] == "1.0.0"
+    expected = (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip()
+    assert v["version"] == expected
     assert v["env"] in ("prod", "preprod")
     assert "commit" in v
