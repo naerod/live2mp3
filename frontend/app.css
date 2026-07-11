@@ -167,3 +167,47 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .prof-cmt .lnk:hover b{color:var(--accent)}
 .prof-cmt .txt{font-size:14px;line-height:1.5;white-space:pre-wrap}
 @media(max-width:520px){.prof-hero .soc-avatar{width:64px;height:64px;font-size:24px}}
+
+/* ============ Menu utilisateur (avatar déroulant, header) ============ */
+.usermenu{position:relative;display:inline-flex}
+.um-trigger{margin:0;padding:2px;border:none;background:transparent;cursor:pointer;
+  border-radius:50%;line-height:0;transition:transform .12s}
+.um-trigger:hover{transform:scale(1.05)}
+.um-trigger .soc-avatar{width:38px;height:38px;font-size:16px;border:2px solid var(--border)}
+.usermenu.open .um-trigger .soc-avatar{border-color:var(--accent)}
+.um-pop{position:absolute;top:calc(100% + 10px);right:0;min-width:230px;z-index:60;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 16px 40px -12px rgba(0,0,0,.5);padding:6px;
+  opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s}
+.usermenu.open .um-pop{opacity:1;transform:none;pointer-events:auto}
+.um-head{display:flex;align-items:center;gap:10px;padding:10px 10px 12px;
+  border-bottom:1px solid var(--border);margin-bottom:6px;text-decoration:none}
+.um-head .soc-avatar{width:42px;height:42px;font-size:18px}
+.um-head .um-name{font-weight:700;font-size:14px;color:var(--fg);line-height:1.2}
+.um-head .um-handle{color:var(--muted);font-size:12px}
+.um-head:hover .um-name{color:var(--accent)}
+.um-item{display:flex;align-items:center;gap:11px;width:100%;margin:0;padding:9px 11px;
+  border:none;background:transparent;color:var(--fg);border-radius:9px;cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:500;text-decoration:none;text-align:left}
+.um-item:hover{background:var(--bg)}
+.um-item .material-symbols-outlined{font-size:19px;color:var(--muted)}
+.um-item .um-val{margin-left:auto;color:var(--muted);font-size:12px;font-weight:600}
+.um-item.danger{color:var(--down)}
+.um-item.danger .material-symbols-outlined{color:var(--down)}
+.um-sep{height:1px;background:var(--border);margin:6px 4px}
+
+/* Bouton retour (page profil) */
+.back-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px 0 12px;
+  border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--fg);
+  font-size:13.5px;font-weight:600;text-decoration:none;transition:all .15s}
+.back-btn:hover{border-color:var(--accent);background:var(--bg)}
+.back-btn .material-symbols-outlined{font-size:20px}
+
+/* Posteur d'un album (avatar + pseudo) */
+.soc-avlink{line-height:0;display:inline-flex}
+.soc-poster{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--muted);
+  font-size:12.5px;font-weight:600}
+.soc-poster .soc-avatar{width:22px;height:22px;font-size:11px}
+.soc-poster-name{color:var(--fg)}
+.soc-poster:hover .soc-poster-name{color:var(--accent)}
+.soc-poster-pre{color:var(--muted);font-size:12.5px;margin-right:6px}

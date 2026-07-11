@@ -25,14 +25,13 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
+  <a class="back-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></a>
   <div class="tools">
-    <a class="icon-btn" href="/"><span class="material-symbols-outlined">library_music</span><span id="t-albums">Albums</span></a>
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span id="t-tool">Outil</span></a>
-    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
-    <a id="logout" class="icon-btn" href="/outpost.goauthentik.io/sign_out" style="display:none"><span class="material-symbols-outlined">logout</span><span id="t-logout">Déconnexion</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
+    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
+    <div id="usermenu" class="usermenu" style="display:none"></div>
   </div>
 </header>
 

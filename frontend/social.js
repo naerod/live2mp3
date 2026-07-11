@@ -14,6 +14,9 @@ const L2M = (function () {
       no_comments: "Aucun commentaire pour l'instant. Soyez le premier !",
       confirm_del: "Supprimer ce commentaire ?", like: "J'aime", liked: "Aimé",
       now: "à l'instant", min: "min", h: "h", d: "j", login_like: "Connectez-vous pour aimer",
+      view_profile: "Voir le profil", language: "Langue", logout: "Déconnexion",
+      theme_dark: "Mode sombre", theme_light: "Mode clair", back: "Retour",
+      published_by: "Publié par",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -26,6 +29,9 @@ const L2M = (function () {
       no_comments: "No comments yet. Be the first!",
       confirm_del: "Delete this comment?", like: "Like", liked: "Liked",
       now: "just now", min: "min", h: "h", d: "d", login_like: "Log in to like",
+      view_profile: "View profile", language: "Language", logout: "Log out",
+      theme_dark: "Dark mode", theme_light: "Light mode", back: "Back",
+      published_by: "Published by",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -43,11 +49,74 @@ const L2M = (function () {
     if (user.avatar) {
       inner = `<img src="/avatar/${encodeURIComponent(user.username)}" alt="" loading="lazy">`;
     } else {
-      inner = esc(name.slice(0, 1) || "?");
-      style = ` style="background:hsl(${hue(user.username || name)},42%,46%)"`;
+      // Avatar par défaut : pastel, teinte déterministe (initiale du pseudo).
+      inner = esc(name.slice(0, 1).toUpperCase() || "?");
+      const h = hue(user.username || name);
+      style = ` style="background:hsl(${h},32%,74%);color:#2c2e36"`;
     }
     const av = `<span class="soc-avatar"${style}>${inner}</span>`;
-    return (link !== false && user.username) ? `<a href="/u/${encodeURIComponent(user.username)}">${av}</a>` : av;
+    return (link !== false && user.username) ? `<a class="soc-avlink" href="/u/${encodeURIComponent(user.username)}">${av}</a>` : av;
+  }
+
+  // Avatar + pseudo cliquables (utilisé pour le posteur d'un album).
+  function poster(user, prefix) {
+    const name = esc(user.display_name || user.username || "?");
+    const inner = `${avatar(user, false)}<span class="soc-poster-name">${name}</span>`;
+    const wrap = user.username
+      ? `<a class="soc-poster" href="/u/${encodeURIComponent(user.username)}">${inner}</a>`
+      : `<span class="soc-poster">${inner}</span>`;
+    return prefix ? `<span class="soc-poster-pre">${esc(prefix)}</span>${wrap}` : wrap;
+  }
+
+  // Récupère en un appel {username: {display_name, avatar}} pour une liste d'users.
+  async function profiles(usernames) {
+    const uniq = [...new Set((usernames || []).filter(Boolean))];
+    if (!uniq.length) return {};
+    try {
+      return await api("GET", "/api/social/profiles?u=" + encodeURIComponent(uniq.join(",")));
+    } catch (e) { return {}; }
+  }
+
+  /* ---------------- Thème & langue (partagés) ---------------- */
+  function getTheme() { return document.documentElement.dataset.theme || localStorage.getItem("l2m-theme") || "dark"; }
+  function applyTheme(x) { document.documentElement.dataset.theme = x; localStorage.setItem("l2m-theme", x); }
+  function getLang() { return localStorage.getItem("l2m-lang") || "fr"; }
+  function applyLang(l) { localStorage.setItem("l2m-lang", l); document.documentElement.lang = l; }
+
+  /* ---------------- Menu utilisateur (avatar déroulant) ---------------- */
+  // mountEl doit avoir la classe .usermenu. opts.onChange(kind) après thème/langue.
+  function userMenu(mountEl, meData, opts) {
+    opts = opts || {};
+    const uname = meData.username;
+    mountEl.innerHTML = `
+      <button class="um-trigger" aria-label="menu" aria-haspopup="true">${avatar(meData, false)}</button>
+      <div class="um-pop" role="menu">
+        <a class="um-head" href="/u/${encodeURIComponent(uname)}">${avatar(meData, false)}
+          <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
+            <div class="um-handle">@${esc(uname)}</div></div></a>
+        <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
+        <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
+        <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
+        <div class="um-sep"></div>
+        <a class="um-item danger" href="/outpost.goauthentik.io/sign_out"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
+      </div>`;
+    const trigger = mountEl.querySelector(".um-trigger");
+    const set = (k, v) => { const el = mountEl.querySelector(`[data-k="${k}"]`); if (el) el.textContent = v; };
+    function refresh() {
+      const dark = getTheme() === "dark";
+      set("profile", t("view_profile")); set("lang", t("language")); set("langval", getLang().toUpperCase());
+      set("logout", t("logout")); set("themeic", dark ? "light_mode" : "dark_mode");
+      set("theme", dark ? t("theme_light") : t("theme_dark"));
+    }
+    refresh();
+    trigger.onclick = (e) => { e.stopPropagation(); mountEl.classList.toggle("open"); };
+    document.addEventListener("click", (e) => { if (!mountEl.contains(e.target)) mountEl.classList.remove("open"); });
+    mountEl.querySelector('[data-act="lang"]').onclick = () => {
+      applyLang(getLang() === "fr" ? "en" : "fr"); refresh(); if (opts.onChange) opts.onChange("lang");
+    };
+    mountEl.querySelector('[data-act="theme"]').onclick = () => {
+      applyTheme(getTheme() === "dark" ? "light" : "dark"); refresh(); if (opts.onChange) opts.onChange("theme");
+    };
   }
 
   function userLink(user) {
@@ -321,5 +390,9 @@ const L2M = (function () {
     if (cancel && onCancel) cancel.onclick = onCancel;
   }
 
-  return { t, esc, avatar, userLink, timeAgo, loginUrl, me, likeButton, comments, LANG };
+  return {
+    t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
+    likeButton, comments, userMenu, LANG,
+    getTheme, applyTheme, getLang, applyLang,
+  };
 })();

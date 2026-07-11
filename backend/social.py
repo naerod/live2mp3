@@ -211,6 +211,17 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     }
 
 
+@router.get("/api/social/profiles")
+def batch_profiles(u: str = "", identity: dict = Depends(current_identity)) -> dict:
+    """Résout en un appel {username: {display_name, avatar}} — pour afficher
+    l'avatar du posteur sur les cartes/fiches d'album."""
+    users = {x.strip() for x in u.split(",") if x.strip()}
+    if len(users) > 100:
+        users = set(list(users)[:100])
+    with get_conn() as conn:
+        return _profiles_map(conn, users)
+
+
 @router.get("/api/social/users/{username}")
 def user_profile(username: str, identity: dict = Depends(current_identity)) -> dict:
     viewer = identity.get("username")

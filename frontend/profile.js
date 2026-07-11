@@ -11,7 +11,7 @@
       member_since: "Membre depuis", no_pubs: "Aucune publication.",
       no_comments: "Aucun commentaire.", no_likes: "Aucun album aimé.",
       not_found: "Utilisateur introuvable.", on_album: "sur", edited: "modifié",
-      titres: "titres",
+      titres: "titres", back: "Retour",
     },
     en: {
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
@@ -21,7 +21,7 @@
       member_since: "Member since", no_pubs: "No publications yet.",
       no_comments: "No comments yet.", no_likes: "No liked albums yet.",
       not_found: "User not found.", on_album: "on", edited: "edited",
-      titres: "tracks",
+      titres: "tracks", back: "Back",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -42,15 +42,15 @@
   function applyStaticI18n() {
     document.documentElement.lang = LANG();
     document.getElementById("lang-label").textContent = LANG().toUpperCase();
-    document.getElementById("t-albums").textContent = t("albums");
+    document.getElementById("t-back").textContent = t("back");
     document.getElementById("t-tool").textContent = t("tool");
     document.getElementById("t-login").textContent = t("login");
-    document.getElementById("t-logout").textContent = t("logout");
   }
   document.getElementById("lang").onclick = () => {
     localStorage.setItem("l2m-lang", LANG() === "fr" ? "en" : "fr");
     applyStaticI18n(); if (DATA) renderProfile();
   };
+  function onLangChanged() { applyStaticI18n(); if (DATA) renderProfile(); }
 
   const USERNAME = decodeURIComponent((location.pathname.split("/u/")[1] || "").replace(/\/$/, ""));
   let DATA = null, ME = { authenticated: false }, activeTab = "publications";
@@ -177,9 +177,18 @@
   async function load() {
     applyStaticI18n();
     ME = await L2M.me();
-    document.getElementById("login").style.display = ME.authenticated ? "none" : "";
-    document.getElementById("logout").style.display = ME.authenticated ? "" : "none";
     if (ME.is_moderator) document.getElementById("tool-link").style.display = "";
+    // Connecté : menu avatar. Anonyme : boutons langue/thème/connexion.
+    const um = document.getElementById("usermenu");
+    if (ME.authenticated) {
+      ["login", "lang", "theme"].forEach((id) => document.getElementById(id).style.display = "none");
+      um.style.display = "";
+      L2M.userMenu(um, { username: ME.username, display_name: ME.display_name, avatar: ME.avatar },
+        { onChange: (k) => { if (k === "lang") onLangChanged(); } });
+    } else {
+      um.style.display = "none";
+      document.getElementById("login").style.display = "";
+    }
     const r = await fetch(`/api/social/users/${encodeURIComponent(USERNAME)}`);
     if (!r.ok) {
       document.getElementById("content").innerHTML =
