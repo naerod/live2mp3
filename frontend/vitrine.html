@@ -79,6 +79,9 @@
   .album .al-line{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
   .album .al-line .material-symbols-outlined{font-size:15px;color:var(--muted)}
   .album .al-poster{margin-top:8px}
+  .album .al-social{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .al-soc-item{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:12px;font-weight:500}
+  .al-soc-item .material-symbols-outlined{font-size:13px}
   .album .meta{color:var(--muted);font-size:12px}
   .album .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px 0}
   .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
@@ -374,6 +377,7 @@ function albumCard(a){
       ${a.date?`<div class="al-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
       ${a.venue?`<div class="al-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
+      <div class="al-social"></div>
     </div>
     ${tags?`<div class="tags">${tags}</div>`:""}
     ${btns?`<div class="btns">${btns}</div>`:""}
@@ -382,6 +386,21 @@ function albumCard(a){
 
 // Avatar + pseudo du posteur (imported_by), résolu via POSTERS.
 let POSTERS={};
+let SOC_CACHE={};
+function patchSocialCounts(){
+  document.querySelectorAll(".al-social").forEach(el=>{
+    const slug=el.closest(".album")?.dataset.slug;
+    if(!slug) return;
+    const s=SOC_CACHE[slug]||{likes:0,comments:0};
+    let html="";
+    if(s.likes) html+=`<span class="al-soc-item"><span class="material-symbols-outlined">favorite</span>${s.likes}</span>`;
+    if(s.comments) html+=`<span class="al-soc-item"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</span>`;
+    el.innerHTML=html;
+  });
+}
+async function loadSocialCounts(){
+  try{SOC_CACHE=await(await fetch("/api/social/counts")).json();patchSocialCounts();}catch(e){}
+}
 function posterFor(username){
   if(!username) return "";
   const p=POSTERS[username]||{};
@@ -423,6 +442,7 @@ function render(){
     wrap.className="albums";
     wrap.innerHTML=shown.map(albumCard).join("");
   }
+  patchSocialCounts();
 }
 
 function buildFilters(){
@@ -623,6 +643,7 @@ async function load(){
   POSTERS=await L2M.profiles(ALBUMS.map(a=>a.imported_by));
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
+  loadSocialCounts();
   // Ouverture directe d'un album (?album=slug), ex. depuis une page profil
   const wanted=new URLSearchParams(location.search).get("album");
   if(wanted) openDetail(wanted);
