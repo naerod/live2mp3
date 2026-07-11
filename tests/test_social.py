@@ -64,7 +64,7 @@ def test_comment_flatten_replies(client):
                   json={"body": "hi"}).status_code == 401           # anonyme
     top = c.post(f"/api/social/albums/{slug}/comments",
                  json={"body": "Super album"}, headers=USER).json()
-    assert top["id"] and top["score"] == 0 and top["reply_to"] == ""
+    assert top["id"] and top["likes"] == 0 and top["reply_to"] == ""
     # réponse au commentaire racine
     r1 = c.post(f"/api/social/albums/{slug}/comments",
                 json={"body": "d'accord", "parent_id": top["id"]}, headers=USER2).json()
@@ -83,23 +83,20 @@ def test_comment_flatten_replies(client):
     assert c.get(f"/api/social/albums/{slug}").json()["comments"] == 3
 
 
-def test_comment_vote(client):
+def test_comment_like(client):
     c, _ = client
     slug = _make_album(c)
     cid = c.post(f"/api/social/albums/{slug}/comments",
                  json={"body": "x"}, headers=USER).json()["id"]
-    r = c.post(f"/api/social/comments/{cid}/vote", json={"value": 1}, headers=USER2).json()
-    assert r["score"] == 1 and r["my_vote"] == 1
-    # changement de vote
-    r = c.post(f"/api/social/comments/{cid}/vote", json={"value": -1}, headers=USER2).json()
-    assert r["score"] == -1
-    # annulation
-    r = c.post(f"/api/social/comments/{cid}/vote", json={"value": 0}, headers=USER2).json()
-    assert r["score"] == 0
-    assert c.post(f"/api/social/comments/{cid}/vote",
-                  json={"value": 2}, headers=USER2).status_code == 400
-    assert c.post(f"/api/social/comments/{cid}/vote",
-                  json={"value": 1}).status_code == 401
+    # like par USER2
+    r = c.post(f"/api/social/comments/{cid}/like", headers=USER2).json()
+    assert r["likes"] == 1 and r["liked"] is True
+    assert any(l["username"] == "bob" for l in r["likers"])
+    # unlike (toggle)
+    r = c.post(f"/api/social/comments/{cid}/like", headers=USER2).json()
+    assert r["likes"] == 0 and r["liked"] is False
+    # anonyme → 401
+    assert c.post(f"/api/social/comments/{cid}/like").status_code == 401
 
 
 def test_comment_edit_delete_permissions(client):
