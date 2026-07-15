@@ -6,6 +6,7 @@ un thread. La progression est publiée par projet et relue via SSE.
 """
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import queue
@@ -30,9 +31,27 @@ from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC, ID3NoHeaderError
 from . import catalogue, jobs
+from .albumfiles import (
+    _extract_embedded_cover,
+    _file_track_n,
+    _rename_audio_files,
+    _sanitize_filename,
+    _write_album_cover,
+    _write_album_tags,
+)
 from .auth import require_gestionnaire, require_user, roles
-from .db import init_db
+from .db import get_conn, init_db
+from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
+from .covers import (
+    MEDIA_TYPES,
+    cover_file,
+    rank_covers,
+    router as covers_router,
+    top_cover,
+    traycard_file,
+    zip_basename,
+)
 from .social import router as social_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
@@ -45,6 +64,10 @@ app = FastAPI(title="live2mp3", docs_url="/api/docs")
 
 # Système social (profils, favoris, commentaires) — routes /api/social, /u, /avatar.
 app.include_router(social_router)
+app.include_router(covers_router)
+
+# Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
+app.include_router(import_router)
 
 
 @app.on_event("startup")
@@ -224,38 +247,67 @@ def get_cover(slug: str) -> FileResponse:
 
 # --- Téléchargements (niveau user) ----------------------------------------
 def _album_extras(project_dir: Path) -> list[tuple[Path, str]]:
-    """Fichiers annexes à joindre au zip complet : pochette + tray card.
+    """Toutes les pochettes de l'album + leurs tray cards, pour le zip complet.
+
+    Nommage `artwork/<rang>-<auteur>_cover.ext` / `_traycard.ext` : le rang vient
+    du classement (gagnante en 01), donc le tri alphabétique de l'archive
+    reproduit l'ordre de popularité et colle chaque tray card à sa cover, seul le
+    suffixe les séparant.
 
     Retourne des couples (chemin source, nom dans l'archive).
     """
+    slug = project_dir.name
     extras: list[tuple[Path, str]] = []
-    mpath = project_dir / "manifest.yaml"
-    if mpath.exists():
-        cover_rel = Manifest.load(mpath).data.get("album", {}).get("cover")
-        if cover_rel:
-            cover = project_dir / cover_rel
-            if cover.exists():
-                extras.append((cover, f"cover{cover.suffix.lower()}"))
-    tray = project_dir / "artwork" / "tray_card.pdf"
-    if tray.exists():
-        extras.append((tray, "tray_card.pdf"))
+    with get_conn() as conn:
+        rows = rank_covers(conn, slug)
+    for i, r in enumerate(rows):
+        base = zip_basename(i + 1, r["username"])
+        cpath = cover_file(slug, r["file_key"], r["cover_ext"])
+        if cpath.exists():
+            extras.append((cpath, f"artwork/{base}_cover{r['cover_ext']}"))
+        if r["traycard_ext"]:
+            tpath = traycard_file(slug, r["file_key"], r["traycard_ext"])
+            if tpath.exists():
+                extras.append((tpath, f"artwork/{base}_traycard{r['traycard_ext']}"))
     return extras
 
 
 def _zip_media(project_dir: Path, kind: str) -> Path:
-    """Construit (et met en cache) un zip des MP3/MP4 + pochette + tray card."""
+    """Construit (et met en cache) un zip des MP3/MP4 + toutes les pochettes."""
     sub = "audio" if kind == "mp3" else "video"
     src = project_dir / "build" / sub
     if not src.exists() or not any(src.glob(f"*.{kind}")):
         raise HTTPException(404, f"aucun {kind} pour cet album")
     out = project_dir / "build" / f"download_{kind}.zip"
+
+    # L'APIC suit la pochette gagnante, mais on ne la recalcule qu'ici : la
+    # réécrire à chaque like retoucherait tout l'album pour un changement que
+    # personne ne télécharge. No-op si l'image embarquée est déjà la bonne.
+    mpath = project_dir / "manifest.yaml"
+    if kind == "mp3" and mpath.exists():
+        _write_album_cover(project_dir.name, Manifest.load(mpath))
+
     extras = _album_extras(project_dir)
     # Le cache est invalidé si un média OU un fichier annexe est plus récent que le zip.
     mtimes = [f.stat().st_mtime for f in src.glob(f"*.{kind}")]
     mtimes += [p.stat().st_mtime for p, _ in extras]
     newest = max(mtimes, default=0)
-    if not out.exists() or out.stat().st_mtime < newest:
+    # ...mais un changement de classement renomme les entrées sans toucher aucun
+    # mtime. On grave la liste des noms dans le commentaire du zip pour détecter
+    # ce cas, que les dates seules manqueraient.
+    layout = hashlib.sha1(
+        "|".join(a for _, a in extras).encode()
+    ).hexdigest().encode()
+    stale = True
+    if out.exists() and out.stat().st_mtime >= newest:
+        try:
+            with zipfile.ZipFile(out) as z:
+                stale = z.comment != layout
+        except (zipfile.BadZipFile, OSError):
+            stale = True
+    if stale:
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            z.comment = layout
             for f in sorted(src.glob(f"*.{kind}")):
                 z.write(f, f.name)
             for p, arcname in extras:
@@ -288,13 +340,37 @@ def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileRes
     return FileResponse(cover, filename=f"{slug}-cover{cover.suffix}")
 
 
-@app.get("/download/{slug}/traycard")
-def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    tc = PROJECTS_DIR / slug / "artwork" / "tray_card.pdf"
+def _album_traycard(slug: str) -> tuple[Path, str]:
+    """Tray card de la pochette gagnante.
+
+    Une tray card n'existe que portée par une cover : c'est donc la gagnante qui
+    décide, et un album dont la gagnante n'en a pas n'en propose pas — même si
+    une pochette moins bien classée en a une (elle reste servie par son id).
+    """
+    with get_conn() as conn:
+        win = top_cover(conn, slug)
+    if not win or not win["traycard_ext"]:
+        raise HTTPException(404, "pas de tray card")
+    ext = win["traycard_ext"]
+    tc = traycard_file(slug, win["file_key"], ext)
     if not tc.exists():
         raise HTTPException(404, "pas de tray card")
-    return FileResponse(tc, filename=f"{slug}-traycard.pdf",
-                        media_type="application/pdf")
+    return tc, ext
+
+
+@app.get("/download/{slug}/traycard")
+def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    tc, ext = _album_traycard(slug)
+    return FileResponse(tc, filename=f"{slug}-traycard{ext}",
+                        media_type=MEDIA_TYPES.get(ext, "application/pdf"))
+
+
+@app.get("/app/traycard/{slug}")
+def view_traycard(slug: str, identity: dict = Depends(require_gestionnaire)) -> FileResponse:
+    """Même fichier, servi inline pour la prévisualisation en iframe."""
+    tc, ext = _album_traycard(slug)
+    return FileResponse(tc, media_type=MEDIA_TYPES.get(ext, "application/pdf"),
+                        content_disposition_type="inline")
 
 
 @app.get("/download/{slug}/{kind}")
@@ -333,147 +409,6 @@ def album_detail(slug: str,
         "published": m.data.get("published", True),
         "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
     }
-
-
-def _file_track_n(stem: str) -> int | None:
-    """Extrait le numéro de piste depuis le nom de fichier MP3.
-
-    Supporte les formats :
-      - '01_Overcompensate'  → 1
-      - '1. Pour Me'         → 1
-      - '14. ALiENS'         → 14
-    """
-    m = re.match(r"^(\d+)[._\s]", stem)
-    return int(m.group(1)) if m else None
-
-
-def _sanitize_filename(title: str) -> str:
-    """Supprime les caractères interdits dans un nom de fichier."""
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', title).strip(' .')
-
-
-def _rename_audio_files(slug: str, m: Manifest) -> int:
-    """Renomme les MP3 au format '01. Titre.mp3' en suivant l'ordre du manifest."""
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    if not audio_dir.exists():
-        return 0
-    rename_map: dict[int, tuple[int, str]] = {}
-    for i, t in enumerate(m.tracks):
-        safe = _sanitize_filename(t.get("title", "") or f"Track {t['n']}")
-        rename_map[int(t["n"])] = (i + 1, safe)
-    # Passe 1 : renommer vers un nom temporaire pour éviter les collisions
-    pending: dict[Path, Path] = {}
-    for mp3_path in list(audio_dir.glob("*.mp3")):
-        file_n = _file_track_n(mp3_path.stem)
-        if file_n is None or file_n not in rename_map:
-            continue
-        new_pos, safe_title = rename_map[file_n]
-        new_name = f"{new_pos:02d}. {safe_title}.mp3"
-        if mp3_path.name == new_name:
-            continue
-        tmp_path = mp3_path.parent / f"._tmp_{file_n}_{mp3_path.name}"
-        mp3_path.rename(tmp_path)
-        pending[tmp_path] = mp3_path.parent / new_name
-    # Passe 2 : renommer vers le nom final
-    for tmp, final in pending.items():
-        tmp.rename(final)
-    return len(pending)
-
-
-def _write_album_tags(slug: str, m: Manifest) -> int:
-    """Écrit les tags ID3 communs à tout l'album (TALB, TPE1, TDRC) dans tous les MP3."""
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    if not audio_dir.exists():
-        return 0
-    alb = m.data.get("album", {})
-    album_title = alb.get("title", "") or ""
-    artist = alb.get("artist", "") or ""
-    date = alb.get("date", "") or ""
-    year = date[:4] if len(date) >= 4 else date
-    tagged = 0
-    for mp3_path in audio_dir.glob("*.mp3"):
-        try:
-            try:
-                tags = EasyID3(str(mp3_path))
-            except ID3NoHeaderError:
-                tags = EasyID3()
-                tags.save(str(mp3_path))
-                tags = EasyID3(str(mp3_path))
-            if album_title:
-                tags["album"] = [album_title]
-            if artist:
-                tags["artist"] = [artist]
-                tags["albumartist"] = [artist]
-            if year:
-                tags["date"] = [year]
-            tags.save()
-            tagged += 1
-        except Exception:
-            pass
-    return tagged
-
-
-_COVER_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-               ".png": "image/png", ".webp": "image/webp"}
-_MIME_EXT = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-
-
-def _write_album_cover(slug: str, m: Manifest) -> int:
-    """Embarque la pochette du site (album.cover) comme APIC dans tous les MP3."""
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    cover_rel = m.data.get("album", {}).get("cover")
-    if not audio_dir.exists() or not cover_rel:
-        return 0
-    cover_path = PROJECTS_DIR / slug / cover_rel
-    if not cover_path.exists():
-        return 0
-    data = cover_path.read_bytes()
-    mime = _COVER_MIME.get(cover_path.suffix.lower(), "image/jpeg")
-    embedded = 0
-    for mp3_path in audio_dir.glob("*.mp3"):
-        try:
-            try:
-                tags = ID3(str(mp3_path))
-            except ID3NoHeaderError:
-                tags = ID3()
-            tags.delall("APIC")
-            tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=data))
-            tags.save(str(mp3_path))
-            embedded += 1
-        except Exception:
-            pass
-    return embedded
-
-
-def _extract_embedded_cover(slug: str, m: Manifest) -> str | None:
-    """Si aucune cover site mais un APIC embarqué existe, l'extrait vers artwork/cover.*.
-
-    Sert au rattrapage des albums importés (pochette déjà dans les MP3, absente du site).
-    Retourne le chemin relatif de la cover créée, ou None.
-    """
-    if m.data.get("album", {}).get("cover"):
-        return None
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    if not audio_dir.exists():
-        return None
-    for mp3_path in sorted(audio_dir.glob("*.mp3")):
-        try:
-            tags = ID3(str(mp3_path))
-        except Exception:
-            continue
-        apics = tags.getall("APIC")
-        if not apics:
-            continue
-        apic = apics[0]
-        ext = _MIME_EXT.get(apic.mime, ".jpg")
-        art_dir = PROJECTS_DIR / slug / "artwork"
-        art_dir.mkdir(exist_ok=True)
-        cover_path = art_dir / f"cover{ext}"
-        cover_path.write_bytes(apic.data)
-        m.data.setdefault("album", {})["cover"] = f"artwork/cover{ext}"
-        m.save()
-        return f"artwork/cover{ext}"
-    return None
 
 
 @app.put("/api/albums/{slug}/meta")
