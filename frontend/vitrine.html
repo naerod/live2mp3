@@ -39,8 +39,8 @@
   .artist-sep{display:flex;align-items:center;gap:14px;margin:36px 0 14px}
   .artist-bar{flex:1;height:3px;background:var(--accent);border-radius:2px;opacity:.65}
   .artist-name{font-size:20px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--fg)}
-  .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
-    gap:14px;margin-top:18px}
+  .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+    gap:18px;margin-top:18px}
   .album{position:relative;background:var(--card);border:1px solid var(--border);
     border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
     transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
@@ -68,7 +68,7 @@
   .gear .material-symbols-outlined{font-size:19px}
   .album:hover .gear{opacity:1;transform:none}
   .gear:hover{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
-  .cover{aspect-ratio:1;overflow:hidden;background:#0a0a0a}
+  .cover{aspect-ratio:4/3;overflow:hidden;background:#0a0a0a}
   .cover-img{width:100%;height:100%;object-fit:cover;display:block}
   .cover-generic{width:100%;height:100%;display:flex;align-items:center;
     justify-content:center;background:linear-gradient(135deg,#1a1c22 0%,#111318 100%)}
