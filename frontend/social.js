@@ -137,7 +137,6 @@ const L2M = (function () {
   }
 
   const loginUrl = () => "/outpost.goauthentik.io/start?rd=" + encodeURIComponent(location.pathname + location.search);
-  const signupUrl = () => "/if/flow/default-enrollment-flow/";
 
   let _me = null;
   function me() {
@@ -166,7 +165,7 @@ const L2M = (function () {
     }
     paint();
     el.onclick = async () => {
-      if (!meData.authenticated) { location.href = signupUrl(); return; }
+      if (!meData.authenticated) { location.href = loginUrl(); return; }
       el.disabled = true;
       try {
         const r = await api("POST", `/api/social/albums/${slug}/like`);
@@ -313,7 +312,7 @@ const L2M = (function () {
 
       // Like commentaire
       if (act === "clike") {
-        if (!meData.authenticated) { location.href = signupUrl(); return; }
+        if (!meData.authenticated) { location.href = loginUrl(); return; }
         const likesEl = btn.closest(".soc-clikes");
         btn.disabled = true;
         try {
