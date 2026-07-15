@@ -80,19 +80,19 @@
   .album .al-line .material-symbols-outlined{font-size:13px;color:var(--muted)}
   .album .al-line.muted-placeholder{opacity:.45;font-style:italic}
   .album .al-poster{margin-top:5px}
-  .album .al-social{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);margin-top:6px}
+  .album .al-social{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:6px}
   .soc-btn{display:flex;align-items:center;justify-content:center;gap:5px;
-    padding:8px 0;border:none;background:transparent;color:var(--muted);
-    font-size:12px;font-weight:500;cursor:pointer;
+    padding:9px 0;border:none;background:var(--bg);color:var(--muted);
+    font-size:12px;font-weight:600;cursor:pointer;
     transition:color .15s,background .15s;width:100%}
   .soc-btn:first-child{border-right:1px solid var(--border)}
-  .soc-btn:hover{background:rgba(128,128,128,.07);color:var(--fg)}
+  .soc-btn:hover{background:color-mix(in srgb,var(--bg) 80%,var(--accent) 20%);color:var(--fg)}
   .soc-btn.liked{color:#e85d75}
-  .soc-btn .material-symbols-outlined{font-size:14px}
+  .soc-btn .material-symbols-outlined{font-size:15px}
   .album .meta{color:var(--muted);font-size:11px}
   .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-  .album .btns{margin-top:auto;padding:7px 12px 10px}
+  .album .btns{padding:7px 12px 10px}
   .album .btns a{width:100%;justify-content:center;height:30px;font-size:12px}
   .album .btns a .material-symbols-outlined{font-size:15px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
