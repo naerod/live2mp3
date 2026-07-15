@@ -53,6 +53,24 @@ déployé en **preprod** (commit 254200b, v1.1.0).
   `legacy`, créditée à `meta.imported_by`. À jouer une fois par base.
 - Front : carrousel (flèches/points/clavier) + crédit avatar→profil + modale par
   cover (likes, commentaires, tray card, import). Tests : `tests/test_covers.py`.
+- **Le carrousel défile `SLIDES`, pas `COVERS`** : chaque pochette occupe une
+  face, suivie de sa tray card quand elle en a une (`buildSlides`). Cohérent
+  avec le modèle backend — la tray card est une *colonne* de sa cover, jamais
+  une entrée autonome : elle ne peut donc pas apparaître sans sa pochette.
+  Le badge « Tray card » n'étiquette plus une présence, il **bascule** vers la
+  face. Puces creuses (`.cr-dot.tray`) pour distinguer une face tray de sa cover.
+- **Recalage par paire `id`+`kind`, jamais par index** (`focusSlide`) : un like
+  ou un épinglage fait renvoyer par le serveur une liste **reclassée**, un index
+  n'y survit pas. Vaut pour like / pin / delete / upload.
+- Face tray card en `contain` (format libre) et non `cover` : une tray card est
+  large, la rogner au carré la décapite. **Seule tray card du catalogue = PDF**
+  (twenty-one-pilots-2026-04-03) → rendue en `<iframe>`. L'iframe capte le clic,
+  donc une face PDF n'ouvre pas la modale (flèches/puces/badge restent le chemin).
+- `traycard_ext` vaut **`''`, pas `NULL`**, quand il n'y a pas de tray card :
+  filtrer sur la vérité (`bool`) ou `COALESCE(...) != ''`, pas sur `IS NOT NULL`.
+- `/traycard-img/{id}` sert le PDF **sans `Content-Disposition`** → inline dans
+  l'iframe. Ne pas viser `/download/{slug}/traycard` (attachment) : c'est le bug
+  du 2026-07-15 (« Enregistrer sous » au lieu de l'aperçu).
 - **Prod : aucune étape nginx** (contrairement au social) — `^~ /api/social/`
   couvre les routes covers, `~ ^/(app|api/jobs|api/albums|download)(/|$)` couvre
   `/download/cover|traycard/{id}`, `/cover-img|traycard-img/{id}` sont publics.
