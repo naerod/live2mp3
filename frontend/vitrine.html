@@ -108,7 +108,7 @@
     color:#ffb347;font-size:12.5px;font-weight:600}
   .preview-banner.show{display:flex}
   .preview-banner .material-symbols-outlined{font-size:16px}
-  .preview-banner button{padding:2px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);
+  .preview-banner button{padding:2px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);align-self:center;
     background:transparent;color:#ffb347;font-size:11.5px;cursor:pointer}
   .preview-banner button:hover{background:rgba(255,140,0,.18)}
   /* Modale */
@@ -432,7 +432,7 @@ function patchSocialCounts(){
 }
 async function handleLike(e,slug){
   e.stopPropagation();
-  if(!ME.authenticated){location.href="/outpost.goauthentik.io/start?rd=/";return;}
+  if(!ME.authenticated){location.href="/if/flow/default-enrollment-flow/";return;}
   try{
     const res=await(await fetch(`/api/social/albums/${slug}/like`,{method:"POST"})).json();
     SOC_CACHE[slug]={likes:res.likes,comments:res.comments};
