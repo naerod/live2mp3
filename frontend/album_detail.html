@@ -59,7 +59,7 @@
     font-size:13px;font-weight:600;cursor:pointer;color:var(--fg);
     transition:border-color .15s,background .15s}
   .soc-action:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
-  .soc-action.liked{color:#e85d75;border-color:#e85d75}
+  .soc-action.liked{color:var(--like);border-color:var(--like)}
   .soc-action.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
   .soc-action[disabled]{opacity:.55;cursor:not-allowed}
   .soc-action .material-symbols-outlined{font-size:17px}
@@ -85,17 +85,27 @@
   .cr-dot{width:6px;height:6px;border-radius:50%;padding:0;border:none;cursor:pointer;
     background:var(--border);transition:background .15s,transform .15s}
   .cr-dot.on{background:var(--accent);transform:scale(1.25)}
+  /* Une face tray card se distingue de sa pochette : puce creuse, même rang. */
+  .cr-dot.tray{background:none;border:1.5px solid var(--border)}
+  .cr-dot.tray.on{border-color:var(--accent)}
   .cr-credit{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
-  .cr-stats{display:flex;align-items:center;gap:6px;margin-left:auto}
-  .cr-stat{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
-  .cr-stat .material-symbols-outlined{font-size:15px}
-  .cr-stat.liked{color:#e85d75}
-  .cr-stat.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
+  /* Actions de la pochette regardée : mêmes boutons que ceux de l'album
+     (.soc-action), simplement étalés sur la largeur de la colonne. */
+  .cr-actions.social-actions{margin-top:12px}
+  .cr-actions .soc-action{flex:1;justify-content:center}
   .cr-add{margin-top:10px;width:100%;justify-content:center}
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
-    color:var(--muted)}
+    color:var(--muted);cursor:pointer;font-family:inherit;
+    transition:border-color .15s,color .15s}
+  .cr-tray-badge:hover,.cr-tray-badge.on{border-color:var(--accent);color:var(--accent)}
   .cr-tray-badge .material-symbols-outlined{font-size:13px}
+  /* Tray card : format libre (souvent large, parfois PDF) — logée en entier
+     dans le cadre carré de la pochette plutôt que rognée. */
+  .al-cover.is-tray{background:var(--bg)}
+  .al-cover.is-tray img,.cr-fit{object-fit:contain!important}
+  .al-cover.is-tray:hover img{transform:none}
+  .cr-tray-embed{width:100%;height:100%;border:0;display:block;background:#fff}
 
   /* ── Modale pochette ────────────────────────────────────────────── */
   .cm{position:fixed;inset:0;z-index:60;background:rgba(6,7,10,.9);backdrop-filter:blur(6px);
@@ -212,8 +222,11 @@ const T={
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil",
-      cv_by:"Pochette par",cv_prev:"Pochette précédente",cv_next:"Pochette suivante",
+      cv_by:"Pochette par",cv_prev:"Précédent",cv_next:"Suivant",
+      cv_cover:"Pochette",cv_see_tray:"Voir la tray card",cv_see_cover:"Voir la pochette",
+      cv_comments:"Commentaires",
       cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
+      cv_comments:"Voir les commentaires",
       cv_pinned:"Pochette épinglée",cv_pin:"Épingler",cv_unpin:"Désépingler",
       cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",
       cv_login:"Connectez-vous pour proposer une pochette",
@@ -235,8 +248,11 @@ const T={
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile",
-      cv_by:"Cover by",cv_prev:"Previous cover",cv_next:"Next cover",
+      cv_by:"Cover by",cv_prev:"Previous",cv_next:"Next",
+      cv_cover:"Cover",cv_see_tray:"View tray card",cv_see_cover:"View cover",
+      cv_comments:"Comments",
       cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
+      cv_comments:"View comments",
       cv_pinned:"Pinned cover",cv_pin:"Pin",cv_unpin:"Unpin",
       cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",
       cv_login:"Log in to submit a cover",
@@ -441,56 +457,104 @@ async function initSocialActions(){
 // ── Carrousel de pochettes ───────────────────────────────────────────────
 // COVERS arrive déjà classé par le serveur (épinglée > plus likée) : l'index 0
 // est la gagnante, donc l'affichage par défaut suit le classement sans calcul.
-let COVERS=[], IDX=0;
+// Le carrousel ne défile pas COVERS mais SLIDES : chaque pochette y occupe une
+// face, suivie de sa tray card quand elle en a une. La tray card reste ainsi
+// une colonne de sa cover (jamais une entrée indépendante), et les flèches
+// parcourent aussi bien les faces d'une pochette que les pochettes entre elles.
+let COVERS=[], SLIDES=[], IDX=0;
+
+function buildSlides(){
+  SLIDES=[];
+  for(const c of COVERS){
+    SLIDES.push({id:c.id,kind:'cover'});
+    if(c.has_traycard)SLIDES.push({id:c.id,kind:'traycard'});
+  }
+}
+
+// Se recaler sur une face précise après un reclassement (like, épinglage) :
+// l'index n'a plus de sens, la paire id+face si.
+function focusSlide(id,kind){
+  const i=SLIDES.findIndex(s=>s.id===id&&s.kind===kind);
+  IDX=i<0?SLIDES.findIndex(s=>s.id===id):i;
+  if(IDX<0)IDX=0;
+}
 
 async function loadCovers(){
   try{
     const d=await fetch(`/api/social/albums/${slug}/covers`).then(r=>r.json());
     COVERS=d.covers||[];
   }catch(e){COVERS=[];}
-  if(IDX>=COVERS.length)IDX=0;
+  buildSlides();
+  if(IDX>=SLIDES.length)IDX=0;
 }
 
-const curCover=()=>COVERS[IDX]||null;
+const curSlide=()=>SLIDES[IDX]||null;
+const coverById=id=>COVERS.find(c=>c.id===id)||null;
+const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
-function creditHtml(c){
+function creditHtml(c,kind){
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
+  // Le badge n'étiquette plus la présence d'une tray card, il bascule vers
+  // elle : c'est le geste attendu quand on regarde une pochette.
   const tray=c.has_traycard
-    ? `<span class="cr-tray-badge"><span class="material-symbols-outlined">description</span>${t('cv_tray')}</span>`
+    ? `<button class="cr-tray-badge${kind==='traycard'?' on':''}" id="cr-flip"
+         title="${kind==='traycard'?t('cv_see_cover'):t('cv_see_tray')}">
+         <span class="material-symbols-outlined">${kind==='traycard'?'image':'description'}</span>${
+         kind==='traycard'?t('cv_cover'):t('cv_tray')}</button>`
     : '';
-  return `<div class="cr-credit">${poster}${tray}
-    <span class="cr-stats">
-      <button class="cr-stat${c.liked?' liked':''}" id="cr-like" title="${ME.authenticated?t('like'):t('login_to_like')}"
-        style="background:none;border:none;cursor:pointer;padding:0">
-        <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
-      <span class="cr-stat"><span class="material-symbols-outlined">comment</span>${c.comments}</span>
-    </span></div>`;
+  return `<div class="cr-credit">${poster}${tray}</div>`;
+}
+
+// Les actions portent sur la pochette regardée, jamais sur la tray card : une
+// tray card est une face de sa cover, ses likes et commentaires sont les siens.
+function actionsHtml(c){
+  return `<div class="social-actions cr-actions">
+    <button class="soc-action${c.liked?' liked':''}" id="cr-like"
+      title="${ME.authenticated?t('like'):t('login_to_like')}">
+      <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
+    <button class="soc-action" id="cr-comment" title="${t('cv_comments')}">
+      <span class="material-symbols-outlined">comment</span>${c.comments}</button>
+  </div>`;
+}
+
+// La face d'une tray card n'est pas carrée et peut être un PDF : on la loge en
+// entier (contain) au lieu de la rogner comme une pochette.
+function faceHtml(c,kind){
+  if(!c)return GENERIC_COVER;
+  if(kind!=='traycard')return `<img src="${c.cover_url}" alt="">`;
+  return c.traycard_kind==='pdf'
+    ? `<iframe class="cr-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
+    : `<img class="cr-fit" src="${c.traycard_url}" alt="${t('cv_tray')}">`;
 }
 
 function renderCarousel(){
   const col=document.getElementById('cover-col');
   if(!col)return;
-  const c=curCover(), multi=COVERS.length>1;
-  const art=c?`<img src="${c.cover_url}" alt="">`:GENERIC_COVER;
+  const s=curSlide(), c=curCover(), multi=SLIDES.length>1;
+  const kind=s?s.kind:'cover';
 
   col.innerHTML=`
     <div class="cr">
-      <div class="al-cover" id="cr-art">${art}</div>
-      ${c&&c.pinned?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
-      ${multi?`<span class="cr-count">${IDX+1}/${COVERS.length}</span>
+      <div class="al-cover${kind==='traycard'?' is-tray':''}" id="cr-art">${faceHtml(c,kind)}</div>
+      ${c&&c.pinned&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
+      ${multi?`<span class="cr-count">${IDX+1}/${SLIDES.length}</span>
         <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
         <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
     </div>
-    ${multi?`<div class="cr-dots">${COVERS.map((_,i)=>
-      `<button class="cr-dot${i===IDX?' on':''}" data-i="${i}"></button>`).join('')}</div>`:''}
-    ${c?creditHtml(c):`<div class="cr-credit" style="color:var(--muted);font-size:13px">${t('cv_none')}</div>`}
+    ${multi?`<div class="cr-dots">${SLIDES.map((sl,i)=>
+      `<button class="cr-dot${sl.kind==='traycard'?' tray':''}${i===IDX?' on':''}" data-i="${i}"
+        title="${sl.kind==='traycard'?t('cv_tray'):t('cv_cover')}"></button>`).join('')}</div>`:''}
+    ${c?actionsHtml(c):''}
+    ${c?creditHtml(c,kind):`<div class="cr-credit" style="color:var(--muted);font-size:13px">${t('cv_none')}</div>`}
     ${ME.authenticated
       ?`<button class="icon-btn cr-add" id="cr-add"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_add')}</button>`
       :`<a class="icon-btn cr-add" href="${L2M.loginUrl()}"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_login')}</a>`}
   `;
 
-  if(c)document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
+  // Un PDF capte le clic : la face entière n'est cliquable que pour une image.
+  if(c&&!(kind==='traycard'&&c.traycard_kind==='pdf'))
+    document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
   const prev=document.getElementById('cr-prev'), next=document.getElementById('cr-next');
   if(prev)prev.onclick=()=>go(-1);
   if(next)next.onclick=()=>go(1);
@@ -499,23 +563,31 @@ function renderCarousel(){
   if(add&&ME.authenticated)add.onclick=()=>openUpload();
   const like=document.getElementById('cr-like');
   if(like)like.onclick=()=>toggleCoverLike(c.id);
+  const cmt=document.getElementById('cr-comment');
+  if(cmt)cmt.onclick=()=>openCoverModal(c.id);
+  const flip=document.getElementById('cr-flip');
+  if(flip)flip.onclick=()=>{
+    focusSlide(c.id,kind==='traycard'?'cover':'traycard');
+    renderCarousel();
+  };
 }
 
 function go(step){
-  if(!COVERS.length)return;
-  IDX=(IDX+step+COVERS.length)%COVERS.length;   // circulaire
+  if(!SLIDES.length)return;
+  IDX=(IDX+step+SLIDES.length)%SLIDES.length;   // circulaire
   renderCarousel();
 }
 
 async function toggleCoverLike(id){
   if(!ME.authenticated){location.href=L2M.loginUrl();return;}
   // Un like peut faire changer la gagnante : le serveur renvoie la liste
-  // reclassée, on se recale donc sur la pochette regardée, pas sur l'index.
+  // reclassée, on se recale donc sur la face regardée, pas sur l'index.
+  const kind=curSlide()?.kind||'cover';
   try{
     const d=await fetch(`/api/social/covers/${id}/like`,{method:'POST'}).then(r=>r.json());
     COVERS=d.covers||[];
-    const i=COVERS.findIndex(x=>x.id===id);
-    IDX=i<0?0:i;
+    buildSlides();
+    focusSlide(id,kind);
     renderCarousel();
     if(!document.getElementById('cm').classList.contains('hidden'))paintModal(id);
   }catch(e){}
@@ -562,10 +634,11 @@ function paintModal(id){
         </div>
         ${c.caption?`<p class="cm-caption">${L2M.esc(c.caption)}</p>`:''}
         <div class="social-actions" style="margin-top:12px">
-          <button class="soc-action${c.liked?' liked':''}" id="cm-like">
+          <button class="soc-action${c.liked?' liked':''}" id="cm-like"
+            title="${ME.authenticated?t('like'):t('login_to_like')}">
             <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
-          <span class="soc-action" style="cursor:default">
-            <span class="material-symbols-outlined">comment</span>${c.comments}</span>
+          <button class="soc-action" id="cm-comment" title="${t('cv_comments')}">
+            <span class="material-symbols-outlined">comment</span>${c.comments}</button>
         </div>
         <div class="cm-actions">
           ${ME.authenticated?`<a class="icon-btn" href="/download/cover/${c.id}">
@@ -585,18 +658,24 @@ function paintModal(id){
     </div>`;
 
   document.getElementById('cm-like').onclick=()=>toggleCoverLike(c.id);
+  // Dans la modale les commentaires sont déjà rendus plus bas : on y amène.
+  document.getElementById('cm-comment').onclick=()=>
+    document.getElementById('cm-comments')?.scrollIntoView({behavior:'smooth',block:'start'});
   const pin=document.getElementById('cm-pin');
   if(pin)pin.onclick=async()=>{
+    const kind=curSlide()?.kind||'cover';
     const d=await fetch(`/api/social/covers/${c.id}/pin`,{method:'POST'}).then(r=>r.json());
     COVERS=d.covers||[];
-    const i=COVERS.findIndex(x=>x.id===c.id);IDX=i<0?0:i;
+    buildSlides();
+    focusSlide(c.id,kind);
     renderCarousel();paintModal(c.id);
   };
   const del=document.getElementById('cm-del');
   if(del)del.onclick=async()=>{
     if(!confirm(t('cv_del_confirm')))return;
     const d=await fetch(`/api/social/covers/${c.id}`,{method:'DELETE'}).then(r=>r.json());
-    COVERS=d.covers||[];IDX=0;
+    // La cover et sa tray card disparaissent ensemble : aucune face à retrouver.
+    COVERS=d.covers||[];buildSlides();IDX=0;
     closeModal();renderCarousel();
   };
   const trayBtn=document.getElementById('cm-tray');
@@ -664,9 +743,11 @@ document.getElementById('up-send').onclick=async()=>{
     }
     const d=await r.json();
     COVERS=d.covers||[];
+    buildSlides();
+    // UP_TARGET renseigné = on vient d'ajouter/remplacer une tray card : on
+    // montre la face qu'on vient de produire, pas la pochette qui la porte.
     const focus=UP_TARGET!==null?UP_TARGET:d.cover_id;
-    const i=COVERS.findIndex(x=>x.id===focus);
-    IDX=i<0?0:i;
+    focusSlide(focus,UP_TARGET!==null?'traycard':'cover');
     closeUpload();
     renderCarousel();
     if(!cm.classList.contains('hidden'))paintModal(focus);
