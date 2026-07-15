@@ -212,7 +212,9 @@ async function loadPage(){
 function posterFor(username){
   if(!username)return '';
   const p=POSTERS[username]||{};
-  return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},t('imported_by'));
+  const prefixFn=T[L()].imported_by;
+  const prefix=typeof prefixFn==='function'?prefixFn(p.display_name||username,null):'';
+  return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},prefix||undefined);
 }
 
 function renderAlbum(d){
@@ -269,7 +271,7 @@ function renderAlbum(d){
         ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
-        <div id="like-btn" style="margin-top:14px"></div>
+        <div id="like-btn" style="margin-top:14px;display:inline-flex"></div>
       </div>
     </div>
     ${dlHtml}
