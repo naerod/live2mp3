@@ -398,7 +398,7 @@ function renderTraycard(){
   const wrap=document.getElementById("traycard-wrap"),t=TT[L()];
   if(DATA.has_traycard){
     wrap.innerHTML=`<div class="tray-zone" id="tray-zone">
-      <iframe src="/app/traycard/${SLUG}#toolbar=0" title="tray card"></iframe>
+      <iframe src="/download/${SLUG}/traycard#toolbar=0" title="tray card"></iframe>
       <div class="upload-hint">
         <span class="material-symbols-outlined">upload</span>
         <span class="txt">${t.replace_traycard}</span>
