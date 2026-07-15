@@ -14,10 +14,22 @@ USER = {"X-authentik-username": "u", "X-authentik-groups": "live2mp3-user"}
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from backend import catalogue, main, manifest
+    # Le zip complet embarque les pochettes, dont le classement vit en base
+    # sociale : le téléchargement en dépend, donc on l'isole aussi ici.
+    # `PROJECTS_DIR` est patché module par module (chacun l'a importé par
+    # valeur, un patch sur `manifest` seul ne les atteindrait pas).
+    from backend import catalogue, covers, db, main, manifest, social
+    data = tmp_path / "data"
+    monkeypatch.setattr(db, "DATA_DIR", data)
+    monkeypatch.setattr(db, "DB_PATH", data / "live2mp3.db")
+    monkeypatch.setattr(db, "AVATARS_DIR", data / "avatars")
+    monkeypatch.setattr(social, "AVATARS_DIR", data / "avatars")
     monkeypatch.setattr(manifest, "PROJECTS_DIR", tmp_path)
     monkeypatch.setattr(main, "PROJECTS_DIR", tmp_path)
     monkeypatch.setattr(catalogue, "PROJECTS_DIR", tmp_path)
+    monkeypatch.setattr(social, "PROJECTS_DIR", tmp_path)
+    monkeypatch.setattr(covers, "PROJECTS_DIR", tmp_path)
+    db.init_db()
     return TestClient(main.app), tmp_path
 
 

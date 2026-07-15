@@ -175,7 +175,12 @@ const L2M = (function () {
   }
 
   /* ---------------- Widget commentaires ---------------- */
-  async function comments(root, slug) {
+  /* `opts.coverId` bascule le widget sur le fil d'une pochette au lieu de celui
+     de l'album. Les deux peuvent coexister (fil d'album + modale pochette), donc
+     rien ici ne doit s'appuyer sur un id global. */
+  async function comments(root, slug, opts) {
+    const coverId = (opts || {}).coverId || null;
+    const scope = coverId ? `&cover_id=${coverId}` : "";
     const meData = await me();
     let sort = "top", offset = 0, total = 0;
 
@@ -200,7 +205,8 @@ const L2M = (function () {
     if (meData.authenticated) {
       composeSlot.innerHTML = composerHtml(t("write_ph"));
       wireComposer(composeSlot.firstElementChild, async (body) => {
-        const c = await api("POST", `/api/social/albums/${slug}/comments`, { body });
+        const c = await api("POST", `/api/social/albums/${slug}/comments`,
+                            coverId ? { body, cover_id: coverId } : { body });
         c.reply_count = 0; c.replies = [];
         const emptyEl = list.querySelector(".soc-empty");
         if (emptyEl) emptyEl.remove();
@@ -222,7 +228,7 @@ const L2M = (function () {
     });
 
     async function loadPage() {
-      const d = await api("GET", `/api/social/albums/${slug}/comments?sort=${sort}&offset=${offset}&limit=20`);
+      const d = await api("GET", `/api/social/albums/${slug}/comments?sort=${sort}&offset=${offset}&limit=20${scope}`);
       total = d.total;
       if (!d.comments.length && offset === 0) {
         list.innerHTML = `<div class="soc-empty">${t("no_comments")}</div>`;
@@ -231,8 +237,8 @@ const L2M = (function () {
       }
       offset += d.comments.length;
       moreSlot.innerHTML = offset < total
-        ? `<button class="soc-more" id="more-top"><span class="material-symbols-outlined">expand_more</span> ${t("more_comments")}</button>` : "";
-      const mt = document.getElementById("more-top");
+        ? `<button class="soc-more"><span class="material-symbols-outlined">expand_more</span> ${t("more_comments")}</button>` : "";
+      const mt = moreSlot.querySelector(".soc-more");
       if (mt) mt.onclick = loadPage;
     }
     loadPage();

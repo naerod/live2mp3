@@ -207,6 +207,7 @@ def _comment_dict(row: sqlite3.Row, profiles: dict[str, dict],
 class CommentIn(BaseModel):
     body: str = Field(min_length=1, max_length=BODY_MAX)
     parent_id: int | None = None
+    cover_id: int | None = None   # None = commentaire d'album
 
 
 class CommentEditIn(BaseModel):
@@ -464,24 +465,31 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
 # =====================================================================
 @router.get("/api/social/albums/{slug}/comments")
 def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TOP_PAGE,
+                  cover_id: int | None = None,
                   identity: dict = Depends(current_identity)) -> dict:
+    """Fil de l'album (`cover_id` absent) ou fil d'une pochette (`cover_id` posé).
+
+    Les deux partagent la même table : `cover_id IS ?` sélectionne l'un ou
+    l'autre sans jamais les mélanger (`IS` compare NULL correctement).
+    """
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
     # Un commentaire racine supprimé n'est affiché que s'il a au moins une
     # réponse non supprimée (préserver le contexte du fil).
     _TOP_FILTER = """
-        slug=? AND parent_id IS NULL
+        slug=? AND cover_id IS ? AND parent_id IS NULL
         AND (deleted=0 OR EXISTS (
             SELECT 1 FROM comments r
             WHERE r.parent_id=comments.id AND r.deleted=0
         ))
     """
+    scope = (slug, cover_id)
     with get_conn() as conn:
         total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM comments WHERE {_TOP_FILTER}", (slug,)
+            f"SELECT COUNT(*) AS n FROM comments WHERE {_TOP_FILTER}", scope
         ).fetchone()["n"]
         tops = conn.execute(
-            f"SELECT * FROM comments WHERE {_TOP_FILTER}", (slug,)
+            f"SELECT * FROM comments WHERE {_TOP_FILTER}", scope
         ).fetchall()
         top_ids = [r["id"] for r in tops]
 
@@ -555,21 +563,32 @@ def create_comment(slug: str, payload: CommentIn,
         raise HTTPException(400, "commentaire vide")
     parent_id = None
     reply_to = ""
+    cover_id = payload.cover_id
     with get_conn() as conn:
         _ensure_profile(conn, username)
+        if cover_id is not None:
+            cov = conn.execute(
+                "SELECT slug FROM covers WHERE id=?", (cover_id,)
+            ).fetchone()
+            if not cov or cov["slug"] != slug:
+                raise HTTPException(404, "pochette introuvable")
         if payload.parent_id is not None:
             parent = conn.execute(
                 "SELECT * FROM comments WHERE id=?", (payload.parent_id,)
             ).fetchone()
             if not parent or parent["slug"] != slug or parent["deleted"]:
                 raise HTTPException(404, "commentaire parent introuvable")
+            # Une réponse reste dans le fil de son parent : sinon un commentaire
+            # d'album pourrait se retrouver greffé sous une pochette.
+            if parent["cover_id"] != cover_id:
+                raise HTTPException(400, "réponse hors du fil du parent")
             # Aplatissement à 1 niveau : rattache toujours à la racine du fil.
             parent_id = parent["id"] if parent["parent_id"] is None else parent["parent_id"]
             reply_to = parent["username"]
         cur = conn.execute(
-            "INSERT INTO comments(slug, parent_id, reply_to, username, body, created_at) "
-            "VALUES(?,?,?,?,?,?)",
-            (slug, parent_id, reply_to, username, body, _now()),
+            "INSERT INTO comments(slug, cover_id, parent_id, reply_to, username, body, "
+            "created_at) VALUES(?,?,?,?,?,?,?)",
+            (slug, cover_id, parent_id, reply_to, username, body, _now()),
         )
         new_id = cur.lastrowid
         row = conn.execute("SELECT * FROM comments WHERE id=?", (new_id,)).fetchone()

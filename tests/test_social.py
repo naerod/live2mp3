@@ -11,7 +11,7 @@ USER2 = {"X-authentik-username": "bob", "X-authentik-groups": "live2mp3-user"}
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    from backend import catalogue, db, main, manifest, social
+    from backend import catalogue, covers, db, main, manifest, social
     data = tmp_path / "data"
     monkeypatch.setattr(db, "DATA_DIR", data)
     monkeypatch.setattr(db, "DB_PATH", data / "live2mp3.db")
@@ -21,6 +21,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, "PROJECTS_DIR", tmp_path)
     monkeypatch.setattr(catalogue, "PROJECTS_DIR", tmp_path)
     monkeypatch.setattr(social, "PROJECTS_DIR", tmp_path)
+    monkeypatch.setattr(covers, "PROJECTS_DIR", tmp_path)
     db.init_db()
     return TestClient(main.app), tmp_path
 

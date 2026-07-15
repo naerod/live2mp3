@@ -178,6 +178,77 @@
     border:1px solid var(--border)}
   .cv-btns{display:flex;flex-direction:column;gap:8px;min-width:140px}
   .cv-close{position:absolute;top:16px;right:16px}
+
+  /* ── Import d'album ─────────────────────────────────────────────────── */
+  .imp-modal{max-width:720px;width:min(720px,94vw)}
+  .imp-head{display:flex;align-items:center;gap:10px;padding:18px 20px;
+    border-bottom:1px solid var(--border)}
+  .imp-head .material-symbols-outlined{color:var(--accent)}
+  .imp-head h2{margin:0;font-size:17px;font-weight:600;color:var(--fg)}
+  .imp-body{padding:20px;max-height:64vh;overflow:auto}
+  .imp-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;
+    border-top:1px solid var(--border)}
+  /* Zone de dépôt */
+  .drop{border:2px dashed var(--border);border-radius:14px;padding:34px 20px;text-align:center;
+    color:var(--muted);cursor:pointer;transition:border-color .2s,background .2s,color .2s}
+  .drop:hover,.drop.over{border-color:var(--accent);background:rgba(99,102,241,.06);color:var(--accent)}
+  .drop .material-symbols-outlined{font-size:44px;display:block;margin-bottom:8px}
+  .drop .dz-title{font-size:15px;font-weight:600;color:var(--fg);margin-bottom:4px}
+  .drop.over .dz-title{color:var(--accent)}
+  .drop .dz-sub{font-size:12.5px;line-height:1.5}
+  .imp-or{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--muted);font-size:12px}
+  .imp-or::before,.imp-or::after{content:"";flex:1;height:1px;background:var(--border)}
+  .imp-picks{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  /* Formulaire */
+  .imp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  @media(max-width:560px){.imp-grid{grid-template-columns:1fr}}
+  .imp-grid .full{grid-column:1/-1}
+  .imp-fg{display:flex;flex-direction:column;gap:4px}
+  .imp-fg label{font-size:11.5px;color:var(--muted);font-weight:500}
+  .imp-fg input{margin:0;font-size:13px;padding:7px 10px}
+  .imp-cols{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:start}
+  @media(max-width:560px){.imp-cols{grid-template-columns:1fr}}
+  .imp-cover{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;
+    border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;
+    justify-content:center;cursor:pointer}
+  .imp-cover img{width:100%;height:100%;object-fit:cover;display:block}
+  .imp-cover .ph{display:flex;flex-direction:column;align-items:center;gap:6px;
+    color:var(--muted);font-size:12px;text-align:center;padding:8px}
+  .imp-cover .ph .material-symbols-outlined{font-size:38px}
+  .imp-cover:hover .upload-hint{background:rgba(0,0,0,.55);opacity:1}
+  .imp-cover .upload-hint{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px;opacity:0;background:rgba(0,0,0,0);
+    transition:opacity .2s,background .2s;pointer-events:none}
+  .imp-cover .upload-hint .material-symbols-outlined{font-size:30px;color:#fff}
+  .imp-cover .upload-hint .txt{color:#fff;font-size:11.5px;font-weight:500}
+  .cover-src{font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.4}
+  .imp-tracks{list-style:none;padding:0;margin:0}
+  .imp-tracks li{display:flex;align-items:center;gap:8px;padding:4px 0;
+    border-bottom:1px solid var(--border)}
+  .imp-tracks li:last-child{border-bottom:none}
+  .imp-tracks .n{color:var(--accent);font-size:12px;font-variant-numeric:tabular-nums;
+    min-width:22px;font-weight:600;text-align:right;flex-shrink:0}
+  .imp-tracks input{flex:1;margin:0;padding:4px 8px;font-size:13px;height:30px}
+  .imp-tracks .dur{color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums;
+    flex-shrink:0;min-width:38px;text-align:right}
+  .imp-sec-t{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    font-weight:700;margin:0 0 8px}
+  /* Avertissements & état */
+  .imp-warn{display:flex;gap:8px;align-items:flex-start;background:rgba(245,158,11,.1);
+    border:1px solid rgba(245,158,11,.35);color:#f59e0b;border-radius:10px;
+    padding:9px 11px;font-size:12.5px;margin-bottom:12px;line-height:1.45}
+  .imp-warn .material-symbols-outlined{font-size:17px;flex-shrink:0}
+  .imp-err{background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.4);
+    color:#e57373;border-radius:10px;padding:9px 11px;font-size:12.5px;margin-bottom:12px}
+  .imp-pub{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);
+    cursor:pointer;margin-right:auto}
+  .imp-pub input{margin:0;width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+  .imp-busy{display:flex;flex-direction:column;align-items:center;gap:12px;
+    padding:34px 20px;color:var(--muted);font-size:13.5px;text-align:center}
+  .spin{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
 </style>
 </head>
 <body>
@@ -185,6 +256,7 @@
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
+    <button id="import-btn" class="icon-btn" style="display:none" onclick="openImport()"><span class="material-symbols-outlined">library_add</span><span id="t-import">Importer</span></button>
     <button id="preview-visitor-btn" class="icon-btn" style="display:none" onclick="togglePreviewVisitor()"><span class="material-symbols-outlined">visibility</span><span id="t-preview-visitor">Vue visiteur</span></button>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
@@ -251,7 +323,23 @@
   <div class="foot" id="foot"></div>
 </main>
 
-
+<!-- Import d'album (gestionnaires) -->
+<div id="import-overlay" class="overlay hidden">
+  <div class="modal imp-modal" role="dialog" aria-modal="true" aria-labelledby="imp-h">
+    <div class="imp-head">
+      <span class="material-symbols-outlined">library_add</span>
+      <h2 id="imp-h">Importer un album</h2>
+      <button class="icon-btn icon-only x" onclick="closeImport()" aria-label="Fermer">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="imp-body" id="imp-body"></div>
+    <div class="imp-foot" id="imp-foot"></div>
+  </div>
+</div>
+<input type="file" id="imp-files" multiple accept=".mp3,audio/mpeg,image/*" style="display:none">
+<input type="file" id="imp-zip" accept=".zip,application/zip" style="display:none">
+<input type="file" id="imp-cover-file" accept="image/jpeg,image/png,image/webp" style="display:none">
 
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
@@ -273,6 +361,10 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   document.getElementById("t-preview-visitor").textContent=T[l].preview_visitor;
   document.getElementById("t-preview-banner").textContent=T[l].preview_banner;
   document.getElementById("t-preview-exit").textContent=T[l].preview_exit;
+  document.getElementById("t-import").textContent=T[l].imp;
+  document.getElementById("imp-h").textContent=T[l].imp_title;
+  // La modale d'import est reconstruite dans la langue courante si elle est ouverte.
+  if(IMP.step)renderImport();
   if(ALBUMS.length)buildFilters();render();updateCount();}
 langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
@@ -291,7 +383,24 @@ const T={
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
-      preview_visitor:"Vue visiteur",preview_banner:"Prévisualisation visiteur",preview_exit:"Quitter"},
+      preview_visitor:"Vue visiteur",preview_banner:"Prévisualisation visiteur",preview_exit:"Quitter",
+      imp:"Importer",imp_title:"Importer un album",
+      imp_dz_title:"Déposez vos fichiers ici",
+      imp_dz_sub:"Les MP3 un par un, ou un ZIP complet (chansons + pochettes).<br>Les cases seront pré-remplies depuis les métadonnées.",
+      imp_or:"ou",imp_pick_files:"Choisir des fichiers",imp_pick_zip:"Choisir un ZIP",
+      imp_reading:"Lecture des métadonnées…",imp_importing:"Import en cours…",
+      imp_wait:"Ne fermez pas cette fenêtre.",
+      imp_meta:"Informations de l'album",imp_tracks:n=>`Pistes (${n})`,
+      imp_artist:"Artiste",imp_album:"Titre de l'album",imp_date:"Date",
+      imp_venue:"Lieu",imp_festival:"Tournée/festival",imp_source:"Lien source",
+      imp_cover:"Pochette",imp_no_cover:"Aucune pochette",imp_change_cover:"Changer",
+      imp_cover_embedded:"Extraite des MP3",imp_cover_file:"Fournie dans le dépôt",
+      imp_cover_chosen:"Choisie à la main",
+      imp_publish:"Publier tout de suite",
+      imp_back:"Retour",imp_cancel:"Annuler",imp_do:"Importer",
+      imp_req:"Artiste et titre de l'album sont obligatoires.",
+      imp_done:n=>`Album importé — ${n} piste${n>1?"s":""}.`,
+      imp_see:"Voir l'album"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
@@ -306,7 +415,24 @@ const T={
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
-      preview_visitor:"Visitor view",preview_banner:"Visitor preview",preview_exit:"Exit"}
+      preview_visitor:"Visitor view",preview_banner:"Visitor preview",preview_exit:"Exit",
+      imp:"Import",imp_title:"Import an album",
+      imp_dz_title:"Drop your files here",
+      imp_dz_sub:"MP3s one by one, or a full ZIP (tracks + covers).<br>Fields will be prefilled from the metadata.",
+      imp_or:"or",imp_pick_files:"Choose files",imp_pick_zip:"Choose a ZIP",
+      imp_reading:"Reading metadata…",imp_importing:"Importing…",
+      imp_wait:"Please keep this window open.",
+      imp_meta:"Album info",imp_tracks:n=>`Tracks (${n})`,
+      imp_artist:"Artist",imp_album:"Album title",imp_date:"Date",
+      imp_venue:"Venue",imp_festival:"Tour/festival",imp_source:"Source link",
+      imp_cover:"Cover",imp_no_cover:"No cover",imp_change_cover:"Change",
+      imp_cover_embedded:"Extracted from the MP3s",imp_cover_file:"Provided in the upload",
+      imp_cover_chosen:"Picked manually",
+      imp_publish:"Publish right away",
+      imp_back:"Back",imp_cancel:"Cancel",imp_do:"Import",
+      imp_req:"Artist and album title are required.",
+      imp_done:n=>`Album imported — ${n} track${n>1?"s":""}.`,
+      imp_see:"View album"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
@@ -592,6 +718,7 @@ async function load(){
   document.getElementById("sort-select").value=currentSort;
   try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
+  document.getElementById("import-btn").style.display=ME.is_gestionnaire?"":"none";
   document.getElementById("preview-visitor-btn").style.display=ME.is_admin?"":"none";
   // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
   const um=document.getElementById("usermenu");
@@ -614,6 +741,192 @@ async function load(){
   loadSocialCounts();
 }
 load();
+
+// ══ Import d'album ════════════════════════════════════════════════════════
+// Parcours : dépôt → analyse serveur (staging + lecture des tags) → formulaire
+// pré-rempli → commit. Tant que le commit n'a pas eu lieu, rien n'existe dans
+// le catalogue : fermer la fenêtre purge le staging.
+const IMP={step:null,data:null,err:"",cover:""};
+
+function openImport(){IMP.step="drop";IMP.data=null;IMP.err="";IMP.cover="";
+  const o=document.getElementById("import-overlay");
+  o.classList.remove("hidden");requestAnimationFrame(()=>o.classList.add("show"));
+  renderImport();}
+
+function closeImport(force){
+  if(IMP.step==="busy"&&!force)return;      // ne pas couper un import en cours
+  if(IMP.data&&IMP.data.token&&IMP.step!=="done"){
+    // Abandon : le staging serveur est purgé sans attendre la réponse.
+    fetch("/api/import/cancel",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:IMP.data.token})}).catch(()=>{});
+  }
+  const o=document.getElementById("import-overlay");
+  o.classList.remove("show");
+  setTimeout(()=>o.classList.add("hidden"),180);
+  IMP.step=null;IMP.data=null;
+}
+
+function fmtDur(s){if(!s)return"";const m=Math.floor(s/60),r=Math.round(s%60);
+  return `${m}:${String(r).padStart(2,"0")}`;}
+
+function esc(s){return(s||"").replace(/[&<>"']/g,c=>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+
+function renderImport(){
+  const t=T[L()], body=document.getElementById("imp-body"), foot=document.getElementById("imp-foot");
+  document.getElementById("imp-h").textContent=t.imp_title;
+  if(IMP.step==="drop"){
+    body.innerHTML=`
+      ${IMP.err?`<div class="imp-err">${esc(IMP.err)}</div>`:""}
+      <div class="drop" id="dz" tabindex="0" role="button">
+        <span class="material-symbols-outlined">cloud_upload</span>
+        <div class="dz-title">${t.imp_dz_title}</div>
+        <div class="dz-sub">${t.imp_dz_sub}</div>
+      </div>
+      <div class="imp-or">${t.imp_or}</div>
+      <div class="imp-picks">
+        <button class="icon-btn" id="pick-files"><span class="material-symbols-outlined">audio_file</span>${t.imp_pick_files}</button>
+        <button class="icon-btn" id="pick-zip"><span class="material-symbols-outlined">folder_zip</span>${t.imp_pick_zip}</button>
+      </div>`;
+    foot.innerHTML=`<button class="icon-btn" onclick="closeImport()">${t.imp_cancel}</button>`;
+    const dz=document.getElementById("dz");
+    dz.onclick=()=>document.getElementById("imp-files").click();
+    dz.onkeydown=e=>{if(e.key==="Enter"||e.key===" ")dz.click();};
+    ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{
+      e.preventDefault();dz.classList.add("over");}));
+    ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{
+      e.preventDefault();dz.classList.remove("over");}));
+    dz.addEventListener("drop",e=>{if(e.dataTransfer.files.length)analyzeFiles(e.dataTransfer.files);});
+    document.getElementById("pick-files").onclick=()=>document.getElementById("imp-files").click();
+    document.getElementById("pick-zip").onclick=()=>document.getElementById("imp-zip").click();
+  }
+  else if(IMP.step==="busy"){
+    body.innerHTML=`<div class="imp-busy"><div class="spin"></div>
+      <div>${IMP.busyMsg||""}</div><div style="font-size:12px">${t.imp_wait}</div></div>`;
+    foot.innerHTML="";
+  }
+  else if(IMP.step==="form"){
+    const d=IMP.data, a=d.album;
+    const cov=IMP.cover||d.cover;
+    const srcLabel=IMP.cover&&IMP.cover!==d.cover?t.imp_cover_chosen
+      :(d.cover_source==="embedded"?t.imp_cover_embedded:t.imp_cover_file);
+    const coverBox=cov
+      ?`<img src="/api/import/${d.token}/file/${encodeURIComponent(cov)}" alt="">
+         <div class="upload-hint"><span class="material-symbols-outlined">swap_horiz</span>
+         <span class="txt">${t.imp_change_cover}</span></div>`
+      :`<div class="ph"><span class="material-symbols-outlined">image</span>${t.imp_no_cover}</div>`;
+    body.innerHTML=`
+      ${IMP.err?`<div class="imp-err">${esc(IMP.err)}</div>`:""}
+      ${(d.warnings||[]).map(w=>`<div class="imp-warn">
+        <span class="material-symbols-outlined">warning</span><span>${esc(w)}</span></div>`).join("")}
+      <div class="imp-cols">
+        <div>
+          <div class="imp-cover" id="imp-cover">${coverBox}</div>
+          ${cov?`<div class="cover-src">${srcLabel}</div>`:""}
+        </div>
+        <div>
+          <h3 class="imp-sec-t">${t.imp_meta}</h3>
+          <div class="imp-grid">
+            <div class="imp-fg"><label for="f-artist">${t.imp_artist} *</label>
+              <input id="f-artist" value="${esc(a.artist)}" autocomplete="off"></div>
+            <div class="imp-fg"><label for="f-title">${t.imp_album} *</label>
+              <input id="f-title" value="${esc(a.title)}" autocomplete="off"></div>
+            <div class="imp-fg"><label for="f-date">${t.imp_date}</label>
+              <input id="f-date" value="${esc(a.date)}" placeholder="2024-08-15" autocomplete="off"></div>
+            <div class="imp-fg"><label for="f-venue">${t.imp_venue}</label>
+              <input id="f-venue" value="${esc(a.venue)}" autocomplete="off"></div>
+            <div class="imp-fg"><label for="f-festival">${t.imp_festival}</label>
+              <input id="f-festival" value="${esc(a.festival)}" autocomplete="off"></div>
+            <div class="imp-fg"><label for="f-source">${t.imp_source}</label>
+              <input id="f-source" value="" placeholder="https://…" autocomplete="off"></div>
+          </div>
+        </div>
+      </div>
+      <h3 class="imp-sec-t" style="margin-top:16px">${t.imp_tracks(d.tracks.length)}</h3>
+      <ul class="imp-tracks">${d.tracks.map((tr,i)=>`
+        <li><span class="n">${tr.n}</span>
+          <input data-i="${i}" class="tr-title" value="${esc(tr.title)}">
+          <span class="dur">${fmtDur(tr.duration)}</span></li>`).join("")}</ul>`;
+    foot.innerHTML=`
+      <label class="imp-pub"><input type="checkbox" id="f-pub">${t.imp_publish}</label>
+      <button class="icon-btn" onclick="backToDrop()">${t.imp_back}</button>
+      <button class="primary" onclick="doImport()">
+        <span class="material-symbols-outlined">library_add</span>${t.imp_do}</button>`;
+    // Choix d'une autre image du dépôt (seulement si le dépôt en contient plusieurs).
+    const cbox=document.getElementById("imp-cover");
+    if(cbox&&(d.images||[]).length>1){
+      cbox.onclick=()=>{const imgs=d.images;
+        const cur=imgs.indexOf(IMP.cover||d.cover);
+        IMP.cover=imgs[(cur+1)%imgs.length];renderImport();};
+    }else if(cbox){cbox.style.cursor="default";}
+  }
+  else if(IMP.step==="done"){
+    const d=IMP.done;
+    body.innerHTML=`<div class="imp-busy">
+      <span class="material-symbols-outlined" style="font-size:44px;color:var(--accent)">check_circle</span>
+      <div>${t.imp_done(d.tracks)}</div></div>`;
+    foot.innerHTML=`<button class="icon-btn" onclick="closeImport(true);load()">${t.imp_cancel}</button>
+      <a class="primary" href="/album/${d.slug}">
+        <span class="material-symbols-outlined">album</span>${t.imp_see}</a>`;
+  }
+}
+
+function backToDrop(){
+  if(IMP.data&&IMP.data.token){
+    fetch("/api/import/cancel",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:IMP.data.token})}).catch(()=>{});
+  }
+  IMP.data=null;IMP.err="";IMP.cover="";IMP.step="drop";renderImport();
+}
+
+async function analyzeFiles(fileList){
+  const t=T[L()];
+  IMP.step="busy";IMP.busyMsg=t.imp_reading;IMP.err="";renderImport();
+  const fd=new FormData();
+  for(const f of fileList)fd.append("files",f);
+  try{
+    const r=await fetch("/api/import/analyze",{method:"POST",body:fd});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`);
+    IMP.data=j;IMP.cover=j.cover||"";IMP.step="form";
+  }catch(e){IMP.err=e.message;IMP.step="drop";}
+  renderImport();
+}
+
+async function doImport(){
+  const t=T[L()], d=IMP.data;
+  const artist=document.getElementById("f-artist").value.trim();
+  const title=document.getElementById("f-title").value.trim();
+  if(!artist||!title){IMP.err=t.imp_req;renderImport();return;}
+  const titles=[...document.querySelectorAll(".tr-title")].map(i=>i.value.trim());
+  const payload={token:d.token,artist,title,
+    date:document.getElementById("f-date").value.trim(),
+    venue:document.getElementById("f-venue").value.trim(),
+    festival:document.getElementById("f-festival").value.trim(),
+    source_url:document.getElementById("f-source").value.trim(),
+    published:document.getElementById("f-pub").checked,
+    cover:IMP.cover||d.cover||"",traycard:d.traycard||"",
+    tracks:d.tracks.map((tr,i)=>({n:tr.n,title:titles[i]||tr.title,file:tr.file}))};
+  IMP.step="busy";IMP.busyMsg=t.imp_importing;IMP.err="";renderImport();
+  try{
+    const r=await fetch("/api/import/commit",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(j.detail||`HTTP ${r.status}`);
+    IMP.done=j;IMP.step="done";
+    load();                                  // le catalogue reflète le nouvel album
+  }catch(e){IMP.err=e.message;IMP.step="form";}
+  renderImport();
+}
+
+document.getElementById("imp-files").addEventListener("change",e=>{
+  if(e.target.files.length)analyzeFiles(e.target.files);e.target.value="";});
+document.getElementById("imp-zip").addEventListener("change",e=>{
+  if(e.target.files.length)analyzeFiles(e.target.files);e.target.value="";});
+document.getElementById("import-overlay").addEventListener("click",e=>{
+  if(e.target.id==="import-overlay")closeImport();});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&IMP.step)closeImport();});
 </script>
 </body>
 </html>

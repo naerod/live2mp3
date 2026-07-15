@@ -63,15 +63,77 @@
   .soc-action.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
   .soc-action[disabled]{opacity:.55;cursor:not-allowed}
   .soc-action .material-symbols-outlined{font-size:17px}
-  /* Cover zoom overlay */
-  .cv-overlay{position:fixed;inset:0;background:rgba(6,7,10,.92);backdrop-filter:blur(6px);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    z-index:50;opacity:0;transition:opacity .18s;cursor:zoom-out}
-  .cv-overlay.hidden{display:none}
-  .cv-overlay.show{opacity:1}
-  .cv-img{border-radius:14px;max-width:min(520px,88vw);max-height:80vh;object-fit:contain;display:block}
-  .cv-btns{display:flex;gap:10px;margin-bottom:14px}
-  .cv-close{position:absolute;top:16px;right:16px}
+  /* ── Carrousel de pochettes ─────────────────────────────────────── */
+  .cr{position:relative}
+  .cr-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;
+    width:34px;height:34px;padding:0;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;border:1px solid var(--border);background:var(--card);
+    color:var(--fg);cursor:pointer;opacity:0;transition:opacity .15s,border-color .15s}
+  .cr:hover .cr-arrow,.cr-arrow:focus-visible{opacity:.95}
+  .cr-arrow:hover{border-color:var(--accent)}
+  .cr-arrow.prev{left:-14px}
+  .cr-arrow.next{right:-14px}
+  .cr-arrow .material-symbols-outlined{font-size:20px}
+  .cr-count{position:absolute;top:8px;right:8px;z-index:2;font-size:11px;font-weight:600;
+    padding:2px 8px;border-radius:999px;background:rgba(6,7,10,.72);color:#fff;
+    backdrop-filter:blur(4px);font-variant-numeric:tabular-nums}
+  .cr-pin{position:absolute;top:8px;left:8px;z-index:2;display:flex;align-items:center;
+    justify-content:center;width:24px;height:24px;border-radius:50%;
+    background:rgba(6,7,10,.72);color:var(--accent);backdrop-filter:blur(4px)}
+  .cr-pin .material-symbols-outlined{font-size:14px;font-variation-settings:'FILL' 1}
+  .cr-dots{display:flex;justify-content:center;gap:5px;margin-top:10px}
+  .cr-dot{width:6px;height:6px;border-radius:50%;padding:0;border:none;cursor:pointer;
+    background:var(--border);transition:background .15s,transform .15s}
+  .cr-dot.on{background:var(--accent);transform:scale(1.25)}
+  .cr-credit{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .cr-stats{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .cr-stat{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+  .cr-stat .material-symbols-outlined{font-size:15px}
+  .cr-stat.liked{color:#e85d75}
+  .cr-stat.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
+  .cr-add{margin-top:10px;width:100%;justify-content:center}
+  .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
+    padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
+    color:var(--muted)}
+  .cr-tray-badge .material-symbols-outlined{font-size:13px}
+
+  /* ── Modale pochette ────────────────────────────────────────────── */
+  .cm{position:fixed;inset:0;z-index:60;background:rgba(6,7,10,.9);backdrop-filter:blur(6px);
+    overflow-y:auto;padding:28px 16px;opacity:0;transition:opacity .18s}
+  .cm.hidden{display:none}
+  .cm.show{opacity:1}
+  .cm-box{max-width:860px;margin:0 auto;background:var(--card);border:1px solid var(--border);
+    border-radius:18px;padding:22px;position:relative}
+  .cm-close{position:absolute;top:12px;right:12px;z-index:2}
+  .cm-top{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
+  @media(max-width:640px){.cm-top{grid-template-columns:1fr}}
+  .cm-art{display:flex;flex-direction:column;gap:10px}
+  .cm-art img{width:100%;border-radius:12px;border:1px solid var(--border);display:block}
+  .cm-art .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);font-weight:700}
+  .cm-tray-embed{width:100%;height:200px;border-radius:12px;border:1px solid var(--border);
+    background:var(--bg)}
+  .cm-caption{color:var(--fg);font-size:14px;margin:10px 0 0;line-height:1.45}
+  .cm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .cm-comments{margin-top:22px;border-top:1px solid var(--border);padding-top:6px}
+  .cm-nav{display:flex;align-items:center;gap:8px;margin-top:14px}
+  .cm-nav .spacer{flex:1}
+
+  /* ── Formulaire d'import ────────────────────────────────────────── */
+  .up{position:fixed;inset:0;z-index:70;background:rgba(6,7,10,.9);backdrop-filter:blur(6px);
+    display:flex;align-items:center;justify-content:center;padding:16px}
+  .up.hidden{display:none}
+  .up-box{background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:22px;width:min(440px,100%)}
+  .up-box h3{margin:0 0 4px;font-size:17px}
+  .up-hint{color:var(--muted);font-size:12.5px;margin:0 0 16px;line-height:1.45}
+  .up-field{margin-bottom:14px}
+  .up-field label{display:block;font-size:12px;font-weight:600;margin-bottom:5px;color:var(--fg)}
+  .up-field input[type=file],.up-field input[type=text]{width:100%;font-size:13px;
+    padding:8px 10px;border-radius:9px;border:1px solid var(--border);
+    background:var(--bg);color:var(--fg)}
+  .up-err{color:#e85d75;font-size:12.5px;margin-bottom:10px;display:none}
+  .up-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
 </style>
 </head>
 <body>
@@ -93,10 +155,38 @@
   <div id="content"><div style="text-align:center;color:var(--muted);margin-top:60px"><span class="material-symbols-outlined" style="font-size:40px;display:block;margin-bottom:8px">sync</span></div></div>
 </main>
 
-<div id="cv-overlay" class="cv-overlay hidden">
-  <button class="icon-btn icon-only cv-close" id="cv-close"><span class="material-symbols-outlined">close</span></button>
-  <div id="cv-btns" class="cv-btns"></div>
-  <img id="cv-img" class="cv-img" src="" alt="">
+<!-- Fiche d'une pochette : crédit, likes, tray card liée, fil de commentaires -->
+<div id="cm" class="cm hidden">
+  <div class="cm-box">
+    <button class="icon-btn icon-only cm-close" id="cm-close"><span class="material-symbols-outlined">close</span></button>
+    <div id="cm-body"></div>
+    <div class="cm-comments" id="cm-comments"></div>
+  </div>
+</div>
+
+<!-- Import d'une pochette (+ tray card optionnelle) -->
+<div id="up" class="up hidden">
+  <div class="up-box">
+    <h3 id="up-title">Proposer une pochette</h3>
+    <p class="up-hint" id="up-hint"></p>
+    <div class="up-err" id="up-err"></div>
+    <div class="up-field" id="up-cover-field">
+      <label id="up-cover-lbl" for="up-cover"></label>
+      <input type="file" id="up-cover" accept="image/jpeg,image/png,image/webp">
+    </div>
+    <div class="up-field" id="up-tray-field">
+      <label id="up-tray-lbl" for="up-tray"></label>
+      <input type="file" id="up-tray" accept="image/jpeg,image/png,image/webp,application/pdf">
+    </div>
+    <div class="up-field" id="up-caption-field">
+      <label id="up-caption-lbl" for="up-caption"></label>
+      <input type="text" id="up-caption" maxlength="300">
+    </div>
+    <div class="up-btns">
+      <button class="icon-btn" id="up-cancel"></button>
+      <button class="primary" id="up-send"></button>
+    </div>
+  </div>
 </div>
 
 <script src="/static/social.js"></script>
@@ -121,7 +211,21 @@ const T={
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
-      imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil"},
+      imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil",
+      cv_by:"Pochette par",cv_prev:"Pochette précédente",cv_next:"Pochette suivante",
+      cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
+      cv_pinned:"Pochette épinglée",cv_pin:"Épingler",cv_unpin:"Désépingler",
+      cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",
+      cv_login:"Connectez-vous pour proposer une pochette",
+      cv_dl_cover:"Télécharger la pochette",cv_dl_tray:"Télécharger la tray card",
+      cv_add_tray:"Ajouter une tray card",cv_replace_tray:"Remplacer la tray card",
+      cv_tray:"Tray card",cv_no_tray:"Pas de tray card",
+      up_title:"Proposer une pochette",
+      up_hint:"La tray card est optionnelle et reste liée à cette pochette. JPEG, PNG ou WebP — PDF accepté pour la tray card.",
+      up_cover:"Pochette (obligatoire)",up_tray:"Tray card (optionnelle)",
+      up_caption:"Légende (optionnelle)",up_send:"Envoyer",up_cancel:"Annuler",
+      up_need_cover:"Choisissez une image de pochette.",up_failed:"Échec de l'envoi.",
+      tray_title:"Tray card",tray_send:"Envoyer la tray card"},
   en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
       downloads:"Downloads",setlist:"Setlist",comments:"Comments",
       full:"Full album (MP3)",cover:"Cover",traycard:"Tray card",
@@ -130,7 +234,21 @@ const T={
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
-      imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile"}
+      imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile",
+      cv_by:"Cover by",cv_prev:"Previous cover",cv_next:"Next cover",
+      cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
+      cv_pinned:"Pinned cover",cv_pin:"Pin",cv_unpin:"Unpin",
+      cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",
+      cv_login:"Log in to submit a cover",
+      cv_dl_cover:"Download cover",cv_dl_tray:"Download tray card",
+      cv_add_tray:"Add a tray card",cv_replace_tray:"Replace tray card",
+      cv_tray:"Tray card",cv_no_tray:"No tray card",
+      up_title:"Submit a cover",
+      up_hint:"The tray card is optional and stays tied to this cover. JPEG, PNG or WebP — PDF also accepted for the tray card.",
+      up_cover:"Cover (required)",up_tray:"Tray card (optional)",
+      up_caption:"Caption (optional)",up_send:"Send",up_cancel:"Cancel",
+      up_need_cover:"Pick a cover image.",up_failed:"Upload failed.",
+      tray_title:"Tray card",tray_send:"Send tray card"}
 };
 const L=()=>localStorage.getItem('l2m-lang')||'fr';
 const t=k=>{const v=(T[L()]||T.fr)[k];return typeof v==='function'?v:v||k;};
@@ -163,24 +281,6 @@ const GENERIC_COVER=`<div class="cover-generic">
     <line x1="50" y1="20" x2="50" y2="80" stroke="currentColor" stroke-width="3" opacity=".15"/>
     <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3" opacity=".15"/>
   </svg></div>`;
-
-// ── Cover zoom ───────────────────────────────────────────────────────────
-const cvOverlay=document.getElementById('cv-overlay');
-document.getElementById('cv-close').onclick=closeCover;
-cvOverlay.onclick=e=>{if(e.target===cvOverlay)closeCover();};
-function closeCover(){cvOverlay.classList.remove('show');setTimeout(()=>cvOverlay.classList.add('hidden'),180);}
-function openCoverPreview(hasCover,hasTraycard){
-  const bts=document.getElementById('cv-btns');
-  bts.innerHTML='';
-  if(hasCover){const a=document.createElement('a');a.className='icon-btn';a.href=`/download/${slug}/cover`;
-    a.innerHTML=`<span class="material-symbols-outlined">download</span> ${t('cover')}`;bts.appendChild(a);}
-  if(hasTraycard){const a=document.createElement('a');a.className='icon-btn';a.href=`/download/${slug}/traycard`;
-    a.innerHTML=`<span class="material-symbols-outlined">description</span> ${t('traycard')}`;bts.appendChild(a);}
-  document.getElementById('cv-img').src=`/cover/${slug}`;
-  cvOverlay.classList.remove('hidden');
-  requestAnimationFrame(()=>cvOverlay.classList.add('show'));
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!cvOverlay.classList.contains('hidden'))closeCover();});
 
 // ── Main ─────────────────────────────────────────────────────────────────
 let ME={authenticated:false,is_gestionnaire:false};
@@ -220,6 +320,7 @@ async function loadPage(){
     POSTERS=ps;
   }
 
+  await loadCovers();
   renderAlbum(d);
 
   if(location.hash==='#comments'){
@@ -238,11 +339,6 @@ function posterFor(username){
 function renderAlbum(d){
   const a=d.album||{};
   const tags=(d.labels||[]).map(l=>`<span class="tag">${L2M.esc(l)}</span>`).join('');
-  const hasCover=d.has_cover, hasTraycard=d.has_traycard;
-
-  const coverHtml=hasCover
-    ?`<img src="/cover/${slug}" alt="" onclick="openCoverPreview(${hasCover},${hasTraycard})">`
-    :GENERIC_COVER;
 
   const set=(d.tracks||[]).map(tr=>{
     const dl=(ME.authenticated&&tr.dl)
@@ -278,9 +374,7 @@ function renderAlbum(d){
 
   document.getElementById('content').innerHTML=`
     <div class="al-layout">
-      <div class="al-cover-col">
-        <div class="al-cover">${coverHtml}</div>
-      </div>
+      <div class="al-cover-col" id="cover-col"></div>
       <div class="al-info">
         ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
         <h1 class="al-title">${L2M.esc(a.title||slug)}</h1>
@@ -305,6 +399,7 @@ function renderAlbum(d){
   `;
 
   initSocialActions();
+  renderCarousel();
   L2M.comments(document.getElementById('sec-comments'),slug);
 }
 
@@ -342,6 +437,256 @@ async function initSocialActions(){
     }catch(e){}finally{btnLike.disabled=false;}
   };
 }
+
+// ── Carrousel de pochettes ───────────────────────────────────────────────
+// COVERS arrive déjà classé par le serveur (épinglée > plus likée) : l'index 0
+// est la gagnante, donc l'affichage par défaut suit le classement sans calcul.
+let COVERS=[], IDX=0;
+
+async function loadCovers(){
+  try{
+    const d=await fetch(`/api/social/albums/${slug}/covers`).then(r=>r.json());
+    COVERS=d.covers||[];
+  }catch(e){COVERS=[];}
+  if(IDX>=COVERS.length)IDX=0;
+}
+
+const curCover=()=>COVERS[IDX]||null;
+
+function creditHtml(c){
+  const poster=L2M.poster(
+    {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
+  const tray=c.has_traycard
+    ? `<span class="cr-tray-badge"><span class="material-symbols-outlined">description</span>${t('cv_tray')}</span>`
+    : '';
+  return `<div class="cr-credit">${poster}${tray}
+    <span class="cr-stats">
+      <button class="cr-stat${c.liked?' liked':''}" id="cr-like" title="${ME.authenticated?t('like'):t('login_to_like')}"
+        style="background:none;border:none;cursor:pointer;padding:0">
+        <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
+      <span class="cr-stat"><span class="material-symbols-outlined">comment</span>${c.comments}</span>
+    </span></div>`;
+}
+
+function renderCarousel(){
+  const col=document.getElementById('cover-col');
+  if(!col)return;
+  const c=curCover(), multi=COVERS.length>1;
+  const art=c?`<img src="${c.cover_url}" alt="">`:GENERIC_COVER;
+
+  col.innerHTML=`
+    <div class="cr">
+      <div class="al-cover" id="cr-art">${art}</div>
+      ${c&&c.pinned?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
+      ${multi?`<span class="cr-count">${IDX+1}/${COVERS.length}</span>
+        <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
+        <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
+    </div>
+    ${multi?`<div class="cr-dots">${COVERS.map((_,i)=>
+      `<button class="cr-dot${i===IDX?' on':''}" data-i="${i}"></button>`).join('')}</div>`:''}
+    ${c?creditHtml(c):`<div class="cr-credit" style="color:var(--muted);font-size:13px">${t('cv_none')}</div>`}
+    ${ME.authenticated
+      ?`<button class="icon-btn cr-add" id="cr-add"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_add')}</button>`
+      :`<a class="icon-btn cr-add" href="${L2M.loginUrl()}"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_login')}</a>`}
+  `;
+
+  if(c)document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
+  const prev=document.getElementById('cr-prev'), next=document.getElementById('cr-next');
+  if(prev)prev.onclick=()=>go(-1);
+  if(next)next.onclick=()=>go(1);
+  col.querySelectorAll('.cr-dot').forEach(d=>d.onclick=()=>{IDX=+d.dataset.i;renderCarousel();});
+  const add=document.getElementById('cr-add');
+  if(add&&ME.authenticated)add.onclick=()=>openUpload();
+  const like=document.getElementById('cr-like');
+  if(like)like.onclick=()=>toggleCoverLike(c.id);
+}
+
+function go(step){
+  if(!COVERS.length)return;
+  IDX=(IDX+step+COVERS.length)%COVERS.length;   // circulaire
+  renderCarousel();
+}
+
+async function toggleCoverLike(id){
+  if(!ME.authenticated){location.href=L2M.loginUrl();return;}
+  // Un like peut faire changer la gagnante : le serveur renvoie la liste
+  // reclassée, on se recale donc sur la pochette regardée, pas sur l'index.
+  try{
+    const d=await fetch(`/api/social/covers/${id}/like`,{method:'POST'}).then(r=>r.json());
+    COVERS=d.covers||[];
+    const i=COVERS.findIndex(x=>x.id===id);
+    IDX=i<0?0:i;
+    renderCarousel();
+    if(!document.getElementById('cm').classList.contains('hidden'))paintModal(id);
+  }catch(e){}
+}
+
+// ── Modale d'une pochette ────────────────────────────────────────────────
+const cm=document.getElementById('cm');
+document.getElementById('cm-close').onclick=closeModal;
+cm.onclick=e=>{if(e.target===cm)closeModal();};
+
+function closeModal(){
+  cm.classList.remove('show');
+  setTimeout(()=>cm.classList.add('hidden'),180);
+}
+
+function openCoverModal(id){
+  paintModal(id);
+  cm.classList.remove('hidden');
+  requestAnimationFrame(()=>cm.classList.add('show'));
+  L2M.comments(document.getElementById('cm-comments'),slug,{coverId:id});
+}
+
+function paintModal(id){
+  const c=COVERS.find(x=>x.id===id);
+  if(!c)return;
+  const mine=ME.authenticated&&(c.username===ME.username||ME.is_gestionnaire);
+  const tray=c.has_traycard
+    ?`<div class="lbl">${t('cv_tray')}</div>${
+        c.traycard_kind==='pdf'
+          ?`<iframe class="cm-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
+          :`<img src="${c.traycard_url}" alt="${t('cv_tray')}">`}`
+    :`<div class="lbl" style="opacity:.5">${t('cv_no_tray')}</div>`;
+
+  document.getElementById('cm-body').innerHTML=`
+    <div class="cm-top">
+      <div class="cm-art">
+        <img src="${c.cover_url}" alt="">
+        ${tray}
+      </div>
+      <div>
+        <div class="cr-credit" style="margin-top:0">${L2M.poster(
+          {username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
+          ${c.pinned?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
+        </div>
+        ${c.caption?`<p class="cm-caption">${L2M.esc(c.caption)}</p>`:''}
+        <div class="social-actions" style="margin-top:12px">
+          <button class="soc-action${c.liked?' liked':''}" id="cm-like">
+            <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
+          <span class="soc-action" style="cursor:default">
+            <span class="material-symbols-outlined">comment</span>${c.comments}</span>
+        </div>
+        <div class="cm-actions">
+          ${ME.authenticated?`<a class="icon-btn" href="/download/cover/${c.id}">
+            <span class="material-symbols-outlined">image</span> ${t('cv_dl_cover')}</a>`:''}
+          ${ME.authenticated&&c.has_traycard?`<a class="icon-btn" href="/download/traycard/${c.id}">
+            <span class="material-symbols-outlined">description</span> ${t('cv_dl_tray')}</a>`:''}
+          ${mine?`<button class="icon-btn" id="cm-tray">
+            <span class="material-symbols-outlined">note_add</span>
+            ${c.has_traycard?t('cv_replace_tray'):t('cv_add_tray')}</button>`:''}
+          ${ME.is_gestionnaire?`<button class="icon-btn" id="cm-pin">
+            <span class="material-symbols-outlined">push_pin</span>
+            ${c.pinned?t('cv_unpin'):t('cv_pin')}</button>`:''}
+          ${mine?`<button class="icon-btn" id="cm-del">
+            <span class="material-symbols-outlined">delete</span> ${t('cv_delete')}</button>`:''}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('cm-like').onclick=()=>toggleCoverLike(c.id);
+  const pin=document.getElementById('cm-pin');
+  if(pin)pin.onclick=async()=>{
+    const d=await fetch(`/api/social/covers/${c.id}/pin`,{method:'POST'}).then(r=>r.json());
+    COVERS=d.covers||[];
+    const i=COVERS.findIndex(x=>x.id===c.id);IDX=i<0?0:i;
+    renderCarousel();paintModal(c.id);
+  };
+  const del=document.getElementById('cm-del');
+  if(del)del.onclick=async()=>{
+    if(!confirm(t('cv_del_confirm')))return;
+    const d=await fetch(`/api/social/covers/${c.id}`,{method:'DELETE'}).then(r=>r.json());
+    COVERS=d.covers||[];IDX=0;
+    closeModal();renderCarousel();
+  };
+  const trayBtn=document.getElementById('cm-tray');
+  if(trayBtn)trayBtn.onclick=()=>openUpload(c.id);
+}
+
+// ── Import d'une pochette / d'une tray card ──────────────────────────────
+const up=document.getElementById('up');
+let UP_TARGET=null;   // null = nouvelle pochette ; id = tray card d'une pochette
+
+function openUpload(coverId){
+  UP_TARGET=coverId||null;
+  const tray=UP_TARGET!==null;
+  document.getElementById('up-title').textContent=tray?t('tray_title'):t('up_title');
+  document.getElementById('up-hint').textContent=tray?'':t('up_hint');
+  document.getElementById('up-cover-lbl').textContent=t('up_cover');
+  document.getElementById('up-tray-lbl').textContent=t('up_tray');
+  document.getElementById('up-caption-lbl').textContent=t('up_caption');
+  document.getElementById('up-send').textContent=tray?t('tray_send'):t('up_send');
+  document.getElementById('up-cancel').textContent=t('up_cancel');
+  // En mode tray card seule, la pochette est déjà choisie : on ne redemande
+  // ni image ni légende, seulement le fichier à rattacher.
+  document.getElementById('up-cover-field').style.display=tray?'none':'';
+  document.getElementById('up-caption-field').style.display=tray?'none':'';
+  document.getElementById('up-tray-lbl').textContent=tray?t('cv_tray'):t('up_tray');
+  document.getElementById('up-err').style.display='none';
+  document.getElementById('up-cover').value='';
+  document.getElementById('up-tray').value='';
+  document.getElementById('up-caption').value='';
+  up.classList.remove('hidden');
+}
+function closeUpload(){up.classList.add('hidden');}
+document.getElementById('up-cancel').onclick=closeUpload;
+up.onclick=e=>{if(e.target===up)closeUpload();};
+
+document.getElementById('up-send').onclick=async()=>{
+  const err=document.getElementById('up-err');
+  const btn=document.getElementById('up-send');
+  const coverF=document.getElementById('up-cover').files[0];
+  const trayF=document.getElementById('up-tray').files[0];
+  err.style.display='none';
+
+  if(UP_TARGET===null&&!coverF){
+    err.textContent=t('up_need_cover');err.style.display='';return;
+  }
+  if(UP_TARGET!==null&&!trayF){
+    err.textContent=t('up_need_cover');err.style.display='';return;
+  }
+  btn.disabled=true;
+  try{
+    const fd=new FormData();
+    let r;
+    if(UP_TARGET!==null){
+      fd.append('traycard',trayF);
+      r=await fetch(`/api/social/covers/${UP_TARGET}/traycard`,{method:'PUT',body:fd});
+    }else{
+      fd.append('cover',coverF);
+      if(trayF)fd.append('traycard',trayF);
+      fd.append('caption',document.getElementById('up-caption').value||'');
+      r=await fetch(`/api/social/albums/${slug}/covers`,{method:'POST',body:fd});
+    }
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      err.textContent=d.detail||t('up_failed');err.style.display='';return;
+    }
+    const d=await r.json();
+    COVERS=d.covers||[];
+    const focus=UP_TARGET!==null?UP_TARGET:d.cover_id;
+    const i=COVERS.findIndex(x=>x.id===focus);
+    IDX=i<0?0:i;
+    closeUpload();
+    renderCarousel();
+    if(!cm.classList.contains('hidden'))paintModal(focus);
+  }catch(e){
+    err.textContent=t('up_failed');err.style.display='';
+  }finally{btn.disabled=false;}
+};
+
+// Flèches clavier : navigation dans le carrousel, hors saisie de texte.
+document.addEventListener('keydown',e=>{
+  if(!cm.classList.contains('hidden')||!up.classList.contains('hidden'))return;
+  if(/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName||''))return;
+  if(e.key==='ArrowLeft')go(-1);
+  if(e.key==='ArrowRight')go(1);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(!up.classList.contains('hidden')){closeUpload();return;}
+  if(!cm.classList.contains('hidden'))closeModal();
+});
 
 function showNotFound(){
   document.getElementById('content').innerHTML=
