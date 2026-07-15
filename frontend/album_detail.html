@@ -52,6 +52,17 @@
     background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
   .not-found{text-align:center;color:var(--muted);margin-top:60px}
   .not-found .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
+  /* Boutons like + commentaires */
+  .social-actions{display:flex;gap:8px;align-items:center;margin-top:14px}
+  .soc-action{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;
+    border-radius:999px;border:1px solid var(--border);background:var(--card);
+    font-size:13px;font-weight:600;cursor:pointer;color:var(--fg);
+    transition:border-color .15s,background .15s}
+  .soc-action:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+  .soc-action.liked{color:#e85d75;border-color:#e85d75}
+  .soc-action.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
+  .soc-action[disabled]{opacity:.55;cursor:not-allowed}
+  .soc-action .material-symbols-outlined{font-size:17px}
   /* Cover zoom overlay */
   .cv-overlay{position:fixed;inset:0;background:rgba(6,7,10,.92);backdrop-filter:blur(6px);
     display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -108,6 +119,8 @@ const T={
       dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",
       not_found:"Album introuvable.",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
+      festival:"Tournée/festival",
+      like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil"},
   en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
       downloads:"Downloads",setlist:"Setlist",comments:"Comments",
@@ -115,6 +128,8 @@ const T={
       dltrack:"Download this track",lockdl:"Log in to download",
       not_found:"Album not found.",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
+      festival:"Tour/festival",
+      like:"Like",liked:"Liked",login_to_like:"Log in to like",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile"}
 };
 const L=()=>localStorage.getItem('l2m-lang')||'fr';
@@ -271,10 +286,14 @@ function renderAlbum(d){
         <h1 class="al-title">${L2M.esc(a.title||slug)}</h1>
         <div class="al-line${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</div>
         <div class="al-line${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</div>
+        ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${L2M.esc(a.festival)}</div>`:''}
         ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
-        <div id="like-btn" style="margin-top:14px;display:inline-flex"></div>
+        <div class="social-actions">
+          <button id="like-btn" class="soc-action"><span class="material-symbols-outlined">favorite</span><span id="like-count">—</span></button>
+          <button id="comment-btn" class="soc-action" onclick="scrollToComments()"><span class="material-symbols-outlined">comment</span><span id="comment-count">—</span></button>
+        </div>
       </div>
     </div>
     ${dlHtml}
@@ -285,8 +304,43 @@ function renderAlbum(d){
     <div class="sec" id="sec-comments"></div>
   `;
 
-  L2M.likeButton(document.getElementById('like-btn'),slug);
+  initSocialActions();
   L2M.comments(document.getElementById('sec-comments'),slug);
+}
+
+function scrollToComments(){
+  document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function initSocialActions(){
+  const btnLike=document.getElementById('like-btn');
+  const btnComment=document.getElementById('comment-btn');
+  if(!btnLike||!btnComment)return;
+
+  let s={likes:0,liked:false,comments:0};
+  try{s=await fetch(`/api/social/albums/${slug}`).then(r=>r.json());}catch(e){}
+  let {likes,liked,comments:commentCount}=s;
+
+  function paintLike(){
+    btnLike.className='soc-action'+(liked?' liked':'');
+    btnLike.innerHTML=`<span class="material-symbols-outlined">favorite</span>${likes}`;
+    btnLike.title=ME.authenticated?(liked?t('liked'):t('like')):t('login_to_like');
+  }
+  function paintComment(){
+    document.getElementById('comment-count').textContent=commentCount;
+  }
+
+  paintLike();
+  paintComment();
+
+  btnLike.onclick=async()=>{
+    if(!ME.authenticated){location.href=`/outpost.goauthentik.io/start?rd=/album/${encodeURIComponent(slug)}`;return;}
+    btnLike.disabled=true;
+    try{
+      const r=await fetch(`/api/social/albums/${slug}/like`,{method:'POST'}).then(r=>r.json());
+      liked=r.liked;likes=r.likes;paintLike();
+    }catch(e){}finally{btnLike.disabled=false;}
+  };
 }
 
 function showNotFound(){
