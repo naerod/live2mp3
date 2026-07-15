@@ -415,9 +415,95 @@ const L2M = (function () {
     if (cancel && onCancel) cancel.onclick = onCancel;
   }
 
+  /* ---------------- Autocomplétion à valeur canonique ----------------
+     Le champ texte n'est qu'une aide à la saisie : la valeur retenue est
+     l'**id** de l'entrée choisie dans la liste. Taper « dijon » sans choisir
+     ne vaut rien — c'est ce qui force un formalisme unique. Le champ est donc
+     remis à l'état choisi (ou vidé) dès qu'il perd le focus.
+
+     mount(el, {endpoint, value:{id,label}, placeholder, icon, onPick})
+     → { get() → {id,label}, clear() } */
+  function autocomplete(el, opts) {
+    const { endpoint, placeholder = "", icon = "", onPick } = opts;
+    let picked = opts.value && opts.value.id ? { ...opts.value } : { id: "", label: "" };
+    let items = [], active = -1, seq = 0, timer = null;
+
+    el.classList.add("ac");
+    el.innerHTML = `
+      <div class="ac-field">
+        ${icon ? `<span class="material-symbols-outlined ac-ic">${icon}</span>` : ""}
+        <input type="text" autocomplete="off" role="combobox" aria-expanded="false"
+               aria-autocomplete="list" placeholder="${esc(placeholder)}">
+        <button type="button" class="ac-clear" tabindex="-1" aria-label="${esc(t("cancel"))}"
+                style="display:${picked.id ? "flex" : "none"}">
+          <span class="material-symbols-outlined">close</span></button>
+      </div>
+      <ul class="ac-list" role="listbox" hidden></ul>`;
+    const input = el.querySelector("input");
+    const list = el.querySelector(".ac-list");
+    const clearBtn = el.querySelector(".ac-clear");
+    input.value = picked.label || "";
+
+    const close = () => { list.hidden = true; input.setAttribute("aria-expanded", "false"); active = -1; };
+    function commit(entry) {
+      picked = entry ? { id: entry.id, label: entry.label } : { id: "", label: "" };
+      input.value = picked.label;
+      clearBtn.style.display = picked.id ? "flex" : "none";
+      close();
+      if (onPick) onPick(picked);
+    }
+    function render() {
+      if (!items.length) return close();
+      list.innerHTML = items.map((it, i) => `
+        <li role="option" aria-selected="${i === active}" class="${i === active ? "on" : ""}" data-i="${i}">
+          ${it.picture ? `<img src="${esc(it.picture)}" alt="" loading="lazy">`
+                       : `<span class="material-symbols-outlined">${icon || "search"}</span>`}
+          <span class="ac-l">${esc(it.label)}</span>
+          ${it.hint ? `<span class="ac-h">${esc(it.hint)}</span>` : ""}
+        </li>`).join("");
+      list.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      list.querySelectorAll("li").forEach((li) => {
+        // mousedown : précède le blur, qui sinon annulerait la sélection.
+        li.addEventListener("mousedown", (e) => { e.preventDefault(); commit(items[+li.dataset.i]); });
+      });
+    }
+    async function search(q) {
+      const my = ++seq;
+      try {
+        const r = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`);
+        const data = r.ok ? await r.json() : [];
+        if (my !== seq) return;            // réponse d'une frappe périmée
+        items = data; active = data.length ? 0 : -1; render();
+      } catch (e) { if (my === seq) { items = []; close(); } }
+    }
+
+    input.addEventListener("input", () => {
+      if (picked.id && input.value !== picked.label) commit(null);
+      const q = input.value.trim();
+      clearTimeout(timer);
+      if (q.length < 2) { items = []; return close(); }
+      timer = setTimeout(() => search(q), 250);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (list.hidden || !items.length) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+        render();
+      } else if (e.key === "Enter") { e.preventDefault(); commit(items[active]); }
+      else if (e.key === "Escape") close();
+    });
+    // Texte libre non validé = pas de valeur : on restaure l'état canonique.
+    input.addEventListener("blur", () => setTimeout(() => { input.value = picked.label; close(); }, 120));
+    clearBtn.onclick = () => { commit(null); input.focus(); };
+
+    return { get: () => ({ ...picked }), clear: () => commit(null) };
+  }
+
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
-    likeButton, comments, userMenu, LANG,
+    likeButton, comments, userMenu, autocomplete, LANG,
     getTheme, applyTheme, getLang, applyLang,
   };
 })();

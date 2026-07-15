@@ -161,3 +161,151 @@ def test_avatar_upload_serve_delete(client):
     assert c.get("/api/social/me", headers=USER).json()["avatar"] is True
     assert c.delete("/api/social/profile/avatar", headers=USER).json()["avatar"] is False
     assert c.get("/avatar/alice").status_code == 404
+
+
+# --- Personnalisation : ville & artiste favori ------------------------------
+# Le réseau est bouchonné : ces tests valident *notre* contrat (formalisme,
+# résolution serveur, dégradation), pas la disponibilité des API tierces.
+@pytest.fixture
+def fake_sources(monkeypatch):
+    from backend import suggest
+    suggest._cache.clear()
+    calls = {"city": [], "artist": []}
+
+    def _geo(url, params=None, **kw):
+        calls["city"].append(url)
+        if url.endswith("/communes"):
+            return [{"nom": "Dijon", "code": "21231", "codesPostaux": ["21000"],
+                     "departement": {"nom": "Côte-d'Or", "code": "21"}}]
+        if url.endswith("/communes/21231"):
+            return {"nom": "Dijon", "code": "21231", "codesPostaux": ["21000"],
+                    "departement": {"nom": "Côte-d'Or", "code": "21"}}
+        if url.endswith("/communes/75056"):      # commune à arrondissements
+            return {"nom": "Paris", "code": "75056",
+                    "codesPostaux": [f"750{i:02d}" for i in range(1, 21)],
+                    "departement": {"nom": "Paris", "code": "75"}}
+        raise _http_error(404)
+
+    def _dz(url, params=None, **kw):
+        calls["artist"].append(url)
+        if url.endswith("/search/artist"):
+            return {"data": [{"id": 92, "name": "Linkin Park",
+                              "picture_small": "http://img/lp.jpg"}]}
+        if url.endswith("/artist/92"):
+            return {"id": 92, "name": "Linkin Park", "picture_small": "http://img/lp.jpg"}
+        return {"error": {"code": 800, "message": "no data"}}
+
+    def _get_json(url, params=None):
+        return (_geo if "geo.api" in url else _dz)(url, params)
+
+    monkeypatch.setattr(suggest, "_get_json", _get_json)
+    return calls
+
+
+def _http_error(status):
+    import requests
+    resp = requests.Response()
+    resp.status_code = status
+    return requests.HTTPError(response=resp)
+
+
+def test_suggest_city_formalism(client, fake_sources):
+    c, _ = client
+    r = c.get("/api/social/suggest/cities?q=dijon")
+    assert r.status_code == 200
+    assert r.json()[0] == {"id": "21231", "label": "Dijon, 21000", "hint": "Côte-d'Or"}
+
+
+def test_suggest_ignores_short_query(client, fake_sources):
+    c, _ = client
+    assert c.get("/api/social/suggest/cities?q=d").json() == []
+    assert c.get("/api/social/suggest/artists?q=").json() == []
+
+
+def test_suggest_artist(client, fake_sources):
+    c, _ = client
+    assert c.get("/api/social/suggest/artists?q=linkin").json()[0]["label"] == "Linkin Park"
+
+
+def test_paris_uses_generic_postal_code(client, fake_sources):
+    """Les codes postaux de Paris sont ceux des arrondissements : on veut le
+    générique « 75000 », pas « 75001 » qui désignerait le 1er."""
+    from backend import suggest
+    assert suggest.resolve_city("75056")["label"] == "Paris, 75000"
+
+
+def test_profile_stores_canonical_label(client, fake_sources):
+    c, _ = client
+    r = c.put("/api/social/profile",
+              json={"display_name": "Alice", "city_id": "21231", "artist_id": "92"},
+              headers=USER)
+    assert r.status_code == 200
+    assert r.json()["city"] == "Dijon, 21000" and r.json()["artist"] == "Linkin Park"
+    me = c.get("/api/social/me", headers=USER).json()
+    assert me["city"] == "Dijon, 21000" and me["city_id"] == "21231"
+    assert me["artist"] == "Linkin Park" and me["artist_id"] == "92"
+    pub = c.get("/api/social/users/alice").json()["profile"]
+    assert pub["city"] == "Dijon, 21000" and pub["artist"] == "Linkin Park"
+
+
+def test_profile_rejects_unknown_id(client, fake_sources):
+    c, _ = client
+    assert c.put("/api/social/profile",
+                 json={"display_name": "Alice", "artist_id": "999"},
+                 headers=USER).status_code == 422
+    assert c.put("/api/social/profile",
+                 json={"display_name": "Alice", "city_id": "00000"},
+                 headers=USER).status_code == 422
+
+
+def test_profile_fields_optional_and_clearable(client, fake_sources):
+    c, _ = client
+    assert c.put("/api/social/profile", json={"display_name": "Alice"},
+                 headers=USER).status_code == 200
+    c.put("/api/social/profile",
+          json={"display_name": "Alice", "city_id": "21231"}, headers=USER)
+    # Chaîne vide = champ effacé, sans appel réseau.
+    r = c.put("/api/social/profile", json={"display_name": "Alice", "city_id": ""},
+              headers=USER)
+    assert r.json()["city"] == "" and r.json()["city_id"] == ""
+
+
+def test_unchanged_id_does_not_hit_network(client, fake_sources):
+    """Éditer sa bio ne doit pas dépendre d'une API tierce."""
+    c, _ = client
+    c.put("/api/social/profile",
+          json={"display_name": "Alice", "city_id": "21231", "artist_id": "92"},
+          headers=USER)
+    n_city, n_art = len(fake_sources["city"]), len(fake_sources["artist"])
+    r = c.put("/api/social/profile",
+              json={"display_name": "Alice", "bio": "nouvelle bio",
+                    "city_id": "21231", "artist_id": "92"}, headers=USER)
+    assert r.status_code == 200 and r.json()["city"] == "Dijon, 21000"
+    assert len(fake_sources["city"]) == n_city and len(fake_sources["artist"]) == n_art
+
+
+def test_source_down_degrades_gracefully(client, monkeypatch):
+    c, _ = client
+    from backend import suggest
+    suggest._cache.clear()
+
+    def boom(url, params=None):
+        raise OSError("réseau injoignable")
+    monkeypatch.setattr(suggest, "_get_json", boom)
+
+    # Recherche : liste vide, jamais une 500.
+    assert c.get("/api/social/suggest/cities?q=dijon").status_code == 200
+    assert c.get("/api/social/suggest/cities?q=dijon").json() == []
+    # Changement de valeur impossible à valider : 503, pas d'écriture douteuse.
+    assert c.put("/api/social/profile",
+                 json={"display_name": "Alice", "city_id": "21231"},
+                 headers=USER).status_code == 503
+    # Le reste du profil reste éditable.
+    assert c.put("/api/social/profile", json={"display_name": "Alice", "bio": "ok"},
+                 headers=USER).status_code == 200
+
+
+def test_profile_requires_auth(client, fake_sources):
+    c, _ = client
+    assert c.put("/api/social/profile",
+                 json={"display_name": "X", "city_id": "21231"}).status_code == 401

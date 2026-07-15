@@ -28,11 +28,19 @@ AVATARS_DIR = DATA_DIR / "avatars"
 DB_PATH = DATA_DIR / "live2mp3.db"
 
 SCHEMA = """
+-- Personnalisation : `*_id` est la clé canonique (code INSEE, id Deezer) et
+-- `*_label` le rendu figé au moment du choix. On garde les deux : l'id permet
+-- de regrouper (même ville, même artiste) sans se fier au texte, le label
+-- permet d'afficher un profil sans dépendre de la disponibilité de la source.
 CREATE TABLE IF NOT EXISTS profiles (
     username     TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
     bio          TEXT NOT NULL DEFAULT '',
     avatar_ext   TEXT NOT NULL DEFAULT '',
+    city_id      TEXT NOT NULL DEFAULT '',
+    city_label   TEXT NOT NULL DEFAULT '',
+    artist_id    TEXT NOT NULL DEFAULT '',
+    artist_label TEXT NOT NULL DEFAULT '',
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
@@ -156,4 +164,19 @@ def init_db() -> None:
             )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_comments_cover ON comments(cover_id)"
+        )
+
+        # Migration : personnalisation du profil (ville, artiste favori).
+        pcols = {r["name"] for r in conn.execute("PRAGMA table_info(profiles)")}
+        for col in ("city_id", "city_label", "artist_id", "artist_label"):
+            if col not in pcols:
+                conn.execute(
+                    f"ALTER TABLE profiles ADD COLUMN {col} TEXT NOT NULL DEFAULT ''"
+                )
+        # Regroupements « même ville » / « même artiste » sur la clé canonique.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profiles_city ON profiles(city_id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profiles_artist ON profiles(artist_id)"
         )
