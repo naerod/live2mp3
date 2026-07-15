@@ -78,6 +78,7 @@
   .album .al-title{font-weight:600;font-size:13px;line-height:1.2;color:var(--fg)}
   .album .al-line{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11.5px}
   .album .al-line .material-symbols-outlined{font-size:13px;color:var(--muted)}
+  .album .al-line.muted-placeholder{opacity:.45;font-style:italic}
   .album .al-poster{margin-top:5px}
   .album .al-social{display:flex;gap:10px;align-items:center;margin-top:4px}
   .al-soc-item{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500}
@@ -269,7 +270,8 @@ const T={
       logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
-      clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années"},
+      clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années",
+      date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
@@ -282,7 +284,8 @@ const T={
       logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
-      clear:"Clear",all_artists:"All artists",all_years:"All years"}
+      clear:"Clear",all_artists:"All artists",all_years:"All years",
+      date_unknown:"Unknown date",venue_unknown:"Unknown venue"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
@@ -376,8 +379,8 @@ function albumCard(a){
     <div class="body">
       ${showArtist&&a.artist?`<div class="al-artist">${a.artist}</div>`:""}
       <div class="al-title">${a.title||a.slug}</div>
-      ${a.date?`<div class="al-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
-      ${a.venue?`<div class="al-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
+      <div class="al-line${a.date?"":" muted-placeholder"}"><span class="material-symbols-outlined">calendar_month</span>${a.date||T[L()].date_unknown}</div>
+      <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue||T[L()].venue_unknown}</div>
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
       <div class="al-social"></div>
     </div>
