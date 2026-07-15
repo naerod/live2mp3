@@ -288,13 +288,29 @@ def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileRes
     return FileResponse(cover, filename=f"{slug}-cover{cover.suffix}")
 
 
-@app.get("/download/{slug}/traycard")
-def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+def _traycard_file(slug: str) -> Path:
     tc = PROJECTS_DIR / slug / "artwork" / "tray_card.pdf"
     if not tc.exists():
         raise HTTPException(404, "pas de tray card")
-    return FileResponse(tc, filename=f"{slug}-traycard.pdf",
+    return tc
+
+
+@app.get("/download/{slug}/traycard")
+def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    return FileResponse(_traycard_file(slug), filename=f"{slug}-traycard.pdf",
                         media_type="application/pdf")
+
+
+@app.get("/app/traycard/{slug}")
+def view_traycard(slug: str,
+                  identity: dict = Depends(require_gestionnaire)) -> FileResponse:
+    """Même fichier, servi inline pour la prévisualisation en iframe.
+
+    En attachment (cas de la route de téléchargement), le navigateur ouvre un
+    « Enregistrer sous » au lieu d'afficher le PDF dans l'iframe.
+    """
+    return FileResponse(_traycard_file(slug), media_type="application/pdf",
+                        content_disposition_type="inline")
 
 
 @app.get("/download/{slug}/{kind}")
