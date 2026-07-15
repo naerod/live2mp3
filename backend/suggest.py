@@ -150,14 +150,34 @@ def search_artists(q: str) -> list[dict]:
     if cached is not None:
         return cached
     try:
-        data = _get_json(f"{DEEZER_URL}/search/artist", {"q": q, "limit": MAX_RESULTS})
+        # On demande large : le dédoublonnage ci-dessous retire des entrées.
+        data = _get_json(f"{DEEZER_URL}/search/artist",
+                         {"q": q, "limit": MAX_RESULTS * 3})
     except Exception:
         return []
+
+    # Deezer laisse coexister des homonymes exacts : le vrai « Coldplay »
+    # (122 albums, 18M fans) et un squatteur vide du même nom. Deux entrées
+    # identiques à l'écran = deux ids possibles pour un même libellé, soit
+    # exactement le formalisme éclaté qu'on cherche à éviter. On ne garde donc
+    # qu'un artiste par nom — le plus suivi — et on écarte les fiches vides.
+    best: dict[str, dict] = {}
+    for a in (data.get("data") or []):
+        name = (a.get("name") or "").strip()
+        if not name:
+            continue
+        if not a.get("nb_album") and (a.get("nb_fan") or 0) < 1000:
+            continue
+        k = name.casefold()
+        if k not in best or (a.get("nb_fan") or 0) > (best[k].get("nb_fan") or 0):
+            best[k] = a
+
     out = [{
         "id": str(a["id"]),
         "label": a["name"],
         "picture": a.get("picture_small") or "",
-    } for a in (data.get("data") or []) if a.get("name")]
+    } for a in sorted(best.values(), key=lambda x: x.get("nb_fan") or 0, reverse=True)
+    ][:MAX_RESULTS]
     _cache_put(key, out, SEARCH_TTL)
     return out
 

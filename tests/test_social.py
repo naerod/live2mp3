@@ -189,8 +189,14 @@ def fake_sources(monkeypatch):
     def _dz(url, params=None, **kw):
         calls["artist"].append(url)
         if url.endswith("/search/artist"):
-            return {"data": [{"id": 92, "name": "Linkin Park",
-                              "picture_small": "http://img/lp.jpg"}]}
+            return {"data": [
+                {"id": 92, "name": "Linkin Park", "nb_album": 40, "nb_fan": 12_000_000,
+                 "picture_small": "http://img/lp.jpg"},
+                # Homonyme squatteur : même nom, fiche vide.
+                {"id": 777, "name": "linkin park", "nb_album": 0, "nb_fan": 24},
+                # Fiche vide sans homonyme.
+                {"id": 778, "name": "Linkin Parkour", "nb_album": 0, "nb_fan": 3},
+            ]}
         if url.endswith("/artist/92"):
             return {"id": 92, "name": "Linkin Park", "picture_small": "http://img/lp.jpg"}
         return {"error": {"code": 800, "message": "no data"}}
@@ -309,3 +315,13 @@ def test_profile_requires_auth(client, fake_sources):
     c, _ = client
     assert c.put("/api/social/profile",
                  json={"display_name": "X", "city_id": "21231"}).status_code == 401
+
+
+def test_artist_duplicates_collapse(client, fake_sources):
+    """Un libellé = un id. Deezer laisse coexister de vrais artistes et des
+    fiches vides du même nom ; deux entrées identiques à l'écran rendraient le
+    formalisme ambigu."""
+    c, _ = client
+    r = c.get("/api/social/suggest/artists?q=linkin").json()
+    assert [x["label"] for x in r] == ["Linkin Park"]   # squatteur + fiche vide écartés
+    assert r[0]["id"] == "92"                            # le plus suivi l'emporte
