@@ -83,12 +83,10 @@
   .al-soc-item{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:12px;font-weight:500}
   .al-soc-item .material-symbols-outlined{font-size:13px}
   .album .meta{color:var(--muted);font-size:12px}
-  .album .tags{display:flex;flex-wrap:wrap;gap:5px;padding:8px 16px 0}
   .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-  .album .btns{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px 16px}
-  .album .btns a{flex:1 1 calc(50% - 4px);justify-content:center;margin:0;
-    height:34px;font-size:12.5px}
+  .album .btns{padding:10px 16px 14px}
+  .album .btns a{width:100%;justify-content:center;height:34px;font-size:12.5px}
   .album .btns a .material-symbols-outlined{font-size:16px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
@@ -263,7 +261,8 @@ const T={
       ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Pochette",traycard:"Tray card",manage:"Gérer cet album",
       setlist:"Setlist",downloads:"Téléchargements",full:"Album complet (MP3)",
-      dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",login:"Connexion",
+      quickdl:"Téléchargement rapide",
+      dltrack:"Télécharger cette piste",lockdl:"Se connecter pour télécharger",login:"Connexion",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
       sort_artist:"Artiste",sort_title:"Titre",
@@ -275,6 +274,7 @@ const T={
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
       setlist:"Setlist",downloads:"Downloads",full:"Full album (MP3)",
+      quickdl:"Quick download",
       dltrack:"Download this track",lockdl:"Log in to download",login:"Log in",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
@@ -350,13 +350,15 @@ function isNew(a){
 }
 
 function albumCard(a){
-  const tags=(a.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
-  let btns="";
-  if(ME.authenticated){
-    if(a.has_mp3) btns+=`<a class="primary" href="/download/${a.slug}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`;
-    if(a.has_mp4) btns+=`<a href="/download/${a.slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-    if(a.has_cover) btns+=`<a href="/download/${a.slug}/cover"><span class="material-symbols-outlined">image</span> ${T[L()].cover}</a>`;
-    if(a.has_traycard) btns+=`<a href="/download/${a.slug}/traycard"><span class="material-symbols-outlined">description</span> ${T[L()].traycard}</a>`;
+  const hasDownloadable=a.has_mp3||a.has_mp4||a.has_cover||a.has_traycard;
+  let dlBtn="";
+  if(hasDownloadable){
+    if(ME.authenticated){
+      const dlHref=a.has_mp3?`/download/${a.slug}/mp3`:`/download/${a.slug}/mp4`;
+      dlBtn=`<a class="primary" href="${dlHref}"><span class="material-symbols-outlined">download</span>${T[L()].quickdl}</a>`;
+    } else {
+      dlBtn=`<a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">lock</span>${T[L()].lockdl}</a>`;
+    }
   }
   const gear=ME.is_gestionnaire
     ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
@@ -379,8 +381,7 @@ function albumCard(a){
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
       <div class="al-social"></div>
     </div>
-    ${tags?`<div class="tags">${tags}</div>`:""}
-    ${btns?`<div class="btns">${btns}</div>`:""}
+    ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
   </div>`;
 }
 

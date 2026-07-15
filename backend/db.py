@@ -60,13 +60,13 @@ CREATE INDEX IF NOT EXISTS idx_comments_slug   ON comments(slug);
 CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 CREATE INDEX IF NOT EXISTS idx_comments_user   ON comments(username);
 
-CREATE TABLE IF NOT EXISTS comment_votes (
+CREATE TABLE IF NOT EXISTS comment_likes (
     comment_id INTEGER NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
     username   TEXT NOT NULL,
-    value      INTEGER NOT NULL,          -- -1 ou +1
+    created_at TEXT NOT NULL,
     PRIMARY KEY (comment_id, username)
 );
-CREATE INDEX IF NOT EXISTS idx_votes_comment ON comment_votes(comment_id);
+CREATE INDEX IF NOT EXISTS idx_likes_comment ON comment_likes(comment_id);
 """
 
 
@@ -98,3 +98,12 @@ def init_db() -> None:
     AVATARS_DIR.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        # Migration : comment_votes (upvote/downvote) → comment_likes
+        if conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='comment_votes'"
+        ).fetchone():
+            conn.execute(
+                "INSERT OR IGNORE INTO comment_likes(comment_id, username, created_at) "
+                "SELECT comment_id, username, datetime('now') FROM comment_votes WHERE value=1"
+            )
+            conn.execute("DROP TABLE comment_votes")

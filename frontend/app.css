@@ -103,20 +103,21 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   margin-bottom:18px}
 .soc-login-note a{margin-left:auto}
 
-.soc-comment{display:flex;gap:10px;padding:12px 0;border-top:1px solid var(--border)}
-.soc-vote{display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;width:34px}
-.soc-vote button{margin:0;padding:0;width:30px;height:26px;border:none;background:transparent;
-  color:var(--muted);display:flex;align-items:center;justify-content:center;border-radius:7px}
-.soc-vote button:hover{background:var(--bg)}
-.soc-vote .material-symbols-outlined{font-size:20px}
-.soc-vote .up.on{color:var(--up)}
-.soc-vote .up.on .material-symbols-outlined{font-variation-settings:'FILL' 1}
-.soc-vote .down.on{color:var(--down)}
-.soc-vote .down.on .material-symbols-outlined{font-variation-settings:'FILL' 1}
-.soc-score{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--fg)}
-.soc-score.pos{color:var(--up)} .soc-score.neg{color:var(--down)}
-
-.soc-main{flex:1;min-width:0}
+.soc-comment{padding:12px 0;border-top:1px solid var(--border)}
+.soc-main{min-width:0}
+.soc-footer{display:flex;align-items:center;gap:10px;margin-top:6px}
+.soc-clikes{display:flex;align-items:center;gap:5px;margin-left:auto}
+.soc-cliker-row{display:flex;align-items:center}
+.soc-clika{width:20px!important;height:20px!important;font-size:9px!important;
+  border:2px solid var(--card);margin-left:-6px;flex-shrink:0;text-decoration:none}
+.soc-cliker-row .soc-clika:first-child{margin-left:0}
+.soc-clikes-more{font-size:11px;font-weight:700;color:var(--muted);margin-left:4px}
+.soc-clike-btn{margin:0;padding:2px;border:none;background:transparent;cursor:pointer;
+  display:inline-flex;align-items:center;color:var(--muted);border-radius:4px;transition:background .1s}
+.soc-clike-btn:hover{background:var(--bg)}
+.soc-clike-btn .material-symbols-outlined{font-size:16px;transition:color .15s,font-variation-settings .15s}
+.soc-clike-btn.on .material-symbols-outlined{color:var(--like);font-variation-settings:'FILL' 1}
+.soc-clike-btn:hover .material-symbols-outlined{color:var(--like)}
 .soc-byline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .soc-byline .soc-avatar{width:26px;height:26px;font-size:12px}
 .soc-mention{color:var(--accent);font-weight:600}
