@@ -80,9 +80,15 @@
   .album .al-line .material-symbols-outlined{font-size:13px;color:var(--muted)}
   .album .al-line.muted-placeholder{opacity:.45;font-style:italic}
   .album .al-poster{margin-top:5px}
-  .album .al-social{display:flex;gap:10px;align-items:center;margin-top:4px}
-  .al-soc-item{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px;font-weight:500}
-  .al-soc-item .material-symbols-outlined{font-size:12px}
+  .album .al-social{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);margin-top:6px}
+  .soc-btn{display:flex;align-items:center;justify-content:center;gap:5px;
+    padding:8px 0;border:none;background:transparent;color:var(--muted);
+    font-size:12px;font-weight:500;cursor:pointer;
+    transition:color .15s,background .15s;width:100%}
+  .soc-btn:first-child{border-right:1px solid var(--border)}
+  .soc-btn:hover{background:rgba(128,128,128,.07);color:var(--fg)}
+  .soc-btn.liked{color:#e85d75}
+  .soc-btn .material-symbols-outlined{font-size:14px}
   .album .meta{color:var(--muted);font-size:11px}
   .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
@@ -410,8 +416,8 @@ function albumCard(a){
       <div class="al-line${a.date?"":" muted-placeholder"}"><span class="material-symbols-outlined">calendar_month</span>${a.date||T[L()].date_unknown}</div>
       <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue||T[L()].venue_unknown}</div>
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
-      <div class="al-social"></div>
     </div>
+    <div class="al-social"></div>
     ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
   </div>`;
 }
@@ -419,16 +425,42 @@ function albumCard(a){
 // Avatar + pseudo du posteur (imported_by), résolu via POSTERS.
 let POSTERS={};
 let SOC_CACHE={};
+let MY_LIKES=new Set();
 function patchSocialCounts(){
   document.querySelectorAll(".al-social").forEach(el=>{
     const slug=el.closest(".album")?.dataset.slug;
     if(!slug) return;
     const s=SOC_CACHE[slug]||{likes:0,comments:0};
-    el.innerHTML=`<span class="al-soc-item"><span class="material-symbols-outlined">favorite</span>${s.likes}</span><span class="al-soc-item"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</span>`;
+    const liked=MY_LIKES.has(slug);
+    el.innerHTML=
+      `<button class="soc-btn${liked?" liked":""}" onclick="handleLike(event,'${slug}')"><span class="material-symbols-outlined">favorite</span>${s.likes}</button>`+
+      `<button class="soc-btn" onclick="handleComment(event,'${slug}')"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</button>`;
   });
 }
+async function handleLike(e,slug){
+  e.stopPropagation();
+  if(!ME.authenticated){location.href="/outpost.goauthentik.io/start?rd=/";return;}
+  try{
+    const res=await(await fetch(`/api/social/albums/${slug}/like`,{method:"POST"})).json();
+    SOC_CACHE[slug]={likes:res.likes,comments:res.comments};
+    if(res.liked) MY_LIKES.add(slug); else MY_LIKES.delete(slug);
+    patchSocialCounts();
+  }catch(e){}
+}
+function handleComment(e,slug){
+  e.stopPropagation();
+  openDetail(slug,true);
+}
 async function loadSocialCounts(){
-  try{SOC_CACHE=await(await fetch("/api/social/counts")).json();patchSocialCounts();}catch(e){}
+  try{
+    const [counts,liked]=await Promise.all([
+      fetch("/api/social/counts").then(r=>r.json()),
+      ME.authenticated?fetch("/api/social/my-likes").then(r=>r.json()):Promise.resolve([])
+    ]);
+    SOC_CACHE=counts;
+    MY_LIKES=new Set(liked);
+    patchSocialCounts();
+  }catch(e){}
 }
 function posterFor(username){
   if(!username) return "";
@@ -548,7 +580,7 @@ document.getElementById("albums").addEventListener("click",e=>{
   if(card) openDetail(card.dataset.slug);
 });
 
-async function openDetail(slug){
+async function openDetail(slug,scrollToComments=false){
   const d=await(await fetch(`/api/catalogue/${slug}`)).json();
   const t=T[L()], a=d.album||{};
   const tags=(d.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
@@ -611,6 +643,7 @@ async function openDetail(slug){
   document.getElementById("modal-like").appendChild(likeEl);
   L2M.likeButton(likeEl,slug);
   L2M.comments(document.getElementById("modal-social"),slug);
+  if(scrollToComments) setTimeout(()=>document.getElementById("modal-social")?.scrollIntoView({behavior:"smooth",block:"start"}),120);
 }
 
 // ── Cover preview overlay ─────────────────────────────────────────────────
