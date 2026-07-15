@@ -404,6 +404,15 @@ def _album_social(conn: sqlite3.Connection, slug: str, username: str | None) -> 
     ).fetchone()["n"]
     return {"likes": likes, "liked": liked, "comments": comments}
 
+@router.get("/api/social/my-likes")
+def my_likes(identity: dict = Depends(current_identity)) -> list:
+    username = identity.get("username")
+    if not username:
+        return []
+    with get_conn() as conn:
+        rows = conn.execute("SELECT slug FROM favorites WHERE username=?", (username,)).fetchall()
+    return [r["slug"] for r in rows]
+
 @router.get("/api/social/counts")
 def all_album_counts() -> dict:
     """Compteurs likes+commentaires pour tous les albums (un seul appel depuis la vitrine)."""

@@ -73,27 +73,43 @@
   .cover-generic{width:100%;height:100%;display:flex;align-items:center;
     justify-content:center;background:linear-gradient(135deg,#1a1c22 0%,#111318 100%)}
   .cover-generic svg{width:48%;height:48%;opacity:.55}
-  .album .body{padding:14px 16px 6px;display:flex;flex-direction:column;gap:4px;flex:1}
-  .album .al-artist{color:var(--accent);font-size:18px;font-weight:700;line-height:1.15}
-  .album .al-title{font-weight:600;font-size:16px;line-height:1.2;color:var(--fg)}
-  .album .al-line{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
-  .album .al-line .material-symbols-outlined{font-size:15px;color:var(--muted)}
-  .album .al-poster{margin-top:8px}
-  .album .al-social{display:flex;gap:10px;align-items:center;margin-top:6px}
-  .al-soc-item{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:12px;font-weight:500}
-  .al-soc-item .material-symbols-outlined{font-size:13px}
-  .album .meta{color:var(--muted);font-size:12px}
-  .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
+  .album .body{padding:10px 12px 4px;display:flex;flex-direction:column;gap:3px}
+  .album .al-artist{color:var(--accent);font-size:14px;font-weight:700;line-height:1.15}
+  .album .al-title{font-weight:600;font-size:13px;line-height:1.2;color:var(--fg)}
+  .album .al-line{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11.5px}
+  .album .al-line .material-symbols-outlined{font-size:13px;color:var(--muted)}
+  .album .al-line.muted-placeholder{opacity:.45;font-style:italic}
+  .album .al-poster{margin-top:5px}
+  .album .al-social{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:6px}
+  .soc-btn{display:flex;align-items:center;justify-content:center;gap:5px;
+    padding:9px 0;border:none;background:var(--bg);color:var(--muted);
+    font-size:12px;font-weight:600;cursor:pointer;
+    transition:color .15s,background .15s;width:100%}
+  .soc-btn:first-child{border-right:1px solid var(--border)}
+  .soc-btn:hover{background:color-mix(in srgb,var(--bg) 80%,var(--accent) 20%);color:var(--fg)}
+  .soc-btn.liked{color:#e85d75}
+  .soc-btn .material-symbols-outlined{font-size:15px}
+  .album .meta{color:var(--muted);font-size:11px}
+  .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-  .album .btns{padding:10px 16px 14px}
-  .album .btns a{width:100%;justify-content:center;height:34px;font-size:12.5px}
-  .album .btns a .material-symbols-outlined{font-size:16px}
+  .album .btns{padding:7px 12px 10px}
+  .album .btns a{width:100%;justify-content:center;height:30px;font-size:12px}
+  .album .btns a .material-symbols-outlined{font-size:15px}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
   .foot{margin:36px 0 14px;text-align:center;color:var(--muted);font-size:12px}
   .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
     border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums}
   .foot .env-preprod{color:var(--run);border-color:var(--run)}
+  /* Preview-visitor banner */
+  .preview-banner{display:none;align-items:center;justify-content:center;gap:8px;
+    padding:6px 14px;background:rgba(255,140,0,.12);border-bottom:1px solid rgba(255,140,0,.35);
+    color:#ffb347;font-size:12.5px;font-weight:600}
+  .preview-banner.show{display:flex}
+  .preview-banner .material-symbols-outlined{font-size:16px}
+  .preview-banner button{padding:2px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);
+    background:transparent;color:#ffb347;font-size:11.5px;cursor:pointer}
+  .preview-banner button:hover{background:rgba(255,140,0,.18)}
   /* Modale */
   .overlay{position:fixed;inset:0;background:rgba(6,7,10,.66);backdrop-filter:blur(3px);
     display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;
@@ -166,12 +182,18 @@
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
+    <button id="preview-visitor-btn" class="icon-btn" style="display:none" onclick="togglePreviewVisitor()"><span class="material-symbols-outlined">visibility</span><span id="t-preview-visitor">Vue visiteur</span></button>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
     <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
     <div id="usermenu" class="usermenu" style="display:none"></div>
   </div>
 </header>
+<div id="preview-banner" class="preview-banner">
+  <span class="material-symbols-outlined">visibility</span>
+  <span id="t-preview-banner">Prévisualisation visiteur</span>
+  <button onclick="togglePreviewVisitor()" id="t-preview-exit">Quitter</button>
+</div>
 
 <main>
   <div class="hero">
@@ -226,15 +248,7 @@
   <div class="foot" id="foot"></div>
 </main>
 
-<div id="overlay" class="overlay hidden"><div class="modal" style="position:relative">
-  <button class="icon-btn icon-only x" id="modal-close"><span class="material-symbols-outlined">close</span></button>
-  <div id="modal-content"></div>
-</div></div>
 
-<div id="cv-overlay" class="cv-overlay hidden" style="position:fixed">
-  <button class="icon-btn icon-only cv-close" id="cv-close"><span class="material-symbols-outlined">close</span></button>
-  <div id="cv-wrap" class="cv-wrap"></div>
-</div>
 
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
@@ -253,6 +267,9 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   if(window.applyI18n)applyI18n(l);
   const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
   const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
+  document.getElementById("t-preview-visitor").textContent=T[l].preview_visitor;
+  document.getElementById("t-preview-banner").textContent=T[l].preview_banner;
+  document.getElementById("t-preview-exit").textContent=T[l].preview_exit;
   if(ALBUMS.length)buildFilters();render();updateCount();}
 langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
@@ -269,7 +286,9 @@ const T={
       logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
-      clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années"},
+      clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années",
+      date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
+      preview_visitor:"Vue visiteur",preview_banner:"Prévisualisation visiteur",preview_exit:"Quitter"},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
@@ -282,11 +301,20 @@ const T={
       logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
-      clear:"Clear",all_artists:"All artists",all_years:"All years"}
+      clear:"Clear",all_artists:"All artists",all_years:"All years",
+      date_unknown:"Unknown date",venue_unknown:"Unknown venue",
+      preview_visitor:"Visitor view",preview_banner:"Visitor preview",preview_exit:"Exit"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
 let ALBUMS=[], selected=new Set(), ME={authenticated:false,is_gestionnaire:false};
+let PREVIEW_VISITOR=false;
+function meDisplay(){return PREVIEW_VISITOR?{authenticated:false,is_gestionnaire:false}:ME;}
+function togglePreviewVisitor(){
+  PREVIEW_VISITOR=!PREVIEW_VISITOR;
+  document.getElementById("preview-banner").classList.toggle("show",PREVIEW_VISITOR);
+  render();
+}
 let currentSort="date_concert";
 let filterArtist="", filterYear="";
 
@@ -350,21 +378,22 @@ function isNew(a){
 }
 
 function albumCard(a){
+  const md=meDisplay();
   const hasDownloadable=a.has_mp3||a.has_mp4||a.has_cover||a.has_traycard;
   let dlBtn="";
   if(hasDownloadable){
-    if(ME.authenticated){
+    if(md.authenticated){
       const dlHref=a.has_mp3?`/download/${a.slug}/mp3`:`/download/${a.slug}/mp4`;
       dlBtn=`<a class="primary" href="${dlHref}"><span class="material-symbols-outlined">download</span>${T[L()].quickdl}</a>`;
     } else {
       dlBtn=`<a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">lock</span>${T[L()].lockdl}</a>`;
     }
   }
-  const gear=ME.is_gestionnaire
+  const gear=md.is_gestionnaire
     ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
-  const draftBadge=a.published===false&&ME.is_gestionnaire
+  const draftBadge=a.published===false&&md.is_gestionnaire
     ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${L()==="fr"?"Brouillon":"Draft"}</span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
@@ -376,11 +405,11 @@ function albumCard(a){
     <div class="body">
       ${showArtist&&a.artist?`<div class="al-artist">${a.artist}</div>`:""}
       <div class="al-title">${a.title||a.slug}</div>
-      ${a.date?`<div class="al-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
-      ${a.venue?`<div class="al-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
+      <div class="al-line${a.date?"":" muted-placeholder"}"><span class="material-symbols-outlined">calendar_month</span>${a.date||T[L()].date_unknown}</div>
+      <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue||T[L()].venue_unknown}</div>
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
-      <div class="al-social"></div>
     </div>
+    <div class="al-social"></div>
     ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
   </div>`;
 }
@@ -388,19 +417,42 @@ function albumCard(a){
 // Avatar + pseudo du posteur (imported_by), résolu via POSTERS.
 let POSTERS={};
 let SOC_CACHE={};
+let MY_LIKES=new Set();
 function patchSocialCounts(){
   document.querySelectorAll(".al-social").forEach(el=>{
     const slug=el.closest(".album")?.dataset.slug;
     if(!slug) return;
     const s=SOC_CACHE[slug]||{likes:0,comments:0};
-    let html="";
-    if(s.likes) html+=`<span class="al-soc-item"><span class="material-symbols-outlined">favorite</span>${s.likes}</span>`;
-    if(s.comments) html+=`<span class="al-soc-item"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</span>`;
-    el.innerHTML=html;
+    const liked=MY_LIKES.has(slug);
+    el.innerHTML=
+      `<button class="soc-btn${liked?" liked":""}" onclick="handleLike(event,'${slug}')"><span class="material-symbols-outlined">favorite</span>${s.likes}</button>`+
+      `<button class="soc-btn" onclick="handleComment(event,'${slug}')"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</button>`;
   });
 }
+async function handleLike(e,slug){
+  e.stopPropagation();
+  if(!ME.authenticated){location.href="/outpost.goauthentik.io/start?rd=/";return;}
+  try{
+    const res=await(await fetch(`/api/social/albums/${slug}/like`,{method:"POST"})).json();
+    SOC_CACHE[slug]={likes:res.likes,comments:res.comments};
+    if(res.liked) MY_LIKES.add(slug); else MY_LIKES.delete(slug);
+    patchSocialCounts();
+  }catch(e){}
+}
+function handleComment(e,slug){
+  e.stopPropagation();
+  location.href=`/album/${slug}#comments`;
+}
 async function loadSocialCounts(){
-  try{SOC_CACHE=await(await fetch("/api/social/counts")).json();patchSocialCounts();}catch(e){}
+  try{
+    const [counts,liked]=await Promise.all([
+      fetch("/api/social/counts").then(r=>r.json()),
+      ME.authenticated?fetch("/api/social/my-likes").then(r=>r.json()):Promise.resolve([])
+    ]);
+    SOC_CACHE=counts;
+    MY_LIKES=new Set(liked);
+    patchSocialCounts();
+  }catch(e){}
 }
 function posterFor(username){
   if(!username) return "";
@@ -507,104 +559,12 @@ document.getElementById("sort-select").addEventListener("change",async e=>{
 
 document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
 
-// ── Modale détail ─────────────────────────────────────────────────────────
-const overlay=document.getElementById("overlay");
-function closeModal(){overlay.classList.remove("show");
-  setTimeout(()=>overlay.classList.add("hidden"),180);}
-document.getElementById("modal-close").onclick=closeModal;
-overlay.onclick=e=>{if(e.target===overlay)closeModal();};
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+// ── Navigation vers la page album ─────────────────────────────────────────
 document.getElementById("albums").addEventListener("click",e=>{
   if(e.target.closest("a,button")) return;
   const card=e.target.closest(".album");
-  if(card) openDetail(card.dataset.slug);
+  if(card) location.href=`/album/${card.dataset.slug}`;
 });
-
-async function openDetail(slug){
-  const d=await(await fetch(`/api/catalogue/${slug}`)).json();
-  const t=T[L()], a=d.album||{};
-  const tags=(d.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
-  const cvHtml=d.has_cover
-    ?`<img src="/cover/${slug}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in" onclick="openCoverPreview('${slug}',${d.has_cover},${d.has_traycard})" title="Voir la pochette">`
-    :GENERIC_COVER;
-  const set=(d.tracks||[]).map(tr=>{
-    const dl=(ME.authenticated&&tr.dl)
-      ?`<a href="/download/${slug}/track/${tr.n}" title="${t.dltrack}"><span class="material-symbols-outlined">download</span></a>`:"";
-    return `<li><span class="n">${String(tr.n).padStart(2,"0")}</span><span class="tt">${tr.title}</span>${dl}</li>`;
-  }).join("");
-  let dl="";
-  if(ME.authenticated){
-    if(d.has_mp3) dl+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t.full}</a>`;
-    if(d.has_mp4) dl+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-    if(d.has_cover) dl+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
-    if(d.has_traycard) dl+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
-    dl=`<div class="dlgrid">${dl}</div>`;
-  } else {
-    dl=`<div class="lock-note"><span class="material-symbols-outlined">lock</span>${t.lockdl}
-        <a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span> ${t.login}</a></div>`;
-  }
-  // posteur de l'album (avatar + pseudo)
-  const posterHtml=posterFor(d.imported_by);
-  // source du live
-  const srcUrl=d.source_url||"";
-  const srcLabel=d.source_label||"";
-  let sourceHtml="";
-  if(srcUrl||srcLabel){
-    const srcContent=srcUrl
-      ?`<a class="source-link" href="${srcUrl}" target="_blank" rel="noopener noreferrer">${srcLabel||srcUrl}</a>`
-      :`<span>${srcLabel}</span>`;
-    sourceHtml=`<div class="source-row"><span class="material-symbols-outlined">link</span>${srcContent}</div>`;
-  }
-  document.getElementById("modal-content").innerHTML=`
-    <div class="modal-head">
-      <div class="cv">${cvHtml}</div>
-      <div class="mh-info">
-        ${a.artist?`<div class="mh-artist">${a.artist}</div>`:""}
-        <h2 class="mh-title">${a.title||slug}</h2>
-        ${a.date?`<div class="mh-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
-        ${a.venue?`<div class="mh-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
-        ${posterHtml?`<div class="mh-poster">${posterHtml}</div>`:""}
-        ${sourceHtml}
-        ${tags?`<div class="tags">${tags}</div>`:""}
-        <div id="modal-like" style="margin-top:12px"></div>
-      </div>
-    </div>
-    <div class="modal-body">
-      <h3>${t.downloads}</h3>
-      ${dl}
-      <h3>${t.setlist}</h3>
-      <ul class="setlist">${set}</ul>
-      <div id="modal-social" style="margin-top:8px"></div>
-    </div>`;
-  overlay.classList.remove("hidden");
-  requestAnimationFrame(()=>overlay.classList.add("show"));
-  // Like + commentaires (module social)
-  const likeEl=document.createElement("button");likeEl.className="soc-like";
-  document.getElementById("modal-like").appendChild(likeEl);
-  L2M.likeButton(likeEl,slug);
-  L2M.comments(document.getElementById("modal-social"),slug);
-}
-
-// ── Cover preview overlay ─────────────────────────────────────────────────
-const cvOverlay=document.getElementById("cv-overlay");
-document.getElementById("cv-close").onclick=()=>{
-  cvOverlay.classList.remove("show");setTimeout(()=>cvOverlay.classList.add("hidden"),180);};
-cvOverlay.onclick=e=>{if(e.target===cvOverlay){cvOverlay.classList.remove("show");
-  setTimeout(()=>cvOverlay.classList.add("hidden"),180);}};
-
-function openCoverPreview(slug,hasCover,hasTraycard){
-  const t=T[L()];
-  let html=`<div class="cv-btns">`;
-  if(hasCover) html+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">download</span> ${t.cover}</a>`;
-  if(hasTraycard) html+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
-  html+=`</div>`;
-  let imgs="";
-  if(hasCover) imgs+=`<img class="cv-img" src="/cover/${slug}" alt="cover">`;
-  if(hasTraycard) imgs+=`<iframe src="/download/${slug}/traycard#toolbar=0" style="width:min(360px,80vw);height:min(500px,75vh);border-radius:12px;border:1px solid var(--border);background:#fff"></iframe>`;
-  document.getElementById("cv-wrap").innerHTML=imgs+html;
-  cvOverlay.classList.remove("hidden");
-  requestAnimationFrame(()=>cvOverlay.classList.add("show"));
-}
 
 // ── Version footer ────────────────────────────────────────────────────────
 async function loadVersion(){
@@ -619,6 +579,9 @@ async function loadVersion(){
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 async function load(){
+  // Redirection legacy ?album=slug → page dédiée (avant tout chargement)
+  const wanted=new URLSearchParams(location.search).get("album");
+  if(wanted){location.replace(`/album/${encodeURIComponent(wanted)}`);return;}
   loadVersion();
   // Restaurer le tri depuis localStorage
   const savedSort=localStorage.getItem("l2m-sort")||"date_concert";
@@ -626,6 +589,7 @@ async function load(){
   document.getElementById("sort-select").value=currentSort;
   try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
+  document.getElementById("preview-visitor-btn").style.display=ME.is_gestionnaire?"":"none";
   // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
   const um=document.getElementById("usermenu");
   if(ME.authenticated){
@@ -645,9 +609,6 @@ async function load(){
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
   loadSocialCounts();
-  // Ouverture directe d'un album (?album=slug), ex. depuis une page profil
-  const wanted=new URLSearchParams(location.search).get("album");
-  if(wanted) openDetail(wanted);
 }
 load();
 </script>
