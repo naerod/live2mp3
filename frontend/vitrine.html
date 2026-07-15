@@ -218,6 +218,11 @@
                placeholder="Rechercher par titre, artiste, lieu, date…">
       </div>
     </div>
+    <div class="toolbar-row">
+      <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
+      <div id="active-filters" style="display:contents"></div>
+      <span class="count" id="count"></span>
+    </div>
     <div id="filter-panel" class="filter-panel">
       <div class="filter-group">
         <label id="t-f-artist">Artiste</label>
@@ -232,11 +237,6 @@
         <div id="filters" style="display:flex;flex-wrap:wrap;gap:6px;padding-top:2px"></div>
       </div>
       <button class="icon-btn filter-clear" id="filter-clear" style="display:none"><span class="material-symbols-outlined">clear_all</span><span id="t-clear">Effacer</span></button>
-    </div>
-    <div class="toolbar-row">
-      <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
-      <div id="active-filters" style="display:contents"></div>
-      <span class="count" id="count"></span>
     </div>
   </div>
 
