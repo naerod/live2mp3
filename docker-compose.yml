@@ -19,7 +19,10 @@ services:
       APP_ENV: ${APP_ENV:-prod}
       GIT_COMMIT: ${GIT_COMMIT:-}
     volumes:
-      - projects:/app/projects
+      # Stockage des albums : bind-mount hôte, partagé prod/preprod (voir DEPLOY.md).
+      # `:?` = échec bruyant si absent du .env, plutôt qu'un repli silencieux
+      # sur un volume vide (cf. workspace/debugging/2026-07-15_prod-volume-nomme.md).
+      - ${PROJECTS_DIR:?PROJECTS_DIR manquant dans .env}:/app/projects
       - ./templates:/app/templates
     networks:
       - internal
@@ -39,7 +42,7 @@ services:
       GIT_COMMIT: ${GIT_COMMIT:-}
     command: python -m backend.worker
     volumes:
-      - projects:/app/projects
+      - ${PROJECTS_DIR:?PROJECTS_DIR manquant dans .env}:/app/projects
       - ./templates:/app/templates
     networks:
       - internal
@@ -54,7 +57,5 @@ networks:
     name: apps_web
 
 volumes:
-  projects:
-    name: live2mp3${ENV_SUFFIX}_projects
   redis-data:
     name: live2mp3${ENV_SUFFIX}_redis-data

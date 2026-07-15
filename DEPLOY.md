@@ -6,9 +6,18 @@
 | prod | https://live2mp3.naerod.com | `main` | /opt/apps/live2mp3 | vitrine publique + auth (user/gestionnaire) |
 | preprod | https://preprod-live2mp3.naerod.com | `preprod` | /opt/apps/live2mp3-preprod | Authentik **gestionnaire/admin** (tout le domaine) |
 
-- 2 stacks Docker isolées (app+worker+redis), volumes séparés
-  (`live2mp3_projects` / `live2mp3-preprod_projects`).
+- 2 stacks Docker isolées (app+worker+redis), redis séparés.
+- **Stockage des albums partagé** entre prod et preprod : bind-mount
+  `PROJECTS_DIR` (.env) → `/opt/data/live2mp3/projects` sur CT110.
+  Les données sociales restent scindées par env (`.l2m-social/<APP_ENV>/`).
+  `PROJECTS_DIR` est obligatoire (`${PROJECTS_DIR:?}`) : un .env incomplet
+  fait échouer le déploiement au lieu de servir un stockage vide.
+  Les anciens volumes nommés `live2mp3*_projects` ne sont plus utilisés.
 - Compose paramétré par `ENV_SUFFIX` (.env) : noms de conteneurs/images/volumes.
+- **Ne jamais patcher `docker-compose.yml` à la main sur CT110** : les scripts de
+  déploiement stashent les modifications locales avant `docker compose up -d`,
+  donc le patch est ignoré par les conteneurs tout en restant visible sur le
+  disque. Toute config d'infra doit être commitée dans le repo.
 - GitHub = source de vérité. On ne modifie jamais directement dans le conteneur.
 
 ## Workflow
