@@ -59,7 +59,7 @@
     const cover = a.has_cover
       ? `<div class="cv" style="background-image:url('/cover/${a.slug}')"></div>`
       : `<div class="cv"><span class="material-symbols-outlined">album</span></div>`;
-    return `<a class="prof-alb" href="/?album=${encodeURIComponent(a.slug)}">
+    return `<a class="prof-alb" href="/album/${encodeURIComponent(a.slug)}">
       ${cover}
       <div class="b"><div class="t">${esc(a.title || a.slug)}</div>
         <div class="a">${esc(a.artist || "")}</div></div>
@@ -67,7 +67,7 @@
   }
 
   function commentItem(c) {
-    return `<a class="prof-cmt" href="/?album=${encodeURIComponent(c.slug)}" style="display:block">
+    return `<a class="prof-cmt" href="/album/${encodeURIComponent(c.slug)}#comments" style="display:block">
       <div class="lnk"><span class="material-symbols-outlined" style="font-size:15px">comment</span>
         ${t("on_album")} <b>${esc(c.album_title)}</b>${c.album_artist ? " · " + esc(c.album_artist) : ""}
         <span class="soc-dim">· ${L2M.timeAgo(c.created_at)}${c.edited_at ? " · " + t("edited") : ""}</span>

@@ -248,15 +248,7 @@
   <div class="foot" id="foot"></div>
 </main>
 
-<div id="overlay" class="overlay hidden"><div class="modal" style="position:relative">
-  <button class="icon-btn icon-only x" id="modal-close"><span class="material-symbols-outlined">close</span></button>
-  <div id="modal-content"></div>
-</div></div>
 
-<div id="cv-overlay" class="cv-overlay hidden" style="position:fixed">
-  <button class="icon-btn icon-only cv-close" id="cv-close"><span class="material-symbols-outlined">close</span></button>
-  <div id="cv-wrap" class="cv-wrap"></div>
-</div>
 
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
@@ -449,7 +441,7 @@ async function handleLike(e,slug){
 }
 function handleComment(e,slug){
   e.stopPropagation();
-  openDetail(slug,true);
+  location.href=`/album/${slug}#comments`;
 }
 async function loadSocialCounts(){
   try{
@@ -567,105 +559,12 @@ document.getElementById("sort-select").addEventListener("change",async e=>{
 
 document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
 
-// ── Modale détail ─────────────────────────────────────────────────────────
-const overlay=document.getElementById("overlay");
-function closeModal(){overlay.classList.remove("show");
-  setTimeout(()=>overlay.classList.add("hidden"),180);}
-document.getElementById("modal-close").onclick=closeModal;
-overlay.onclick=e=>{if(e.target===overlay)closeModal();};
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeModal();});
+// ── Navigation vers la page album ─────────────────────────────────────────
 document.getElementById("albums").addEventListener("click",e=>{
   if(e.target.closest("a,button")) return;
   const card=e.target.closest(".album");
-  if(card) openDetail(card.dataset.slug);
+  if(card) location.href=`/album/${card.dataset.slug}`;
 });
-
-async function openDetail(slug,scrollToComments=false){
-  const d=await(await fetch(`/api/catalogue/${slug}`)).json();
-  const t=T[L()], a=d.album||{};
-  const tags=(d.labels||[]).map(l=>`<span class="tag">${l}</span>`).join("");
-  const cvHtml=d.has_cover
-    ?`<img src="/cover/${slug}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in" onclick="openCoverPreview('${slug}',${d.has_cover},${d.has_traycard})" title="Voir la pochette">`
-    :GENERIC_COVER;
-  const set=(d.tracks||[]).map(tr=>{
-    const dl=(ME.authenticated&&tr.dl)
-      ?`<a href="/download/${slug}/track/${tr.n}" title="${t.dltrack}"><span class="material-symbols-outlined">download</span></a>`:"";
-    return `<li><span class="n">${String(tr.n).padStart(2,"0")}</span><span class="tt">${tr.title}</span>${dl}</li>`;
-  }).join("");
-  let dl="";
-  if(ME.authenticated){
-    if(d.has_mp3) dl+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t.full}</a>`;
-    if(d.has_mp4) dl+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-    if(d.has_cover) dl+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
-    if(d.has_traycard) dl+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
-    dl=`<div class="dlgrid">${dl}</div>`;
-  } else {
-    dl=`<div class="lock-note"><span class="material-symbols-outlined">lock</span>${t.lockdl}
-        <a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span> ${t.login}</a></div>`;
-  }
-  // posteur de l'album (avatar + pseudo)
-  const posterHtml=posterFor(d.imported_by);
-  // source du live
-  const srcUrl=d.source_url||"";
-  const srcLabel=d.source_label||"";
-  let sourceHtml="";
-  if(srcUrl||srcLabel){
-    const srcContent=srcUrl
-      ?`<a class="source-link" href="${srcUrl}" target="_blank" rel="noopener noreferrer">${srcLabel||srcUrl}</a>`
-      :`<span>${srcLabel}</span>`;
-    sourceHtml=`<div class="source-row"><span class="material-symbols-outlined">link</span>${srcContent}</div>`;
-  }
-  document.getElementById("modal-content").innerHTML=`
-    <div class="modal-head">
-      <div class="cv">${cvHtml}</div>
-      <div class="mh-info">
-        ${a.artist?`<div class="mh-artist">${a.artist}</div>`:""}
-        <h2 class="mh-title">${a.title||slug}</h2>
-        ${a.date?`<div class="mh-line"><span class="material-symbols-outlined">calendar_month</span>${a.date}</div>`:""}
-        ${a.venue?`<div class="mh-line"><span class="material-symbols-outlined">location_on</span>${a.venue}</div>`:""}
-        ${posterHtml?`<div class="mh-poster">${posterHtml}</div>`:""}
-        ${sourceHtml}
-        ${tags?`<div class="tags">${tags}</div>`:""}
-        <div id="modal-like" style="margin-top:12px"></div>
-      </div>
-    </div>
-    <div class="modal-body">
-      <h3>${t.downloads}</h3>
-      ${dl}
-      <h3>${t.setlist}</h3>
-      <ul class="setlist">${set}</ul>
-      <div id="modal-social" style="margin-top:8px"></div>
-    </div>`;
-  overlay.classList.remove("hidden");
-  requestAnimationFrame(()=>overlay.classList.add("show"));
-  // Like + commentaires (module social)
-  const likeEl=document.createElement("button");likeEl.className="soc-like";
-  document.getElementById("modal-like").appendChild(likeEl);
-  L2M.likeButton(likeEl,slug);
-  L2M.comments(document.getElementById("modal-social"),slug);
-  if(scrollToComments) setTimeout(()=>document.getElementById("modal-social")?.scrollIntoView({behavior:"smooth",block:"start"}),120);
-}
-
-// ── Cover preview overlay ─────────────────────────────────────────────────
-const cvOverlay=document.getElementById("cv-overlay");
-document.getElementById("cv-close").onclick=()=>{
-  cvOverlay.classList.remove("show");setTimeout(()=>cvOverlay.classList.add("hidden"),180);};
-cvOverlay.onclick=e=>{if(e.target===cvOverlay){cvOverlay.classList.remove("show");
-  setTimeout(()=>cvOverlay.classList.add("hidden"),180);}};
-
-function openCoverPreview(slug,hasCover,hasTraycard){
-  const t=T[L()];
-  let html=`<div class="cv-btns">`;
-  if(hasCover) html+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">download</span> ${t.cover}</a>`;
-  if(hasTraycard) html+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
-  html+=`</div>`;
-  let imgs="";
-  if(hasCover) imgs+=`<img class="cv-img" src="/cover/${slug}" alt="cover">`;
-  if(hasTraycard) imgs+=`<iframe src="/download/${slug}/traycard#toolbar=0" style="width:min(360px,80vw);height:min(500px,75vh);border-radius:12px;border:1px solid var(--border);background:#fff"></iframe>`;
-  document.getElementById("cv-wrap").innerHTML=imgs+html;
-  cvOverlay.classList.remove("hidden");
-  requestAnimationFrame(()=>cvOverlay.classList.add("show"));
-}
 
 // ── Version footer ────────────────────────────────────────────────────────
 async function loadVersion(){
@@ -707,9 +606,9 @@ async function load(){
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
   loadSocialCounts();
-  // Ouverture directe d'un album (?album=slug), ex. depuis une page profil
+  // Redirection legacy ?album=slug → page dédiée
   const wanted=new URLSearchParams(location.search).get("album");
-  if(wanted) openDetail(wanted);
+  if(wanted) location.replace(`/album/${encodeURIComponent(wanted)}`);
 }
 load();
 </script>

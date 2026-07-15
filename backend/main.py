@@ -623,6 +623,13 @@ def set_published(slug: str, payload: PublishIn,
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------
+@app.get("/album/{slug}", response_class=HTMLResponse)
+def album_detail_page(slug: str) -> HTMLResponse:
+    page = FRONTEND / "album_detail.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — album</h1>")
+
 @app.get("/app", response_class=HTMLResponse)
 def tool(identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
     idx = FRONTEND / "index.html"

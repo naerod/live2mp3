@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live2mp3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<style>
+  .al-layout{display:grid;grid-template-columns:300px 1fr;gap:28px;margin-top:24px;align-items:start}
+  @media(max-width:700px){.al-layout{grid-template-columns:1fr}}
+  .al-cover{aspect-ratio:1;border-radius:16px;overflow:hidden;background:#0a0a0a;
+    border:1px solid var(--border);cursor:zoom-in;position:relative}
+  .al-cover img{width:100%;height:100%;object-fit:cover;display:block;
+    transition:transform .25s ease}
+  .al-cover:hover img{transform:scale(1.03)}
+  .al-cover .cover-generic{width:100%;height:100%}
+  .al-info{display:flex;flex-direction:column;gap:6px}
+  .al-artist{color:var(--accent);font-size:22px;font-weight:700;line-height:1.15}
+  .al-title{font-size:26px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 6px}
+  .al-line{display:flex;align-items:center;gap:8px;color:var(--fg);font-size:14px}
+  .al-line .material-symbols-outlined{font-size:18px;color:var(--muted)}
+  .al-line.muted-placeholder{opacity:.45;font-style:italic}
+  .al-poster{margin-top:4px}
+  .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;flex-wrap:wrap}
+  .source-row .material-symbols-outlined{font-size:15px;flex-shrink:0}
+  .source-link{color:var(--accent);text-decoration:none;word-break:break-all}
+  .source-link:hover{text-decoration:underline}
+  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+  .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
+    background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+  .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:18px 20px;margin-top:18px}
+  .sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);margin:0 0 12px;font-weight:700}
+  .setlist{list-style:none;padding:0;margin:0}
+  .setlist li{display:flex;align-items:center;gap:10px;padding:7px 0;
+    border-bottom:1px solid var(--border);font-size:14px}
+  .setlist li:last-child{border-bottom:none}
+  .setlist li .n{color:var(--accent);font-variant-numeric:tabular-nums;min-width:22px;font-weight:600}
+  .setlist li .tt{flex:1}
+  .setlist li a{color:var(--muted);display:flex}
+  .setlist li a:hover{color:var(--accent)}
+  .dlgrid{display:flex;flex-wrap:wrap;gap:8px}
+  .dlgrid a{margin:0;height:36px;font-size:13px}
+  .lock-note{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;
+    background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+  .not-found{text-align:center;color:var(--muted);margin-top:60px}
+  .not-found .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
+  /* Cover zoom overlay */
+  .cv-overlay{position:fixed;inset:0;background:rgba(6,7,10,.92);backdrop-filter:blur(6px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    z-index:50;opacity:0;transition:opacity .18s;cursor:zoom-out}
+  .cv-overlay.hidden{display:none}
+  .cv-overlay.show{opacity:1}
+  .cv-img{border-radius:14px;max-width:min(520px,88vw);max-height:80vh;object-fit:contain;display:block}
+  .cv-btns{display:flex;gap:10px;margin-bottom:14px}
+  .cv-close{position:absolute;top:16px;right:16px}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
+  <div class="tools">
+    <a id="gear-btn" class="icon-btn" style="display:none"><span class="material-symbols-outlined">settings</span><span id="t-manage">Gérer</span></a>
+    <button class="icon-btn" id="back-btn" onclick="goBack()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
+    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
+    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
+    <div id="usermenu" class="usermenu" style="display:none"></div>
+  </div>
+</header>
+
+<main>
+  <div id="content"><div style="text-align:center;color:var(--muted);margin-top:60px"><span class="material-symbols-outlined" style="font-size:40px;display:block;margin-bottom:8px;animation:spin 1s linear infinite">sync</span></div></div>
+</main>
+
+<div id="cv-overlay" class="cv-overlay hidden">
+  <button class="icon-btn icon-only cv-close" id="cv-close"><span class="material-symbols-outlined">close</span></button>
+  <div id="cv-btns" class="cv-btns"></div>
+  <img id="cv-img" class="cv-img" src="" alt="">
+</div>
+
+<script src="/static/social.js"></script>
+<script>
+const slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
+
+function goBack(){
+  try{
+    if(history.length>1&&document.referrer&&new URL(document.referrer).hostname===location.hostname)
+      {history.back();return;}
+  }catch(e){}
+  location.href='/';
+}
+
+// ── i18n ────────────────────────────────────────────────────────────────
+const T={
+  fr:{back:"Retour",manage:"Gérer",login:"Connexion",logout:"Déconnexion",
+      downloads:"Téléchargements",setlist:"Setlist",comments:"Commentaires",
+      full:"Album complet (MP3)",cover:"Pochette",traycard:"Tray card",
+      dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",
+      not_found:"Album introuvable.",
+      date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
+      imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil"},
+  en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
+      downloads:"Downloads",setlist:"Setlist",comments:"Comments",
+      full:"Full album (MP3)",cover:"Cover",traycard:"Tray card",
+      dltrack:"Download this track",lockdl:"Log in to download",
+      not_found:"Album not found.",
+      date_unknown:"Unknown date",venue_unknown:"Unknown venue",
+      imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile"}
+};
+const L=()=>localStorage.getItem('l2m-lang')||'fr';
+const t=k=>{const v=(T[L()]||T.fr)[k];return typeof v==='function'?v:v||k;};
+function setLang(l){
+  localStorage.setItem('l2m-lang',l);
+  document.documentElement.lang=l;
+  document.getElementById('lang-label').textContent=l.toUpperCase();
+  document.getElementById('t-back').textContent=t('back');
+  document.getElementById('t-login').textContent=t('login');
+  const mg=document.getElementById('t-manage');if(mg)mg.textContent=t('manage');
+  if(window.applyI18n)applyI18n(l);
+}
+document.getElementById('lang').onclick=()=>setLang(L()==='fr'?'en':'fr');
+
+// ── Thème ────────────────────────────────────────────────────────────────
+const themeBtn=document.getElementById('theme');
+function setTheme(x){
+  document.documentElement.dataset.theme=x;
+  localStorage.setItem('l2m-theme',x);
+  themeBtn.querySelector('.material-symbols-outlined').textContent=x==='dark'?'dark_mode':'light_mode';
+}
+setTheme(localStorage.getItem('l2m-theme')||'dark');
+themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+
+// ── Cover générique ──────────────────────────────────────────────────────
+const GENERIC_COVER=`<div class="cover-generic">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="4" opacity=".3"/>
+    <circle cx="50" cy="50" r="10" fill="currentColor" opacity=".25"/>
+    <line x1="50" y1="20" x2="50" y2="80" stroke="currentColor" stroke-width="3" opacity=".15"/>
+    <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3" opacity=".15"/>
+  </svg></div>`;
+
+// ── Cover zoom ───────────────────────────────────────────────────────────
+const cvOverlay=document.getElementById('cv-overlay');
+document.getElementById('cv-close').onclick=closeCover;
+cvOverlay.onclick=e=>{if(e.target===cvOverlay)closeCover();};
+function closeCover(){cvOverlay.classList.remove('show');setTimeout(()=>cvOverlay.classList.add('hidden'),180);}
+function openCoverPreview(hasCover,hasTraycard){
+  const bts=document.getElementById('cv-btns');
+  bts.innerHTML='';
+  if(hasCover){const a=document.createElement('a');a.className='icon-btn';a.href=`/download/${slug}/cover`;
+    a.innerHTML=`<span class="material-symbols-outlined">download</span> ${t('cover')}`;bts.appendChild(a);}
+  if(hasTraycard){const a=document.createElement('a');a.className='icon-btn';a.href=`/download/${slug}/traycard`;
+    a.innerHTML=`<span class="material-symbols-outlined">description</span> ${t('traycard')}`;bts.appendChild(a);}
+  document.getElementById('cv-img').src=`/cover/${slug}`;
+  cvOverlay.classList.remove('hidden');
+  requestAnimationFrame(()=>cvOverlay.classList.add('show'));
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!cvOverlay.classList.contains('hidden'))closeCover();});
+
+// ── Main ─────────────────────────────────────────────────────────────────
+let ME={authenticated:false,is_gestionnaire:false};
+let POSTERS={};
+
+async function loadPage(){
+  setLang(L());
+  try{ME=await fetch('/api/me').then(r=>r.json());}catch(e){}
+
+  if(ME.is_gestionnaire){
+    const gb=document.getElementById('gear-btn');
+    gb.href=`/app/album/${slug}`;
+    gb.style.display='';
+  }
+
+  const um=document.getElementById('usermenu');
+  if(ME.authenticated){
+    ['login','lang','theme'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    um.style.display='';
+    const sm=await L2M.me();
+    L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},{});
+  }else{
+    um.style.display='none';
+    document.getElementById('login').style.display='';
+  }
+
+  let d;
+  try{const r=await fetch(`/api/catalogue/${slug}`);if(!r.ok)throw 0;d=await r.json();}
+  catch(e){showNotFound();return;}
+  if(!d||!d.album){showNotFound();return;}
+
+  document.title=`live2mp3 — ${d.album.title||slug}`;
+
+  // Résoudre le posteur
+  if(d.imported_by){
+    const ps=await fetch(`/api/social/profiles?u=${encodeURIComponent(d.imported_by)}`).then(r=>r.json()).catch(()=>({}));
+    POSTERS=ps;
+  }
+
+  renderAlbum(d);
+
+  if(location.hash==='#comments'){
+    setTimeout(()=>document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'}),350);
+  }
+}
+
+function posterFor(username){
+  if(!username)return '';
+  const p=POSTERS[username]||{};
+  return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},t('imported_by'));
+}
+
+function renderAlbum(d){
+  const a=d.album||{};
+  const tags=(d.labels||[]).map(l=>`<span class="tag">${L2M.esc(l)}</span>`).join('');
+  const hasCover=d.has_cover, hasTraycard=d.has_traycard;
+
+  const coverHtml=hasCover
+    ?`<img src="/cover/${slug}" alt="" onclick="openCoverPreview(${hasCover},${hasTraycard})">`
+    :GENERIC_COVER;
+
+  const set=(d.tracks||[]).map(tr=>{
+    const dl=(ME.authenticated&&tr.dl)
+      ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
+    return `<li><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
+  }).join('');
+
+  let dlHtml='';
+  if(ME.authenticated){
+    let links='';
+    if(d.has_mp3)links+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t('full')}</a>`;
+    if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
+    if(d.has_cover)links+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t('cover')}</a>`;
+    if(d.has_traycard)links+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t('traycard')}</a>`;
+    if(links)dlHtml=`<div class="sec"><h3>${t('downloads')}</h3><div class="dlgrid">${links}</div></div>`;
+  }else{
+    dlHtml=`<div class="sec"><h3>${t('downloads')}</h3><div class="lock-note"><span class="material-symbols-outlined">lock</span>${t('lockdl')}<a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/album/${slug}"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
+  }
+
+  const srcUrl=d.source_url||'';
+  const srcLabel=d.source_label||'';
+  let sourceHtml='';
+  if(srcUrl||srcLabel){
+    const srcContent=srcUrl
+      ?`<a class="source-link" href="${srcUrl}" target="_blank" rel="noopener">${L2M.esc(srcLabel||srcUrl)}</a>`
+      :`<span>${L2M.esc(srcLabel)}</span>`;
+    sourceHtml=`<div class="source-row"><span class="material-symbols-outlined">link</span>${srcContent}</div>`;
+  }
+
+  const posterHtml=posterFor(d.imported_by);
+  const dateStr=a.date||t('date_unknown');
+  const venueStr=a.venue||t('venue_unknown');
+
+  document.getElementById('content').innerHTML=`
+    <div class="al-layout">
+      <div class="al-cover-col">
+        <div class="al-cover">${coverHtml}</div>
+      </div>
+      <div class="al-info">
+        ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
+        <h1 class="al-title">${L2M.esc(a.title||slug)}</h1>
+        <div class="al-line${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</div>
+        <div class="al-line${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</div>
+        ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
+        ${sourceHtml}
+        ${tags?`<div class="tags">${tags}</div>`:''}
+        <div id="like-btn" style="margin-top:14px"></div>
+      </div>
+    </div>
+    ${dlHtml}
+    <div class="sec">
+      <h3>${t('setlist')}</h3>
+      <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
+    </div>
+    <div class="sec" id="sec-comments"></div>
+  `;
+
+  L2M.likeButton(document.getElementById('like-btn'),slug);
+  L2M.comments(document.getElementById('sec-comments'),slug);
+}
+
+function showNotFound(){
+  document.getElementById('content').innerHTML=
+    `<div class="not-found"><span class="material-symbols-outlined">album</span>${t('not_found')}</div>`;
+}
+
+loadPage();
+</script>
+</body>
+</html>
