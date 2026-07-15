@@ -579,6 +579,9 @@ async function loadVersion(){
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 async function load(){
+  // Redirection legacy ?album=slug → page dédiée (avant tout chargement)
+  const wanted=new URLSearchParams(location.search).get("album");
+  if(wanted){location.replace(`/album/${encodeURIComponent(wanted)}`);return;}
   loadVersion();
   // Restaurer le tri depuis localStorage
   const savedSort=localStorage.getItem("l2m-sort")||"date_concert";
@@ -606,9 +609,6 @@ async function load(){
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
   loadSocialCounts();
-  // Redirection legacy ?album=slug → page dédiée
-  const wanted=new URLSearchParams(location.search).get("album");
-  if(wanted) location.replace(`/album/${encodeURIComponent(wanted)}`);
 }
 load();
 </script>
