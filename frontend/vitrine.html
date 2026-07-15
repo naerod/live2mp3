@@ -592,7 +592,7 @@ async function load(){
   document.getElementById("sort-select").value=currentSort;
   try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
-  document.getElementById("preview-visitor-btn").style.display=ME.is_gestionnaire?"":"none";
+  document.getElementById("preview-visitor-btn").style.display=ME.is_admin?"":"none";
   // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
   const um=document.getElementById("usermenu");
   if(ME.authenticated){
