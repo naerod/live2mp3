@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import catalogue
+from . import catalogue, suggest
 from .auth import (
     GROUP_GESTIONNAIRE,
     SUPERUSER_GROUPS,
@@ -207,6 +207,7 @@ def _comment_dict(row: sqlite3.Row, profiles: dict[str, dict],
 class CommentIn(BaseModel):
     body: str = Field(min_length=1, max_length=BODY_MAX)
     parent_id: int | None = None
+    cover_id: int | None = None   # None = commentaire d'album
 
 
 class CommentEditIn(BaseModel):
@@ -216,6 +217,11 @@ class CommentEditIn(BaseModel):
 class ProfileIn(BaseModel):
     display_name: str = Field(min_length=1, max_length=40)
     bio: str = Field(default="", max_length=500)
+    # Identifiants canoniques uniquement (code INSEE / id Deezer) : le libellé
+    # affiché est reconstruit côté serveur, jamais dicté par le client — c'est
+    # ce qui garantit un formalisme unique. Chaîne vide = champ effacé.
+    city_id: str = Field(default="", max_length=16)
+    artist_id: str = Field(default="", max_length=32)
 
 
 # =====================================================================
@@ -234,6 +240,8 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "display_name": row["display_name"],
         "bio": row["bio"],
         "avatar": bool(row["avatar_ext"]),
+        "city_id": row["city_id"], "city": row["city_label"],
+        "artist_id": row["artist_id"], "artist": row["artist_label"],
         "is_moderator": _is_moderator(identity.get("groups", set())),
     }
 
@@ -313,6 +321,10 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         "display_name": (row["display_name"] if row else username),
         "bio": (row["bio"] if row else ""),
         "avatar": bool(row["avatar_ext"]) if row else False,
+        "city_id": (row["city_id"] if row else ""),
+        "city": (row["city_label"] if row else ""),
+        "artist_id": (row["artist_id"] if row else ""),
+        "artist": (row["artist_label"] if row else ""),
         "created_at": (row["created_at"] if row else ""),
     }
     return {
@@ -329,16 +341,61 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
     }
 
 
+def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]:
+    """(id, label) à écrire pour un champ à suggestions.
+
+    Ne sollicite la source que si l'id a *changé* : éditer sa bio ne doit pas
+    dépendre de la disponibilité d'une API tierce, ni en payer la latence.
+    """
+    new_id = (new_id or "").strip()
+    old_id = (row[f"{kind}_id"] or "") if row is not None else ""
+    if not new_id:
+        return "", ""
+    if new_id == old_id and row[f"{kind}_label"]:
+        return old_id, row[f"{kind}_label"]
+    resolver = suggest.resolve_city if kind == "city" else suggest.resolve_artist
+    try:
+        entry = resolver(new_id)
+    except suggest.SourceUnavailable:
+        raise HTTPException(503, f"source de suggestions {kind} indisponible")
+    if not entry:
+        raise HTTPException(422, f"{kind} inconnu — choisis une entrée dans la liste")
+    return entry["id"], entry["label"]
+
+
 @router.put("/api/social/profile")
 def update_profile(payload: ProfileIn, identity: dict = Depends(require_user)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
-        _ensure_profile(conn, username)
+        row = _ensure_profile(conn, username)
+        city_id, city_label = _resolve_choice("city", payload.city_id, row)
+        artist_id, artist_label = _resolve_choice("artist", payload.artist_id, row)
         conn.execute(
-            "UPDATE profiles SET display_name=?, bio=?, updated_at=? WHERE username=?",
-            (payload.display_name.strip(), payload.bio.strip(), _now(), username),
+            "UPDATE profiles SET display_name=?, bio=?, city_id=?, city_label=?, "
+            "artist_id=?, artist_label=?, updated_at=? WHERE username=?",
+            (payload.display_name.strip(), payload.bio.strip(), city_id, city_label,
+             artist_id, artist_label, _now(), username),
         )
-    return {"ok": True, "display_name": payload.display_name.strip(), "bio": payload.bio.strip()}
+    return {
+        "ok": True,
+        "display_name": payload.display_name.strip(),
+        "bio": payload.bio.strip(),
+        "city_id": city_id, "city": city_label,
+        "artist_id": artist_id, "artist": artist_label,
+    }
+
+
+# =====================================================================
+#  SUGGESTIONS (ville, artiste favori)
+# =====================================================================
+@router.get("/api/social/suggest/cities")
+def suggest_cities(q: str = "", identity: dict = Depends(current_identity)) -> list[dict]:
+    return suggest.search_cities(q)
+
+
+@router.get("/api/social/suggest/artists")
+def suggest_artists(q: str = "", identity: dict = Depends(current_identity)) -> list[dict]:
+    return suggest.search_artists(q)
 
 
 @router.post("/api/social/profile/avatar")
@@ -464,24 +521,31 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
 # =====================================================================
 @router.get("/api/social/albums/{slug}/comments")
 def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TOP_PAGE,
+                  cover_id: int | None = None,
                   identity: dict = Depends(current_identity)) -> dict:
+    """Fil de l'album (`cover_id` absent) ou fil d'une pochette (`cover_id` posé).
+
+    Les deux partagent la même table : `cover_id IS ?` sélectionne l'un ou
+    l'autre sans jamais les mélanger (`IS` compare NULL correctement).
+    """
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
     # Un commentaire racine supprimé n'est affiché que s'il a au moins une
     # réponse non supprimée (préserver le contexte du fil).
     _TOP_FILTER = """
-        slug=? AND parent_id IS NULL
+        slug=? AND cover_id IS ? AND parent_id IS NULL
         AND (deleted=0 OR EXISTS (
             SELECT 1 FROM comments r
             WHERE r.parent_id=comments.id AND r.deleted=0
         ))
     """
+    scope = (slug, cover_id)
     with get_conn() as conn:
         total = conn.execute(
-            f"SELECT COUNT(*) AS n FROM comments WHERE {_TOP_FILTER}", (slug,)
+            f"SELECT COUNT(*) AS n FROM comments WHERE {_TOP_FILTER}", scope
         ).fetchone()["n"]
         tops = conn.execute(
-            f"SELECT * FROM comments WHERE {_TOP_FILTER}", (slug,)
+            f"SELECT * FROM comments WHERE {_TOP_FILTER}", scope
         ).fetchall()
         top_ids = [r["id"] for r in tops]
 
@@ -555,21 +619,32 @@ def create_comment(slug: str, payload: CommentIn,
         raise HTTPException(400, "commentaire vide")
     parent_id = None
     reply_to = ""
+    cover_id = payload.cover_id
     with get_conn() as conn:
         _ensure_profile(conn, username)
+        if cover_id is not None:
+            cov = conn.execute(
+                "SELECT slug FROM covers WHERE id=?", (cover_id,)
+            ).fetchone()
+            if not cov or cov["slug"] != slug:
+                raise HTTPException(404, "pochette introuvable")
         if payload.parent_id is not None:
             parent = conn.execute(
                 "SELECT * FROM comments WHERE id=?", (payload.parent_id,)
             ).fetchone()
             if not parent or parent["slug"] != slug or parent["deleted"]:
                 raise HTTPException(404, "commentaire parent introuvable")
+            # Une réponse reste dans le fil de son parent : sinon un commentaire
+            # d'album pourrait se retrouver greffé sous une pochette.
+            if parent["cover_id"] != cover_id:
+                raise HTTPException(400, "réponse hors du fil du parent")
             # Aplatissement à 1 niveau : rattache toujours à la racine du fil.
             parent_id = parent["id"] if parent["parent_id"] is None else parent["parent_id"]
             reply_to = parent["username"]
         cur = conn.execute(
-            "INSERT INTO comments(slug, parent_id, reply_to, username, body, created_at) "
-            "VALUES(?,?,?,?,?,?)",
-            (slug, parent_id, reply_to, username, body, _now()),
+            "INSERT INTO comments(slug, cover_id, parent_id, reply_to, username, body, "
+            "created_at) VALUES(?,?,?,?,?,?,?)",
+            (slug, cover_id, parent_id, reply_to, username, body, _now()),
         )
         new_id = cur.lastrowid
         row = conn.execute("SELECT * FROM comments WHERE id=?", (new_id,)).fetchone()

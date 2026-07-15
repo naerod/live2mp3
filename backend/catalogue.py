@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from .db import get_conn
 from .manifest import Manifest, PROJECTS_DIR
 
 
@@ -15,10 +16,42 @@ def _has_files(d: Path, ext: str) -> bool:
     return d.exists() and any(d.glob(f"*.{ext}"))
 
 
+def _traycard_slugs() -> set[str]:
+    """Slugs dont la pochette *gagnante* porte une tray card.
+
+    Le classement est dupliqué ici (au lieu d'appeler `covers.rank_covers`) pour
+    deux raisons : `covers` importe `catalogue` via `social`, donc l'importer en
+    retour ferait un cycle ; et la vitrine liste tous les albums d'un coup, un
+    appel par slug serait un N+1. Une seule requête à fenêtrage suffit.
+    Doit rester aligné sur l'ordre de `covers.rank_covers`.
+    """
+    try:
+        with get_conn() as conn:
+            return {
+                r["slug"]
+                for r in conn.execute(
+                    "SELECT slug, traycard_ext FROM ("
+                    "  SELECT c.slug, c.traycard_ext, ROW_NUMBER() OVER ("
+                    "    PARTITION BY c.slug"
+                    "    ORDER BY c.pinned DESC, COUNT(l.cover_id) DESC,"
+                    "             c.created_at ASC, c.id ASC"
+                    "  ) AS rn"
+                    "  FROM covers c LEFT JOIN cover_likes l ON l.cover_id = c.id"
+                    "  GROUP BY c.id"
+                    ") WHERE rn=1 AND traycard_ext != ''"
+                )
+            }
+    except Exception:
+        # La vitrine doit rester consultable même si la base sociale est
+        # indisponible : au pire les badges tray card manquent.
+        return set()
+
+
 def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> list[dict]:
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
         return albums
+    tray_slugs = _traycard_slugs()
     for pdir in sorted(PROJECTS_DIR.iterdir()):
         manifest = pdir / "manifest.yaml"
         if not manifest.is_file():
@@ -37,7 +70,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             continue
         cover_rel = album.get("cover")
         has_cover = bool(cover_rel and (pdir / cover_rel).exists())
-        has_traycard = (pdir / "artwork" / "tray_card.pdf").exists()
+        has_traycard = pdir.name in tray_slugs
         meta = m.data.get("meta", {})
         albums.append({
             "slug": pdir.name,

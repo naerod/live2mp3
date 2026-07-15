@@ -188,7 +188,7 @@ themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"l
 
 const TT={
   fr:{back:"Vitrine",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
-      f_venue:"Lieu",f_festival:"Festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       save_meta:"Enregistrer",save_tracks:"Enregistrer les pistes",save_labels:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",traycard:"Tray card",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
@@ -199,7 +199,7 @@ const TT={
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
       status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
-      f_venue:"Venue",f_festival:"Festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_venue:"Venue",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       save_meta:"Save",save_tracks:"Save tracks",save_labels:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",traycard:"Tray card",
       no_cover:"No cover",no_traycard:"No tray card",
@@ -398,7 +398,7 @@ function renderTraycard(){
   const wrap=document.getElementById("traycard-wrap"),t=TT[L()];
   if(DATA.has_traycard){
     wrap.innerHTML=`<div class="tray-zone" id="tray-zone">
-      <iframe src="/download/${SLUG}/traycard#toolbar=0" title="tray card"></iframe>
+      <iframe src="/app/traycard/${SLUG}#toolbar=0" title="tray card"></iframe>
       <div class="upload-hint">
         <span class="material-symbols-outlined">upload</span>
         <span class="txt">${t.replace_traycard}</span>

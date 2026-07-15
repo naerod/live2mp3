@@ -12,6 +12,10 @@
       no_comments: "Aucun commentaire.", no_likes: "Aucun album aimé.",
       not_found: "Utilisateur introuvable.", on_album: "sur", edited: "modifié",
       titres: "titres", back: "Retour",
+      city: "Ville", artist: "Artiste/groupe favori",
+      city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
+      pick_hint: "Choisissez une entrée dans la liste",
+      save_err: "Enregistrement impossible. Réessayez.",
     },
     en: {
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
@@ -22,6 +26,10 @@
       no_comments: "No comments yet.", no_likes: "No liked albums yet.",
       not_found: "User not found.", on_album: "on", edited: "edited",
       titres: "tracks", back: "Back",
+      city: "City", artist: "Favourite artist/band",
+      city_ph: "Start typing: Dijon…", artist_ph: "Start typing: Coldplay…",
+      pick_hint: "Pick an entry from the list",
+      save_err: "Could not save. Please try again.",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -92,6 +100,13 @@
       : `<div class="soc-empty">${t("no_likes")}</div>`;
   }
 
+  function chips(p) {
+    const out = [];
+    if (p.city) out.push(`<span class="prof-chip"><span class="material-symbols-outlined">location_on</span>${esc(p.city)}</span>`);
+    if (p.artist) out.push(`<span class="prof-chip"><span class="material-symbols-outlined">music_note</span>${esc(p.artist)}</span>`);
+    return out.length ? `<div class="prof-chips">${out.join("")}</div>` : "";
+  }
+
   function renderProfile() {
     const p = DATA.profile, c = DATA.counts;
     const since = p.created_at ? new Date(p.created_at).toLocaleDateString(LANG(), { year: "numeric", month: "long" }) : "";
@@ -107,6 +122,7 @@
             <h1>${esc(p.display_name)}</h1>
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
+            ${chips(p)}
           </div>
           ${editBtn}
         </div>
@@ -117,6 +133,13 @@
           </div>
           <label>${t("bio")}
             <textarea id="e-bio" maxlength="500" rows="3">${esc(p.bio)}</textarea></label>
+          <div class="row" style="gap:14px;align-items:flex-start">
+            <label style="flex:1;min-width:200px">${t("city")}
+              <div id="e-city"></div></label>
+            <label style="flex:1;min-width:200px">${t("artist")}
+              <div id="e-artist"></div></label>
+          </div>
+          <div class="row" id="e-err" style="display:none;color:var(--like);font-size:13px"></div>
           <div class="row">
             <button class="primary" id="e-save">${t("save")}</button>
             <button class="icon-btn" id="e-cancel">${t("cancel")}</button>
@@ -143,21 +166,47 @@
 
   function wireEdit() {
     const panel = document.getElementById("edit-panel");
+    const p = DATA.profile;
+    const err = document.getElementById("e-err");
     document.getElementById("edit-btn").onclick = () => panel.classList.toggle("open");
     document.getElementById("e-cancel").onclick = () => panel.classList.remove("open");
+
+    const city = L2M.autocomplete(document.getElementById("e-city"), {
+      endpoint: "/api/social/suggest/cities", icon: "location_on",
+      placeholder: t("city_ph"), value: { id: p.city_id, label: p.city },
+    });
+    const artist = L2M.autocomplete(document.getElementById("e-artist"), {
+      endpoint: "/api/social/suggest/artists", icon: "music_note",
+      placeholder: t("artist_ph"), value: { id: p.artist_id, label: p.artist },
+    });
+
     document.getElementById("e-save").onclick = async () => {
       const display_name = document.getElementById("e-pseudo").value.trim();
       const bio = document.getElementById("e-bio").value.trim();
       if (!display_name) return;
       const btn = document.getElementById("e-save"); btn.disabled = true;
+      err.style.display = "none";
       try {
-        await fetch("/api/social/profile", {
+        const r = await fetch("/api/social/profile", {
           method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ display_name, bio }),
-        }).then((r) => { if (!r.ok) throw 0; });
-        DATA.profile.display_name = display_name; DATA.profile.bio = bio;
+          body: JSON.stringify({
+            display_name, bio,
+            city_id: city.get().id, artist_id: artist.get().id,
+          }),
+        });
+        if (!r.ok) throw new Error(r.status === 422 ? t("pick_hint") : t("save_err"));
+        const saved = await r.json();
+        Object.assign(DATA.profile, {
+          display_name, bio,
+          city_id: saved.city_id, city: saved.city,
+          artist_id: saved.artist_id, artist: saved.artist,
+        });
         renderProfile();
-      } catch (e) { btn.disabled = false; }
+      } catch (e) {
+        btn.disabled = false;
+        err.textContent = e.message || t("save_err");
+        err.style.display = "";
+      }
     };
     const input = document.getElementById("avatar-input");
     if (input) input.onchange = async () => {
