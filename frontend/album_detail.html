@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
+  .page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px}
   .al-layout{display:grid;grid-template-columns:300px 1fr;gap:28px;margin-top:24px;align-items:start}
   @media(max-width:700px){.al-layout{grid-template-columns:1fr}}
   .al-cover{aspect-ratio:1;border-radius:16px;overflow:hidden;background:#0a0a0a;
@@ -66,8 +67,6 @@
 <header>
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
-    <a id="gear-btn" class="icon-btn" style="display:none"><span class="material-symbols-outlined">settings</span><span id="t-manage">Gérer</span></a>
-    <button class="icon-btn" id="back-btn" onclick="goBack()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
     <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
@@ -76,7 +75,11 @@
 </header>
 
 <main>
-  <div id="content"><div style="text-align:center;color:var(--muted);margin-top:60px"><span class="material-symbols-outlined" style="font-size:40px;display:block;margin-bottom:8px;animation:spin 1s linear infinite">sync</span></div></div>
+  <div class="page-nav">
+    <button class="icon-btn" id="back-btn" onclick="goBack()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+    <a id="gear-btn" class="icon-btn" style="display:none"><span class="material-symbols-outlined">settings</span><span id="t-manage">Gérer</span></a>
+  </div>
+  <div id="content"><div style="text-align:center;color:var(--muted);margin-top:60px"><span class="material-symbols-outlined" style="font-size:40px;display:block;margin-bottom:8px">sync</span></div></div>
 </main>
 
 <div id="cv-overlay" class="cv-overlay hidden">
