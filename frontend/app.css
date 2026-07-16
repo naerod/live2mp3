@@ -198,6 +198,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   font-variant-numeric:tabular-nums}
 .prof-albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;
   margin-top:16px}
+/* Précédée du sélecteur de tri : c'est lui qui porte l'espacement (10px/10px). */
+.prof-sort+.prof-albums{margin-top:0}
 .prof-alb{background:var(--card);border:1px solid var(--border);border-radius:12px;
   overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
 .prof-alb:hover{transform:translateY(-4px);border-color:var(--accent)}
