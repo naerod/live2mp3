@@ -53,6 +53,9 @@
   .soc-btn[disabled]{opacity:.55;cursor:not-allowed}
   /* ── Téléchargements inline ────────────────────────────────────── */
   .al-dl{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .al-dl-wrap{margin-top:12px}
+  .al-dl-title{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);font-weight:700;margin-bottom:6px}
   .al-dl a,.al-dl button{margin:0;height:32px;font-size:12.5px;padding:0 12px}
   .al-dl .lock-inline{display:inline-flex;align-items:center;gap:5px;color:var(--muted);
     font-size:12.5px}
@@ -109,12 +112,13 @@
   .cr-dot.tray.on{border-color:var(--accent)}
   .cr-footer{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:12px}
   .cr-footer .soc-poster{font-size:12px}
-  .cr-add-sm{display:inline-flex;align-items:center;gap:4px;margin-left:auto;
-    padding:3px 10px;height:26px;border-radius:999px;border:1px solid var(--border);
-    background:var(--card);color:var(--muted);font-size:11.5px;font-weight:500;
-    cursor:pointer;font-family:inherit;transition:border-color .15s,color .15s}
-  .cr-add-sm:hover{border-color:var(--accent);color:var(--accent)}
-  .cr-add-sm .material-symbols-outlined{font-size:14px}
+  .cr-upload-overlay{position:absolute;bottom:0;left:0;right:0;z-index:3;
+    display:flex;align-items:center;justify-content:center;gap:6px;
+    padding:8px;background:linear-gradient(transparent,rgba(6,7,10,.75));
+    opacity:0;transition:opacity .18s;cursor:pointer;border-radius:0 0 14px 14px}
+  .cr:hover .cr-upload-overlay{opacity:1}
+  .cr-upload-overlay .material-symbols-outlined{font-size:20px;color:#fff}
+  .cr-upload-overlay span:last-child{font-size:12px;color:#fff;font-weight:600}
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
     color:var(--muted);cursor:pointer;font-family:inherit;
@@ -386,9 +390,9 @@ function renderAlbum(d){
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
     if(d.has_cover)links+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t('cover')}</a>`;
     if(d.has_traycard)links+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t('traycard')}</a>`;
-    if(links)dlHtml=`<div class="al-dl">${links}</div>`;
+    if(links)dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl">${links}</div></div>`;
   }else{
-    dlHtml=`<div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div>`;
+    dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
   }
 
   const srcUrl=d.source_url||'';
@@ -515,13 +519,7 @@ function footerHtml(c,kind){
   if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
-  const tray=c.has_traycard
-    ? `<button class="cr-tray-badge${kind==='traycard'?' on':''}" id="cr-flip"
-         title="${kind==='traycard'?t('cv_see_cover'):t('cv_see_tray')}">
-         <span class="material-symbols-outlined">${kind==='traycard'?'image':'description'}</span>${
-         kind==='traycard'?t('cv_cover'):t('cv_tray')}</button>`
-    : '';
-  return `<div class="cr-footer">${poster}${tray}</div>`;
+  return `<div class="cr-footer">${poster}</div>`;
 }
 
 // La face d'une tray card n'est pas carrée et peut être un PDF : on la loge en
@@ -540,9 +538,9 @@ function renderCarousel(){
   const s=curSlide(), c=curCover(), multi=SLIDES.length>1;
   const kind=s?s.kind:'cover';
 
-  const addBtn=ME.authenticated
-    ?`<button class="cr-add-sm" id="cr-add" title="${t('cv_add')}"><span class="material-symbols-outlined">add_photo_alternate</span>${t('cv_add')}</button>`
-    :`<a class="cr-add-sm" href="${L2M.loginUrl()}" title="${t('cv_login')}"><span class="material-symbols-outlined">add_photo_alternate</span></a>`;
+  const uploadOverlay=ME.authenticated
+    ?`<div class="cr-upload-overlay" id="cr-add" title="${t('cv_add')}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${t('cv_add')}</span></div>`
+    :'';
 
   col.innerHTML=`
     <div class="cr">
@@ -551,12 +549,12 @@ function renderCarousel(){
       ${multi?`<span class="cr-count">${IDX+1}/${SLIDES.length}</span>
         <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
         <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
+      ${uploadOverlay}
     </div>
     ${multi?`<div class="cr-dots">${SLIDES.map((sl,i)=>
       `<button class="cr-dot${sl.kind==='traycard'?' tray':''}${i===IDX?' on':''}" data-i="${i}"
         title="${sl.kind==='traycard'?t('cv_tray'):t('cv_cover')}"></button>`).join('')}</div>`:''}
     ${footerHtml(c,kind)}
-    ${COVERS.length>0||ME.authenticated?`<div class="cr-footer">${addBtn}</div>`:''}
   `;
 
   if(c&&!(kind==='traycard'&&c.traycard_kind==='pdf'))
@@ -566,12 +564,7 @@ function renderCarousel(){
   if(next)next.onclick=()=>go(1);
   col.querySelectorAll('.cr-dot').forEach(d=>d.onclick=()=>{IDX=+d.dataset.i;renderCarousel();});
   const add=document.getElementById('cr-add');
-  if(add&&ME.authenticated)add.onclick=()=>openUpload();
-  const flip=document.getElementById('cr-flip');
-  if(flip)flip.onclick=()=>{
-    focusSlide(c.id,kind==='traycard'?'cover':'traycard');
-    renderCarousel();
-  };
+  if(add&&ME.authenticated)add.onclick=e=>{e.stopPropagation();openUpload();};
 }
 
 function go(step){
