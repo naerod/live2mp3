@@ -173,7 +173,7 @@ const L2M = (function () {
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
         ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <div class="um-sep"></div>
-        <a class="um-item danger" href="/outpost.goauthentik.io/sign_out"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
+        <a class="um-item danger" href="/outpost.goauthentik.io/sign_out?rd=https://auth.naerod.com/if/flow/default-invalidation-flow/"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
     const trigger = mountEl.querySelector(".um-trigger");
     const set = (k, v) => { const el = mountEl.querySelector(`[data-k="${k}"]`); if (el) el.textContent = v; };
