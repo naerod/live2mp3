@@ -16,7 +16,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
