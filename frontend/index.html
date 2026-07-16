@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,16 +14,24 @@
 <script src="https://unpkg.com/peaks.js/dist/peaks.min.js"></script>
 </head>
 <body>
-<header>
-  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
-  <div class="tools">
-    <a class="icon-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span data-i18n="back">Retour</span></a>
-    <button id="lang" class="icon-btn" title="Langue"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
-    <button id="theme" class="icon-btn icon-only" title="Thème"><span class="material-symbols-outlined">dark_mode</span></button>
-  </div>
-</header>
+<header></header>
 
 <main>
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span data-i18n="back">Retour</span></button>
+  </div>
+  <h1 class="page-title"><span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;margin-right:8px;color:var(--accent)">auto_fix_high</span><span data-i18n="app_title">Créateur de concerts — découpe automatique et mastering IA</span></h1>
+
+  <!-- Overlay d'accès conditionnel -->
+  <div id="access-overlay" class="access-overlay hidden">
+    <div class="access-box">
+      <span class="material-symbols-outlined access-icon">lock</span>
+      <p id="access-msg" class="access-msg"></p>
+      <a id="access-btn" class="primary hidden" href="/outpost.goauthentik.io/start?rd=/app"><span class="material-symbols-outlined">login</span> <span data-i18n="login">Se connecter</span></a>
+    </div>
+  </div>
+
+  <div id="app-content">
   <!-- Étape 1 : formulaire -->
   <section id="step-form" class="card">
     <h1 data-i18n="form_title">Nouveau concert</h1>
@@ -72,8 +81,10 @@
     <div id="summary"></div>
     <a id="btn-download" class="primary" href="#"><span class="material-symbols-outlined">download</span> <span data-i18n="download">Télécharger le bundle</span></a>
   </section>
+  </div><!-- /app-content -->
 </main>
 
+<script src="/static/social.js"></script>
 <script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>

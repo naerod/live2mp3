@@ -1,18 +1,39 @@
-// --- Thème (localStorage) ---
-const themeBtn=document.getElementById("theme");
-function setTheme(t){document.documentElement.dataset.theme=t;
-  localStorage.setItem("l2m-theme",t);
-  themeBtn.querySelector(".material-symbols-outlined").textContent=
-    t==="dark"?"dark_mode":"light_mode";}
-setTheme(localStorage.getItem("l2m-theme")||"dark");
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+// --- Accès conditionnel ---
+(async()=>{
+  let me={authenticated:false,is_gestionnaire:false,is_admin:false};
+  try{me=await(await fetch("/api/me")).json();}catch(e){}
+  const overlay=document.getElementById("access-overlay");
+  const msg=document.getElementById("access-msg");
+  const btn=document.getElementById("access-btn");
+  const lang=()=>localStorage.getItem("l2m-lang")||"fr";
+  const msgs={
+    guest:{fr:"Connectez-vous pour accéder à toutes les fonctionnalités du site.",
+           en:"Log in to access all features."},
+    user:{fr:"Cette fonctionnalité est réservée aux gestionnaires de l'application.",
+          en:"This feature is restricted to application managers."},
+    wip:{fr:"Cette fonctionnalité est encore en cours de développement…",
+         en:"This feature is still under development…"}
+  };
+  if(me.is_admin){
+    // admin : accès complet pour tests
+  }else{
+    document.body.classList.add("app-locked");
+    overlay.classList.remove("hidden");
+    if(!me.authenticated){
+      msg.textContent=msgs.guest[lang()];
+      btn.classList.remove("hidden");
+    }else if(!me.is_gestionnaire){
+      msg.textContent=msgs.user[lang()];
+    }else{
+      msg.textContent=msgs.wip[lang()];
+    }
+  }
+})();
 
-// --- Langue (localStorage) ---
-const langBtn=document.getElementById("lang");
-function setLang(l){localStorage.setItem("l2m-lang",l);
-  document.getElementById("lang-label").textContent=l.toUpperCase();applyI18n(l);}
-setLang(localStorage.getItem("l2m-lang")||"fr");
-langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
+// --- Header + Thème + Langue ---
+L2M.initHeader({onLangChange:l=>applyI18n(l)});
+function setLang(l){localStorage.setItem("l2m-lang",l);applyI18n(l);}
+applyI18n(localStorage.getItem("l2m-lang")||"fr");
 
 const $=id=>document.getElementById(id);
 const show=id=>{["step-form","step-progress","step-editor","step-done"]

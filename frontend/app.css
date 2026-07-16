@@ -33,7 +33,9 @@ a{text-decoration:none;color:inherit}
 main{max-width:900px;margin:28px auto;padding:0 18px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;
   padding:24px;margin-bottom:20px}
-.hidden{display:none}
+/* !important : sans lui, toute règle ultérieure de même spécificité qui pose
+   un display (.primary, .access-overlay…) ré-affiche l'élément masqué. */
+.hidden{display:none!important}
 h1{font-size:22px;margin:0 0 18px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
@@ -60,6 +62,21 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 #zoom{height:160px;background:var(--bg)}
 .actions{display:flex;gap:10px}
 @media(max-width:640px){.grid{grid-template-columns:1fr}}
+
+/* Titre de page */
+.page-title{font-size:24px;font-weight:700;margin:0 0 24px;display:flex;align-items:center}
+
+/* Overlay d'accès */
+.access-overlay{position:relative;display:flex;align-items:center;justify-content:center;
+  min-height:340px;margin-bottom:20px}
+.access-overlay::before{content:"";position:absolute;inset:0;
+  background:var(--card);border:1px solid var(--border);border-radius:16px;opacity:.6}
+.access-box{position:relative;z-index:1;text-align:center;padding:40px 24px}
+.access-icon{font-size:48px;color:var(--muted);margin-bottom:12px;display:block}
+.access-msg{font-size:15px;color:var(--muted);max-width:400px;margin:0 auto 16px;line-height:1.5}
+
+/* Grisage du contenu */
+.app-locked #app-content{filter:grayscale(1) brightness(.5);pointer-events:none;user-select:none}
 
 /* ============ Composants sociaux (profils, likes, commentaires) ============ */
 .soc-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
@@ -183,6 +200,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   font-variant-numeric:tabular-nums}
 .prof-albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;
   margin-top:16px}
+/* Précédée du sélecteur de tri : c'est lui qui porte l'espacement (10px/10px). */
+.prof-sort+.prof-albums{margin-top:0}
 .prof-alb{background:var(--card);border:1px solid var(--border);border-radius:12px;
   overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
 .prof-alb:hover{transform:translateY(-4px);border-color:var(--accent)}
@@ -243,3 +262,4 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .soc-poster-name{color:var(--fg)}
 .soc-poster:hover .soc-poster-name{color:var(--accent)}
 .soc-poster-pre{color:var(--muted);font-size:12.5px;margin-right:6px}
+.page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}

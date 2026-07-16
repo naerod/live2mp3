@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3 — nos albums</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -112,7 +113,7 @@
   .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
     border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums}
   .foot .env-preprod{color:var(--run);border-color:var(--run)}
-  /* Preview-visitor banner */
+  /* Preview banner */
   .preview-banner{display:none;align-items:center;justify-content:center;gap:8px;
     padding:6px 14px;background:rgba(255,140,0,.12);border-bottom:1px solid rgba(255,140,0,.35);
     color:#ffb347;font-size:12.5px;font-weight:600}
@@ -121,6 +122,15 @@
   .preview-banner button{padding:2px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);
     background:transparent;color:#ffb347;font-size:11.5px;cursor:pointer}
   .preview-banner button:hover{background:rgba(255,140,0,.18)}
+  /* View-as submenu in usermenu */
+  .um-viewas{position:relative}
+  .um-viewas-pop{display:none;position:absolute;right:100%;top:-4px;min-width:170px;
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:4px 0;box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:1001}
+  .um-viewas.open .um-viewas-pop{display:block}
+  .um-viewas-pop .um-item{width:100%;justify-content:flex-start}
+  .um-viewas-pop .um-item.active{color:var(--accent)}
+  .um-viewas-pop .um-item.active .material-symbols-outlined{font-variation-settings:'FILL' 1}
   /* Modale */
   .overlay{position:fixed;inset:0;background:rgba(6,7,10,.66);backdrop-filter:blur(3px);
     display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;
@@ -263,22 +273,11 @@
 </style>
 </head>
 <body>
-<header>
-  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
-  <div class="tools">
-    <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
-    <button id="import-btn" class="icon-btn" style="display:none" onclick="openImport()"><span class="material-symbols-outlined">library_add</span><span id="t-import">Importer</span></button>
-    <button id="preview-visitor-btn" class="icon-btn" style="display:none" onclick="togglePreviewVisitor()"><span class="material-symbols-outlined">visibility</span><span id="t-preview-visitor">Vue visiteur</span></button>
-    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
-    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
-    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
-    <div id="usermenu" class="usermenu" style="display:none"></div>
-  </div>
-</header>
+<header></header>
 <div id="preview-banner" class="preview-banner">
   <span class="material-symbols-outlined">visibility</span>
   <span id="t-preview-banner">Prévisualisation visiteur</span>
-  <button onclick="togglePreviewVisitor()" id="t-preview-exit">Quitter</button>
+  <button onclick="setViewAs('normal')" id="t-preview-exit">Quitter</button>
 </div>
 
 <main>
@@ -355,29 +354,21 @@
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
 <script>
-// ── Thème ──────────────────────────────────────────────────────────────────
-const themeBtn=document.getElementById("theme");
-function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem("l2m-theme",t);
-  themeBtn.querySelector(".material-symbols-outlined").textContent=t==="dark"?"dark_mode":"light_mode";}
-setTheme(localStorage.getItem("l2m-theme")||"dark");
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+// Thème appliqué dans le <head> ; toggles gérés par le header unifié (L2M.initHeader).
 
 // ── Langue ────────────────────────────────────────────────────────────────
-const langBtn=document.getElementById("lang");
 function setLang(l){localStorage.setItem("l2m-lang",l);
-  document.getElementById("lang-label").textContent=l.toUpperCase();
+  const _ll=document.getElementById("lang-label");if(_ll)_ll.textContent=l.toUpperCase();
   if(window.applyI18n)applyI18n(l);
   const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
   const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
-  document.getElementById("t-preview-visitor").textContent=T[l].preview_visitor;
-  document.getElementById("t-preview-banner").textContent=T[l].preview_banner;
+  if(VIEW_AS!=="normal") document.getElementById("t-preview-banner").textContent=T[l]["preview_"+VIEW_AS];
   document.getElementById("t-preview-exit").textContent=T[l].preview_exit;
-  document.getElementById("t-import").textContent=T[l].imp;
   document.getElementById("imp-h").textContent=T[l].imp_title;
+  refreshViewAsLabels();
   // La modale d'import est reconstruite dans la langue courante si elle est ouverte.
   if(IMP.step)renderImport();
   if(ALBUMS.length)buildFilters();render();updateCount();}
-langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
@@ -394,7 +385,9 @@ const T={
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
-      preview_visitor:"Vue visiteur",preview_banner:"Prévisualisation visiteur",preview_exit:"Quitter",
+      preview_visitor:"Vue visiteur",preview_user:"Vue utilisateur",preview_gestionnaire:"Vue gestionnaire",
+      preview_banner:"Prévisualisation visiteur",preview_normal:"Vue standard",preview_exit:"Quitter",
+      view_as:"Voir en tant que…",
       imp:"Importer",imp_title:"Importer un album",
       imp_dz_title:"Déposez vos fichiers ici",
       imp_dz_sub:"Les MP3 un par un, ou un ZIP complet (chansons + pochettes).<br>Les cases seront pré-remplies depuis les métadonnées.",
@@ -426,7 +419,9 @@ const T={
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
-      preview_visitor:"Visitor view",preview_banner:"Visitor preview",preview_exit:"Exit",
+      preview_visitor:"Visitor view",preview_user:"User view",preview_gestionnaire:"Manager view",
+      preview_banner:"Visitor preview",preview_normal:"Standard view",preview_exit:"Exit",
+      view_as:"View as…",
       imp:"Import",imp_title:"Import an album",
       imp_dz_title:"Drop your files here",
       imp_dz_sub:"MP3s one by one, or a full ZIP (tracks + covers).<br>Fields will be prefilled from the metadata.",
@@ -448,11 +443,41 @@ const T={
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
 let ALBUMS=[], selected=new Set(), ME={authenticated:false,is_gestionnaire:false};
-let PREVIEW_VISITOR=false;
-function meDisplay(){return PREVIEW_VISITOR?{authenticated:false,is_gestionnaire:false}:ME;}
-function togglePreviewVisitor(){
-  PREVIEW_VISITOR=!PREVIEW_VISITOR;
-  document.getElementById("preview-banner").classList.toggle("show",PREVIEW_VISITOR);
+let VIEW_AS="normal";
+const VIEW_PROFILES={
+  normal:()=>ME,
+  visitor:()=>({authenticated:false,is_gestionnaire:false,is_admin:false}),
+  user:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:false,is_admin:false}),
+  gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:true,is_admin:false})
+};
+function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
+// Le header injecté (L2M.initHeader) doit refléter la vue simulée :
+// visiteur → login/langue/thème, sinon avatar ; Outil/Importer selon les droits simulés.
+function applyViewToHeader(){
+  const md=meDisplay();
+  const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
+  const gest=!!(md.is_gestionnaire||md.is_admin);
+  show("tool-link",gest);
+  show("import-btn",gest);
+  show("usermenu",md.authenticated);
+  show("login",!md.authenticated);
+  show("lang",!md.authenticated);
+  show("theme",!md.authenticated);
+}
+function setViewAs(mode){
+  VIEW_AS=mode;
+  const banner=document.getElementById("preview-banner");
+  const l=L();
+  if(mode==="normal"){
+    banner.classList.remove("show");
+  }else{
+    document.getElementById("t-preview-banner").textContent=T[l]["preview_"+mode];
+    banner.classList.add("show");
+  }
+  document.querySelectorAll(".um-viewas-pop .um-item").forEach(el=>{
+    el.classList.toggle("active",el.dataset.view===mode);
+  });
+  applyViewToHeader();
   render();
 }
 let currentSort="date_concert";
@@ -717,6 +742,45 @@ async function loadVersion(){
   }catch(e){}
 }
 
+// ── View-as menu (dev tool) ───────────────────────────────────────────────
+const VIEW_MODES=[
+  {key:"normal",icon:"shield_person"},
+  {key:"visitor",icon:"visibility"},
+  {key:"user",icon:"person"},
+  {key:"gestionnaire",icon:"engineering"}
+];
+function viewAsLabel(key){
+  const l=L();
+  const map={normal:T[l].preview_normal,visitor:T[l].preview_visitor,
+    user:T[l].preview_user,gestionnaire:T[l].preview_gestionnaire};
+  return map[key]||key;
+}
+function injectViewAsMenu(um){
+  const pop=um.querySelector(".um-pop");
+  const sep=pop.querySelector(".um-sep");
+  const wrap=document.createElement("div");
+  wrap.className="um-viewas";
+  wrap.innerHTML=`<button class="um-item"><span class="material-symbols-outlined">visibility</span><span class="um-viewas-label">${T[L()].view_as}</span><span class="material-symbols-outlined" style="margin-left:auto;font-size:16px">chevron_left</span></button>
+    <div class="um-viewas-pop">${VIEW_MODES.map(m=>
+      `<button class="um-item${m.key===VIEW_AS?" active":""}" data-view="${m.key}"><span class="material-symbols-outlined">${m.icon}</span>${viewAsLabel(m.key)}</button>`
+    ).join("")}</div>`;
+  pop.insertBefore(wrap,sep);
+  wrap.querySelector(":scope > .um-item").onclick=(e)=>{
+    e.stopPropagation();wrap.classList.toggle("open");};
+  wrap.querySelectorAll("[data-view]").forEach(btn=>{
+    btn.onclick=()=>{setViewAs(btn.dataset.view);um.classList.remove("open");wrap.classList.remove("open");};
+  });
+  document.addEventListener("click",e=>{if(!wrap.contains(e.target))wrap.classList.remove("open");});
+}
+function refreshViewAsLabels(){
+  document.querySelectorAll("[data-view]").forEach(btn=>{
+    const icon=btn.querySelector(".material-symbols-outlined").textContent;
+    btn.innerHTML=`<span class="material-symbols-outlined">${icon}</span>${viewAsLabel(btn.dataset.view)}`;
+  });
+  const lbl=document.querySelector(".um-viewas-label");
+  if(lbl) lbl.textContent=T[L()].view_as;
+}
+
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 async function load(){
   // Redirection legacy ?album=slug → page dédiée (avant tout chargement)
@@ -727,21 +791,14 @@ async function load(){
   const savedSort=localStorage.getItem("l2m-sort")||"date_concert";
   currentSort=savedSort;
   document.getElementById("sort-select").value=currentSort;
-  try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
-  document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
-  document.getElementById("import-btn").style.display=ME.is_gestionnaire?"":"none";
-  document.getElementById("preview-visitor-btn").style.display=ME.is_admin?"":"none";
-  // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
-  const um=document.getElementById("usermenu");
-  if(ME.authenticated){
-    ["login","lang","theme"].forEach(id=>document.getElementById(id).style.display="none");
-    um.style.display="";
-    const sm=await L2M.me();
-    L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},
-      {onChange:k=>{ if(k==="lang") setLang(L2M.getLang()); }});
-  }else{
-    um.style.display="none";
-    document.getElementById("login").style.display="";
+  ME=await L2M.initHeader({
+    onImport:()=>openImport(),
+    onLangChange:l=>setLang(l),
+  });
+  // Outil de dev : menu "Voir en tant que…" dans le menu avatar (gestionnaires/admins).
+  if(ME.is_gestionnaire||ME.is_admin){
+    const um=document.getElementById("usermenu");
+    if(um&&um.querySelector(".um-pop"))injectViewAsMenu(um);
   }
   const apiSort=currentSort==="artist"?"date_concert":currentSort;
   ALBUMS=await(await fetch(`/api/catalogue?sort=${apiSort}`)).json();

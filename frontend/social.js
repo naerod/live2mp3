@@ -83,6 +83,80 @@ const L2M = (function () {
   function getLang() { return localStorage.getItem("l2m-lang") || "fr"; }
   function applyLang(l) { localStorage.setItem("l2m-lang", l); document.documentElement.lang = l; }
 
+  /* ---------------- Header unifié ---------------- */
+  async function initHeader(opts) {
+    opts = opts || {};
+    const header = document.querySelector("header");
+    if (!header) return {};
+    header.innerHTML = `
+      <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
+      <div class="tools">
+        <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-hk="tool"></span></a>
+        <button id="import-btn" class="icon-btn" style="display:none"><span class="material-symbols-outlined">library_add</span><span data-hk="import"></span></button>
+        <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label"></span></button>
+        <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined"></span></button>
+        <a id="login" class="icon-btn" style="display:none"><span class="material-symbols-outlined">login</span><span data-hk="login"></span></a>
+        <div id="usermenu" class="usermenu" style="display:none"></div>
+      </div>`;
+
+    const HT = {
+      fr: { tool: "Outil", import: "Importer", login: "Connexion" },
+      en: { tool: "Tool", import: "Import", login: "Log in" },
+    };
+    function refreshHeaderTexts() {
+      const lang = getLang();
+      const tx = HT[lang] || HT.fr;
+      header.querySelectorAll("[data-hk]").forEach(el => { el.textContent = tx[el.dataset.hk] || ""; });
+      document.getElementById("lang-label").textContent = lang.toUpperCase();
+      const themeIcon = document.querySelector("#theme .material-symbols-outlined");
+      themeIcon.textContent = getTheme() === "dark" ? "dark_mode" : "light_mode";
+    }
+
+    document.getElementById("theme").onclick = () => {
+      applyTheme(getTheme() === "dark" ? "light" : "dark");
+      refreshHeaderTexts();
+    };
+    document.getElementById("lang").onclick = () => {
+      applyLang(getLang() === "fr" ? "en" : "fr");
+      refreshHeaderTexts();
+      if (opts.onLangChange) opts.onLangChange(getLang());
+    };
+
+    refreshHeaderTexts();
+
+    let meData = { authenticated: false, is_gestionnaire: false };
+    try { meData = await fetch("/api/me").then(r => r.json()); } catch (e) {}
+
+    if (meData.is_gestionnaire || meData.is_admin) {
+      document.getElementById("tool-link").style.display = "";
+      if (opts.onImport) {
+        const ib = document.getElementById("import-btn");
+        ib.style.display = "";
+        ib.onclick = opts.onImport;
+      }
+    }
+
+    const um = document.getElementById("usermenu");
+    if (meData.authenticated) {
+      ["login", "lang", "theme"].forEach(id => document.getElementById(id).style.display = "none");
+      um.style.display = "";
+      const sm = await me();
+      const extraItems = opts.extraItems ? (typeof opts.extraItems === "function" ? opts.extraItems(meData) : opts.extraItems) : [];
+      userMenu(um, { username: sm.username || meData.username, display_name: sm.display_name, avatar: sm.avatar },
+        { extraItems, onChange: k => {
+          if (k === "lang" && opts.onLangChange) opts.onLangChange(getLang());
+          if (opts.onMenuChange) opts.onMenuChange(k);
+        }});
+    } else {
+      um.style.display = "none";
+      const loginEl = document.getElementById("login");
+      loginEl.href = loginUrl();
+      loginEl.style.display = "";
+    }
+
+    return meData;
+  }
+
   /* ---------------- Menu utilisateur (avatar déroulant) ---------------- */
   // mountEl doit avoir la classe .usermenu. opts.onChange(kind) après thème/langue.
   function userMenu(mountEl, meData, opts) {
@@ -97,6 +171,7 @@ const L2M = (function () {
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
+        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <div class="um-sep"></div>
         <a class="um-item danger" href="/outpost.goauthentik.io/sign_out"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
@@ -116,6 +191,13 @@ const L2M = (function () {
     };
     mountEl.querySelector('[data-act="theme"]').onclick = () => {
       applyTheme(getTheme() === "dark" ? "light" : "dark"); refresh(); if (opts.onChange) opts.onChange("theme");
+    };
+    (opts.extraItems||[]).forEach((it,i)=>{
+      const btn=mountEl.querySelector(`[data-extra="${i}"]`);
+      if(btn) btn.onclick=()=>{ if(it.onclick) it.onclick(); mountEl.classList.remove("open"); };
+    });
+    mountEl._refreshExtra=function(items){
+      items.forEach((it,i)=>{ set("extra"+i, it.label); });
     };
   }
 
@@ -504,6 +586,6 @@ const L2M = (function () {
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
     likeButton, comments, userMenu, autocomplete, LANG,
-    getTheme, applyTheme, getLang, applyLang,
+    getTheme, applyTheme, getLang, applyLang, initHeader,
   };
 })();

@@ -44,9 +44,11 @@ def _pdf() -> bytes:
 
 
 def _post_cover(c, slug, headers, traycard=False, color=(255, 0, 0)):
+    # Depuis 26edc0c, la tray card importée est une image (le PDF imprimable
+    # est généré à la volée au téléchargement).
     files = {"cover": ("c.png", _png(color), "image/png")}
     if traycard:
-        files["traycard"] = ("t.pdf", _pdf(), "application/pdf")
+        files["traycard"] = ("t.png", _png((0, 128, 255)), "image/png")
     return c.post(f"/api/social/albums/{slug}/covers", files=files, headers=headers)
 
 
@@ -165,16 +167,17 @@ def test_traycard_preview_is_served_inline(client):
                                 headers=USER).headers["content-disposition"]
 
 
-def test_traycard_kind_distinguishes_pdf_from_image(client):
-    """Le front rend un PDF en iframe et une image en <img> : l'URL ne portant
-    pas d'extension, il ne peut trancher que sur ce champ."""
+def test_traycard_upload_accepts_images_only(client):
+    """L'import de tray card est image-only depuis 26edc0c : le PDF imprimable
+    est généré au téléchargement. `traycard_kind` reste exposé pour les tray
+    cards PDF héritées de la migration."""
     c, _ = client
     slug = _album(c)
     cid = _post_cover(c, slug, USER, traycard=True).json()["covers"][0]["id"]
-    assert c.get(f"/api/social/albums/{slug}/covers").json()["covers"][0]["traycard_kind"] == "pdf"
-    c.put(f"/api/social/covers/{cid}/traycard",
-          files={"traycard": ("t.png", _png(), "image/png")}, headers=USER)
     assert c.get(f"/api/social/albums/{slug}/covers").json()["covers"][0]["traycard_kind"] == "image"
+    r = c.put(f"/api/social/covers/{cid}/traycard",
+              files={"traycard": ("t.pdf", _pdf(), "application/pdf")}, headers=USER)
+    assert r.status_code == 400
 
 
 def test_traycard_absent_by_default(client):
@@ -190,7 +193,7 @@ def test_traycard_attaches_to_existing_cover(client):
     slug = _album(c)
     cid = _post_cover(c, slug, USER).json()["covers"][0]["id"]
     r = c.put(f"/api/social/covers/{cid}/traycard",
-              files={"traycard": ("t.pdf", _pdf(), "application/pdf")}, headers=USER)
+              files={"traycard": ("t.png", _png((0, 128, 255)), "image/png")}, headers=USER)
     assert r.status_code == 200 and r.json()["covers"][0]["has_traycard"] is True
 
 
@@ -199,7 +202,7 @@ def test_traycard_not_editable_by_others(client):
     slug = _album(c)
     cid = _post_cover(c, slug, USER).json()["covers"][0]["id"]
     r = c.put(f"/api/social/covers/{cid}/traycard",
-              files={"traycard": ("t.pdf", _pdf(), "application/pdf")}, headers=USER2)
+              files={"traycard": ("t.png", _png((0, 128, 255)), "image/png")}, headers=USER2)
     assert r.status_code == 403
 
 
@@ -284,9 +287,9 @@ def test_zip_pairs_cover_and_traycard_alphabetically(client):
     names = [arc for _, arc in main._album_extras(tmp / slug)]
     assert sorted(names) == [
         "artwork/01-bob_cover.png",
-        "artwork/01-bob_traycard.pdf",
+        "artwork/01-bob_traycard.png",
         "artwork/02-alice_cover.png",
-        "artwork/02-alice_traycard.pdf",
+        "artwork/02-alice_traycard.png",
     ]
 
 

@@ -52,6 +52,7 @@ from .covers import (
     traycard_file,
     zip_basename,
 )
+from .printable import cover_pdf, traycard_pdf
 from .social import router as social_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
@@ -373,6 +374,33 @@ def view_traycard(slug: str, identity: dict = Depends(require_gestionnaire)) -> 
                         content_disposition_type="inline")
 
 
+from fastapi.responses import Response as _Response
+
+
+@app.get("/download/{slug}/cover/pdf")
+def download_cover_printable(slug: str,
+                             identity: dict = Depends(require_user)) -> _Response:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
+    if not cover or not cover.exists():
+        raise HTTPException(404, "pas de pochette")
+    data = cover_pdf(cover)
+    return _Response(data, media_type="application/pdf",
+                     headers={"Content-Disposition": f'attachment; filename="{slug}-cover_print.pdf"'})
+
+
+@app.get("/download/{slug}/traycard/pdf")
+def download_traycard_printable(slug: str,
+                                identity: dict = Depends(require_user)) -> _Response:
+    tc, ext = _album_traycard(slug)
+    data = traycard_pdf(tc)
+    return _Response(data, media_type="application/pdf",
+                     headers={"Content-Disposition": f'attachment; filename="{slug}-traycard_print.pdf"'})
+
+
 @app.get("/download/{slug}/{kind}")
 def download_media(slug: str, kind: str,
                    identity: dict = Depends(require_user)) -> FileResponse:
@@ -566,7 +594,7 @@ def album_detail_page(slug: str) -> HTMLResponse:
     return HTMLResponse("<h1>live2mp3 — album</h1>")
 
 @app.get("/app", response_class=HTMLResponse)
-def tool(identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
+def tool() -> HTMLResponse:
     idx = FRONTEND / "index.html"
     if idx.exists():
         return HTMLResponse(idx.read_text(encoding="utf-8"))

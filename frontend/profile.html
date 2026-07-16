@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3 — profil</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,23 +20,22 @@
     border-radius:50%;background:var(--accent);color:#0d0f13;display:flex;align-items:center;
     justify-content:center;cursor:pointer;border:2px solid var(--bg)}
   .prof-avatar-edit .cam .material-symbols-outlined{font-size:17px}
+  .prof-sort{display:flex;align-items:center;gap:5px;margin:10px 0 10px}
+  .prof-sort select{height:28px;padding:0 24px 0 6px;font-size:11.5px;cursor:pointer;border-radius:6px;
+    background:var(--card);color:var(--fg);border:1px solid var(--border);appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239aa0b0'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 6px center}
   .notfound{text-align:center;color:var(--muted);margin-top:60px}
   .notfound .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
 </style>
 </head>
 <body>
-<header>
-  <a class="back-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></a>
-  <div class="tools">
-    <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span id="t-tool">Outil</span></a>
-    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
-    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
-    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
-    <div id="usermenu" class="usermenu" style="display:none"></div>
-  </div>
-</header>
+<header></header>
 
 <main id="main">
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+  </div>
   <div id="content"></div>
 </main>
 
