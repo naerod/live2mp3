@@ -16,6 +16,7 @@
       city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
       pick_hint: "Choisissez une entrée dans la liste",
       save_err: "Enregistrement impossible. Réessayez.",
+      sort_by: "Trier", sort_date: "Date du concert", sort_new: "Publication",
     },
     en: {
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
@@ -27,6 +28,7 @@
       not_found: "User not found.", on_album: "on", edited: "edited",
       titres: "tracks", back: "Back",
       city: "City", artist: "Favourite artist/band",
+      sort_by: "Sort", sort_date: "Concert date", sort_new: "Published",
       city_ph: "Start typing: Dijon…", artist_ph: "Start typing: Coldplay…",
       pick_hint: "Pick an entry from the list",
       save_err: "Could not save. Please try again.",
@@ -61,7 +63,7 @@
   function onLangChanged() { applyStaticI18n(); if (DATA) renderProfile(); }
 
   const USERNAME = decodeURIComponent((location.pathname.split("/u/")[1] || "").replace(/\/$/, ""));
-  let DATA = null, ME = { authenticated: false }, activeTab = "publications";
+  let DATA = null, ME = { authenticated: false }, activeTab = "publications", pubSort = "date";
 
   function albumCard(a) {
     const cover = a.has_cover
@@ -84,10 +86,18 @@
     </a>`;
   }
 
+  function sortedPubs() {
+    const arr = [...DATA.publications];
+    if (pubSort === "imported") arr.sort((a, b) => (b.imported_at || "").localeCompare(a.imported_at || ""));
+    else arr.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    return arr;
+  }
+
   function tabContent() {
     if (activeTab === "publications") {
+      const sort = `<div class="prof-sort"><span class="material-symbols-outlined" style="font-size:14px;color:var(--muted)">sort</span><select id="pub-sort"><option value="date"${pubSort==="date"?' selected':''}>${t("sort_date")}</option><option value="imported"${pubSort==="imported"?' selected':''}>${t("sort_new")}</option></select></div>`;
       return DATA.publications.length
-        ? `<div class="prof-albums">${DATA.publications.map(albumCard).join("")}</div>`
+        ? sort + `<div class="prof-albums">${sortedPubs().map(albumCard).join("")}</div>`
         : `<div class="soc-empty">${t("no_pubs")}</div>`;
     }
     if (activeTab === "comments") {
@@ -105,6 +115,15 @@
     if (p.city) out.push(`<span class="prof-chip"><span class="material-symbols-outlined">location_on</span>${esc(p.city)}</span>`);
     if (p.artist) out.push(`<span class="prof-chip"><span class="material-symbols-outlined">music_note</span>${esc(p.artist)}</span>`);
     return out.length ? `<div class="prof-chips">${out.join("")}</div>` : "";
+  }
+
+  function wirePubSort() {
+    const sel = document.getElementById("pub-sort");
+    if (sel) sel.onchange = () => {
+      pubSort = sel.value;
+      document.getElementById("tab-content").innerHTML = tabContent();
+      wirePubSort();
+    };
   }
 
   function renderProfile() {
@@ -159,7 +178,9 @@
       activeTab = b.dataset.tab;
       document.querySelectorAll(".prof-tabs button").forEach((x) => x.classList.toggle("active", x === b));
       document.getElementById("tab-content").innerHTML = tabContent();
+      wirePubSort();
     });
+    wirePubSort();
 
     if (DATA.is_self) wireEdit();
   }
