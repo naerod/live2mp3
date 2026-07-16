@@ -30,21 +30,10 @@
   }
 })();
 
-// --- Thème (localStorage) ---
-const themeBtn=document.getElementById("theme");
-function setTheme(t){document.documentElement.dataset.theme=t;
-  localStorage.setItem("l2m-theme",t);
-  themeBtn.querySelector(".material-symbols-outlined").textContent=
-    t==="dark"?"dark_mode":"light_mode";}
-setTheme(localStorage.getItem("l2m-theme")||"dark");
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
-
-// --- Langue (localStorage) ---
-const langBtn=document.getElementById("lang");
-function setLang(l){localStorage.setItem("l2m-lang",l);
-  document.getElementById("lang-label").textContent=l.toUpperCase();applyI18n(l);}
-setLang(localStorage.getItem("l2m-lang")||"fr");
-langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
+// --- Header + Thème + Langue ---
+L2M.initHeader({onLangChange:l=>applyI18n(l)});
+function setLang(l){localStorage.setItem("l2m-lang",l);applyI18n(l);}
+applyI18n(localStorage.getItem("l2m-lang")||"fr");
 
 const $=id=>document.getElementById(id);
 const show=id=>{["step-form","step-progress","step-editor","step-done"]

@@ -185,13 +185,6 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
-  <div class="tools">
-    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
-    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
-    <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span id="t-login">Connexion</span></a>
-    <div id="usermenu" class="usermenu" style="display:none"></div>
-  </div>
 </header>
 
 <main>
@@ -341,23 +334,12 @@ let POSTERS={};
 
 async function loadPage(){
   setLang(L());
-  try{ME=await fetch('/api/me').then(r=>r.json());}catch(e){}
+  ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
 
   if(ME.is_gestionnaire){
     const gb=document.getElementById('gear-btn');
     gb.href=`/app/album/${slug}`;
     gb.style.display='';
-  }
-
-  const um=document.getElementById('usermenu');
-  if(ME.authenticated){
-    ['login','lang','theme'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
-    um.style.display='';
-    const sm=await L2M.me();
-    L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},{});
-  }else{
-    um.style.display='none';
-    document.getElementById('login').style.display='';
   }
 
   let d;

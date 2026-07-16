@@ -90,13 +90,7 @@
 </style>
 </head>
 <body>
-<header>
-  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
-  <div class="tools">
-    <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
-    <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
-  </div>
-</header>
+<header></header>
 
 <main>
   <div class="page-nav">
@@ -181,12 +175,9 @@
 </main>
 <div class="toast" id="toast"></div>
 
+<script src="/static/social.js"></script>
 <script>
-const themeBtn=document.getElementById("theme");
-function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem("l2m-theme",t);
-  themeBtn.querySelector(".material-symbols-outlined").textContent=t==="dark"?"dark_mode":"light_mode";}
-setTheme(localStorage.getItem("l2m-theme")||"dark");
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();}});
 
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
@@ -238,8 +229,7 @@ function applyLang(){
   document.getElementById("newlabel").placeholder=t.add_label;
   if(DATA){renderDL();renderTraycard();}
 }
-document.getElementById("lang").onclick=()=>{
-  localStorage.setItem("l2m-lang",L()==="fr"?"en":"fr");applyLang();};
+
 
 const SLUG=decodeURIComponent(location.pathname.split("/app/album/")[1]||"");
 let albumPublished=true;

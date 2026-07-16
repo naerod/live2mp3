@@ -246,19 +246,7 @@
 
   async function load() {
     applyStaticI18n();
-    ME = await L2M.me();
-    if (ME.is_moderator) document.getElementById("tool-link").style.display = "";
-    // Connecté : menu avatar. Anonyme : boutons langue/thème/connexion.
-    const um = document.getElementById("usermenu");
-    if (ME.authenticated) {
-      ["login", "lang", "theme"].forEach((id) => document.getElementById(id).style.display = "none");
-      um.style.display = "";
-      L2M.userMenu(um, { username: ME.username, display_name: ME.display_name, avatar: ME.avatar },
-        { onChange: (k) => { if (k === "lang") onLangChanged(); } });
-    } else {
-      um.style.display = "none";
-      document.getElementById("login").style.display = "";
-    }
+    await L2M.initHeader({onLangChange:()=>onLangChanged()});
     const r = await fetch(`/api/social/users/${encodeURIComponent(USERNAME)}`);
     if (!r.ok) {
       document.getElementById("content").innerHTML =
