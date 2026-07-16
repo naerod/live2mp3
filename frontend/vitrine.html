@@ -291,8 +291,8 @@
       <div class="sort-block">
         <span class="sort-label"><span class="material-symbols-outlined">sort</span><span data-i18n="sort_by">Trier par</span></span>
         <select id="sort-select">
-          <option value="date_concert" data-i18n="sort_date">Date</option>
           <option value="date_import" data-i18n="sort_new">Nouveauté</option>
+          <option value="date_concert" data-i18n="sort_date">Date</option>
           <option value="title" data-i18n="sort_title">Titre</option>
           <option value="artist" data-i18n="sort_artist">Artiste</option>
         </select>
@@ -480,7 +480,7 @@ function setViewAs(mode){
   applyViewToHeader();
   render();
 }
-let currentSort="date_concert";
+let currentSort="date_import";
 let filterArtist="", filterYear="";
 
 // ── Cover générique SVG ───────────────────────────────────────────────────
