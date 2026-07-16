@@ -268,7 +268,6 @@
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-i18n="tool">Outil</span></a>
     <button id="import-btn" class="icon-btn" style="display:none" onclick="openImport()"><span class="material-symbols-outlined">library_add</span><span id="t-import">Importer</span></button>
-    <button id="preview-visitor-btn" class="icon-btn" style="display:none" onclick="togglePreviewVisitor()"><span class="material-symbols-outlined">visibility</span><span id="t-preview-visitor">Vue visiteur</span></button>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
     <a id="login" class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">login</span><span data-i18n="login">Connexion</span></a>
@@ -369,7 +368,6 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   if(window.applyI18n)applyI18n(l);
   const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
   const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
-  document.getElementById("t-preview-visitor").textContent=T[l].preview_visitor;
   document.getElementById("t-preview-banner").textContent=T[l].preview_banner;
   document.getElementById("t-preview-exit").textContent=T[l].preview_exit;
   document.getElementById("t-import").textContent=T[l].imp;
@@ -730,15 +728,15 @@ async function load(){
   try{ ME=await(await fetch("/api/me")).json(); }catch(e){ ME={authenticated:false,is_gestionnaire:false}; }
   document.getElementById("tool-link").style.display=ME.is_gestionnaire?"":"none";
   document.getElementById("import-btn").style.display=ME.is_gestionnaire?"":"none";
-  document.getElementById("preview-visitor-btn").style.display=ME.is_admin?"":"none";
   // Connecté : menu avatar (profil / langue / thème / déconnexion). Anonyme : boutons classiques.
   const um=document.getElementById("usermenu");
   if(ME.authenticated){
     ["login","lang","theme"].forEach(id=>document.getElementById(id).style.display="none");
     um.style.display="";
     const sm=await L2M.me();
+    const extraItems=ME.is_admin?[{icon:"visibility",label:T[L2M.getLang()].preview_visitor,onclick:togglePreviewVisitor}]:[];
     L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},
-      {onChange:k=>{ if(k==="lang") setLang(L2M.getLang()); }});
+      {extraItems,onChange:k=>{ if(k==="lang"){ setLang(L2M.getLang()); if(um._refreshExtra) um._refreshExtra([{label:T[L2M.getLang()].preview_visitor}]); } }});
   }else{
     um.style.display="none";
     document.getElementById("login").style.display="";

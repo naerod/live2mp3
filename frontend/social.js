@@ -97,6 +97,7 @@ const L2M = (function () {
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
+        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <div class="um-sep"></div>
         <a class="um-item danger" href="/outpost.goauthentik.io/sign_out"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
@@ -116,6 +117,13 @@ const L2M = (function () {
     };
     mountEl.querySelector('[data-act="theme"]').onclick = () => {
       applyTheme(getTheme() === "dark" ? "light" : "dark"); refresh(); if (opts.onChange) opts.onChange("theme");
+    };
+    (opts.extraItems||[]).forEach((it,i)=>{
+      const btn=mountEl.querySelector(`[data-extra="${i}"]`);
+      if(btn) btn.onclick=()=>{ if(it.onclick) it.onclick(); mountEl.classList.remove("open"); };
+    });
+    mountEl._refreshExtra=function(items){
+      items.forEach((it,i)=>{ set("extra"+i, it.label); });
     };
   }
 
