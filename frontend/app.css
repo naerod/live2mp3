@@ -33,7 +33,9 @@ a{text-decoration:none;color:inherit}
 main{max-width:900px;margin:28px auto;padding:0 18px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;
   padding:24px;margin-bottom:20px}
-.hidden{display:none}
+/* !important : sans lui, toute règle ultérieure de même spécificité qui pose
+   un display (.primary, .access-overlay…) ré-affiche l'élément masqué. */
+.hidden{display:none!important}
 h1{font-size:22px;margin:0 0 18px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
