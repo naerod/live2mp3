@@ -145,11 +145,15 @@ class PublishIn(BaseModel):
 
 # --- Santé & version (public) ---------------------------------------------
 import os
+import httpx
 
 APP_ENV = os.environ.get("APP_ENV", "prod")
 GIT_COMMIT = os.environ.get("GIT_COMMIT", "")[:7]
 _vfile = BASE / "VERSION"
 APP_VERSION = _vfile.read_text().strip() if _vfile.exists() else "0.0.0"
+
+_AUTHENTIK_URL = os.environ.get("AUTHENTIK_URL", "https://auth.naerod.com")
+_AUTHENTIK_TOKEN = os.environ.get("AUTHENTIK_API_TOKEN", "")
 
 
 @app.api_route("/healthz", methods=["GET", "HEAD"])
@@ -182,6 +186,35 @@ def get_catalogue(sort: str = "date_concert", identity: dict = Depends(roles)) -
 def me(identity: dict = Depends(roles)) -> dict:
     """État de connexion + rôles (soft-auth via nginx). Jamais d'erreur."""
     return identity
+
+
+@app.get("/api/logout")
+async def logout(x_authentik_username: str | None = Header(default=None)):
+    """Détruit toutes les sessions Authentik du user courant, puis redirige vers /."""
+    from fastapi.responses import RedirectResponse
+    if x_authentik_username and _AUTHENTIK_TOKEN:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(
+                f"{_AUTHENTIK_URL}/api/v3/core/users/?username={x_authentik_username}",
+                headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
+            )
+            if r.status_code == 200:
+                users = r.json().get("results", [])
+                if users:
+                    user_pk = users[0]["pk"]
+                    sr = await client.get(
+                        f"{_AUTHENTIK_URL}/api/v3/core/authenticated_sessions/"
+                        f"?user={user_pk}&page_size=100",
+                        headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
+                    )
+                    if sr.status_code == 200:
+                        for session in sr.json().get("results", []):
+                            await client.delete(
+                                f"{_AUTHENTIK_URL}/api/v3/core/authenticated_sessions/"
+                                f"{session['uuid']}/",
+                                headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
+                            )
+    return RedirectResponse(url="/", status_code=302)
 
 
 def _track_file(project_dir: Path, n: int) -> Path | None:
