@@ -79,3 +79,43 @@ déployé en **preprod** (commit 254200b, v1.1.0).
 Aplati à 1 niveau : racine (`parent_id` NULL) + réponses rattachées à la racine
 avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/Récents,
 édition + suppression douce (auteur ou modérateur).
+
+2026-07-15: Profil — ville + artiste favori (preprod cbf4baf).
+- **Formalisme garanti par construction** : le client envoie l'**id** de
+  l'entrée choisie (code INSEE / id Deezer), jamais un libellé ; le serveur
+  reconstruit le texte depuis la source. Taper « dijon » sans choisir ne vaut
+  rien (le champ se restaure au blur).
+- Sources publiques sans clé : `geo.api.gouv.fr` (villes) + `api.deezer.com`
+  (artistes, triés par popularité). Cache TTL mémoire, timeout 4 s.
+- Paris/Lyon/Marseille : code générique 75000/69000/13000 (les codes de la
+  source sont ceux des arrondissements). Seul cas particulier, liste fermée.
+- Artistes dédoublonnés par nom (le plus suivi gagne) : Deezer laisse
+  coexister le vrai « Coldplay » et un squatteur vide du même nom.
+- Résolution seulement si l'id change → éditer sa bio ne dépend d'aucune API.
+  Source en panne : suggestions vides, 503 sur un changement invérifiable.
+- `L2M.autocomplete()` réutilisable (debounce 250 ms, clavier, ARIA combobox).
+- ⚠️ **Villes = France uniquement** (geo.api.gouv.fr). Le format « Dijon, 21000 »
+  est intrinsèquement français ; ouvrir à l'international demanderait une autre
+  source (Nominatim/Google Places) et un autre formalisme.
+- 118 tests verts, vérifié E2E sur preprod. Aucune étape nginx pour la prod
+  (routes sous `/api/social/`, déjà couvertes).
+
+2026-07-16: Réparation post-refactor header + release v1.4.0 en prod.
+- L'unification du header (a23b256) avait cassé vitrine / fiche album / profil
+  (code legacy thème/langue sur des éléments supprimés) et le menu « Voir en
+  tant que… » n'était plus monté. Voir
+  workspace/debugging/2026-07-16_preprod-cassee-refactor-header-a-moitie-committe.md
+- Fixes : 32d698a (3 pages + injectViewAsMenu + thème dans <head>),
+  e77d103 (tri profil 10px/10px réels, fusion de marges neutralisée),
+  eb3c58f (.hidden!important — /app restait verrouillé pour l'admin),
+  21ac841 (tests alignés sur 26edc0c/4bb250b) → 118/118 verts.
+- E2E : proxy local injectant X-authentik-username/groups (4 rôles) via tunnel
+  SSH vers le conteneur + Chromium headless/CDP. 16 combinaisons page×rôle OK.
+- Release v1.4.0 (d16cdb2) : header unifié, menu Voir-en-tant-que 4 vues,
+  tri Publications profil, covers PNG/PDF imprimable, gating /app client.
+- Bugs connus relevés en review (non corrigés, en attente d'arbitrage) :
+  « ▲ undefined » onglet Commentaires du profil (profile.js:71, c.score
+  n'existe plus depuis les likes) ; « Trier par » et boutons header
+  Outil/Importer non retraduits au changement de langue ; redondance
+  « Importé par nathan 🅝 nathan » sur les fiches ; badge version absent hors
+  vitrine ; profil inconnu répond HTTP 200.
