@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -301,23 +302,13 @@ const t=k=>{const v=(T[L()]||T.fr)[k];return typeof v==='function'?v:v||k;};
 function setLang(l){
   localStorage.setItem('l2m-lang',l);
   document.documentElement.lang=l;
-  document.getElementById('lang-label').textContent=l.toUpperCase();
+  const _ll=document.getElementById('lang-label');if(_ll)_ll.textContent=l.toUpperCase();
   document.getElementById('t-back').textContent=t('back');
-  document.getElementById('t-login').textContent=t('login');
   const mg=document.getElementById('t-manage');if(mg)mg.textContent=t('manage');
   if(window.applyI18n)applyI18n(l);
 }
-document.getElementById('lang').onclick=()=>setLang(L()==='fr'?'en':'fr');
 
-// ── Thème ────────────────────────────────────────────────────────────────
-const themeBtn=document.getElementById('theme');
-function setTheme(x){
-  document.documentElement.dataset.theme=x;
-  localStorage.setItem('l2m-theme',x);
-  themeBtn.querySelector('.material-symbols-outlined').textContent=x==='dark'?'dark_mode':'light_mode';
-}
-setTheme(localStorage.getItem('l2m-theme')||'dark');
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+// Thème appliqué dans le <head> ; toggles gérés par le header unifié (L2M.initHeader).
 
 // ── Cover générique ──────────────────────────────────────────────────────
 const GENERIC_COVER=`<div class="cover-generic">

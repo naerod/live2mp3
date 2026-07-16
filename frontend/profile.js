@@ -38,28 +38,15 @@
   const t = (k) => (T[LANG()] || T.fr)[k] || k;
   const esc = L2M.esc;
 
-  // ── Thème ──
-  const themeBtn = document.getElementById("theme");
-  function setTheme(x) {
-    document.documentElement.dataset.theme = x;
-    localStorage.setItem("l2m-theme", x);
-    themeBtn.querySelector(".material-symbols-outlined").textContent = x === "dark" ? "dark_mode" : "light_mode";
-  }
-  setTheme(localStorage.getItem("l2m-theme") || "dark");
-  themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  // Thème appliqué dans le <head> ; toggles gérés par le header unifié (L2M.initHeader).
 
   // ── Langue ──
   function applyStaticI18n() {
     document.documentElement.lang = LANG();
-    document.getElementById("lang-label").textContent = LANG().toUpperCase();
+    const ll = document.getElementById("lang-label");
+    if (ll) ll.textContent = LANG().toUpperCase();
     document.getElementById("t-back").textContent = t("back");
-    document.getElementById("t-tool").textContent = t("tool");
-    document.getElementById("t-login").textContent = t("login");
   }
-  document.getElementById("lang").onclick = () => {
-    localStorage.setItem("l2m-lang", LANG() === "fr" ? "en" : "fr");
-    applyStaticI18n(); if (DATA) renderProfile();
-  };
   function onLangChanged() { applyStaticI18n(); if (DATA) renderProfile(); }
 
   const USERNAME = decodeURIComponent((location.pathname.split("/u/")[1] || "").replace(/\/$/, ""));

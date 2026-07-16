@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3 — nos albums</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -353,28 +354,21 @@
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
 <script>
-// ── Thème ──────────────────────────────────────────────────────────────────
-const themeBtn=document.getElementById("theme");
-function setTheme(t){document.documentElement.dataset.theme=t;localStorage.setItem("l2m-theme",t);
-  themeBtn.querySelector(".material-symbols-outlined").textContent=t==="dark"?"dark_mode":"light_mode";}
-setTheme(localStorage.getItem("l2m-theme")||"dark");
-themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
+// Thème appliqué dans le <head> ; toggles gérés par le header unifié (L2M.initHeader).
 
 // ── Langue ────────────────────────────────────────────────────────────────
-const langBtn=document.getElementById("lang");
 function setLang(l){localStorage.setItem("l2m-lang",l);
-  document.getElementById("lang-label").textContent=l.toUpperCase();
+  const _ll=document.getElementById("lang-label");if(_ll)_ll.textContent=l.toUpperCase();
   if(window.applyI18n)applyI18n(l);
   const _h=document.querySelector(".hero h1");if(_h)_h.textContent=T[l].hero_title;
   const _s=document.querySelector(".hero p");if(_s)_s.textContent=T[l].hero_sub;
   if(VIEW_AS!=="normal") document.getElementById("t-preview-banner").textContent=T[l]["preview_"+VIEW_AS];
   document.getElementById("t-preview-exit").textContent=T[l].preview_exit;
-  document.getElementById("t-import").textContent=T[l].imp;
   document.getElementById("imp-h").textContent=T[l].imp_title;
+  refreshViewAsLabels();
   // La modale d'import est reconstruite dans la langue courante si elle est ouverte.
   if(IMP.step)renderImport();
   if(ALBUMS.length)buildFilters();render();updateCount();}
-langBtn.onclick=()=>setLang((localStorage.getItem("l2m-lang")||"fr")==="fr"?"en":"fr");
 
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
@@ -457,6 +451,19 @@ const VIEW_PROFILES={
   gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:true,is_admin:false})
 };
 function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
+// Le header injecté (L2M.initHeader) doit refléter la vue simulée :
+// visiteur → login/langue/thème, sinon avatar ; Outil/Importer selon les droits simulés.
+function applyViewToHeader(){
+  const md=meDisplay();
+  const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
+  const gest=!!(md.is_gestionnaire||md.is_admin);
+  show("tool-link",gest);
+  show("import-btn",gest);
+  show("usermenu",md.authenticated);
+  show("login",!md.authenticated);
+  show("lang",!md.authenticated);
+  show("theme",!md.authenticated);
+}
 function setViewAs(mode){
   VIEW_AS=mode;
   const banner=document.getElementById("preview-banner");
@@ -470,6 +477,7 @@ function setViewAs(mode){
   document.querySelectorAll(".um-viewas-pop .um-item").forEach(el=>{
     el.classList.toggle("active",el.dataset.view===mode);
   });
+  applyViewToHeader();
   render();
 }
 let currentSort="date_concert";
@@ -787,6 +795,11 @@ async function load(){
     onImport:()=>openImport(),
     onLangChange:l=>setLang(l),
   });
+  // Outil de dev : menu "Voir en tant que…" dans le menu avatar (gestionnaires/admins).
+  if(ME.is_gestionnaire||ME.is_admin){
+    const um=document.getElementById("usermenu");
+    if(um&&um.querySelector(".um-pop"))injectViewAsMenu(um);
+  }
   const apiSort=currentSort==="artist"?"date_concert":currentSort;
   ALBUMS=await(await fetch(`/api/catalogue?sort=${apiSort}`)).json();
   // Profils des posteurs (avatars sur les cartes/fiches)
