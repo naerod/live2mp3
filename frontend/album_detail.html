@@ -12,47 +12,67 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   .page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px}
-  .al-layout{display:grid;grid-template-columns:300px 1fr;gap:28px;margin-top:24px;align-items:start}
+  .al-layout{display:grid;grid-template-columns:280px 1fr;gap:24px;margin-top:16px;align-items:start}
   @media(max-width:700px){.al-layout{grid-template-columns:1fr}}
-  .al-cover{aspect-ratio:1;border-radius:16px;overflow:hidden;background:#0a0a0a;
+  .al-cover{aspect-ratio:1;border-radius:14px;overflow:hidden;background:#0a0a0a;
     border:1px solid var(--border);cursor:zoom-in;position:relative}
   .al-cover img{width:100%;height:100%;object-fit:cover;display:block;
     transition:transform .25s ease}
   .al-cover:hover img{transform:scale(1.03)}
   .al-cover .cover-generic{width:100%;height:100%}
-  .al-info{display:flex;flex-direction:column;gap:6px}
-  .al-artist{color:var(--accent);font-size:22px;font-weight:700;line-height:1.15}
-  .al-title{font-size:26px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 6px}
-  .al-line{display:flex;align-items:center;gap:8px;color:var(--fg);font-size:14px}
-  .al-line .material-symbols-outlined{font-size:18px;color:var(--muted)}
-  .al-line.muted-placeholder{opacity:.45;font-style:italic}
-  .al-poster{margin-top:4px}
-  .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;flex-wrap:wrap}
-  .source-row .material-symbols-outlined{font-size:15px;flex-shrink:0}
+  .al-info{display:flex;flex-direction:column;gap:4px}
+  .al-artist{color:var(--accent);font-size:20px;font-weight:700;line-height:1.15}
+  .al-title{font-size:24px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 2px}
+  .al-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--fg);font-size:13px;margin-top:2px}
+  .al-meta-item{display:inline-flex;align-items:center;gap:5px}
+  .al-meta-item .material-symbols-outlined{font-size:16px;color:var(--muted)}
+  .al-meta-item.muted-placeholder{opacity:.45;font-style:italic}
+  .al-poster{margin-top:2px}
+  .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;flex-wrap:wrap}
+  .source-row .material-symbols-outlined{font-size:14px;flex-shrink:0}
   .source-link{color:var(--accent);text-decoration:none;word-break:break-all}
   .source-link:hover{text-decoration:underline}
-  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
-  .tag{font-size:11px;font-weight:500;padding:2px 9px;border-radius:999px;
+  .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .tag{font-size:10.5px;font-weight:500;padding:2px 9px;border-radius:999px;
     background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+  /* ── Boutons sociaux style accueil ─────────────────────────────── */
+  .al-social{display:flex;gap:6px;align-items:center;margin-top:10px}
+  .soc-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    height:32px;margin:0;padding:0 14px;border:1px solid;border-radius:999px;
+    font-size:12.5px;font-weight:600;line-height:1;cursor:pointer;
+    transition:color .15s,background .15s,border-color .15s}
+  .soc-btn.is-like{color:var(--like);border-color:color-mix(in srgb,var(--like) 45%,transparent);
+    background:color-mix(in srgb,var(--like) 10%,var(--card))}
+  .soc-btn.is-like:hover{background:color-mix(in srgb,var(--like) 20%,var(--card));border-color:var(--like)}
+  .soc-btn.is-like.liked{background:var(--like);border-color:var(--like);color:#fff}
+  .soc-btn.is-like.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
+  .soc-btn.is-comment{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);
+    background:color-mix(in srgb,var(--accent) 10%,var(--card))}
+  .soc-btn.is-comment:hover{background:color-mix(in srgb,var(--accent) 20%,var(--card));border-color:var(--accent)}
+  .soc-btn .material-symbols-outlined{font-size:15px;line-height:1}
+  .soc-btn[disabled]{opacity:.55;cursor:not-allowed}
+  /* ── Téléchargements inline ────────────────────────────────────── */
+  .al-dl{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .al-dl a,.al-dl button{margin:0;height:32px;font-size:12.5px;padding:0 12px}
+  .al-dl .lock-inline{display:inline-flex;align-items:center;gap:5px;color:var(--muted);
+    font-size:12.5px}
+  .al-dl .lock-inline .material-symbols-outlined{font-size:15px}
+  /* ── Sections setlist / commentaires ────────────────────────────── */
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;
-    padding:18px 20px;margin-top:18px}
+    padding:16px 18px;margin-top:14px}
   .sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;
-    color:var(--muted);margin:0 0 12px;font-weight:700}
+    color:var(--muted);margin:0 0 10px;font-weight:700}
   .setlist{list-style:none;padding:0;margin:0}
-  .setlist li{display:flex;align-items:center;gap:10px;padding:7px 0;
-    border-bottom:1px solid var(--border);font-size:14px}
+  .setlist li{display:flex;align-items:center;gap:10px;padding:6px 0;
+    border-bottom:1px solid var(--border);font-size:13.5px}
   .setlist li:last-child{border-bottom:none}
   .setlist li .n{color:var(--accent);font-variant-numeric:tabular-nums;min-width:22px;font-weight:600}
   .setlist li .tt{flex:1}
   .setlist li a{color:var(--muted);display:flex}
   .setlist li a:hover{color:var(--accent)}
-  .dlgrid{display:flex;flex-wrap:wrap;gap:8px}
-  .dlgrid a{margin:0;height:36px;font-size:13px}
-  .lock-note{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;
-    background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
   .not-found{text-align:center;color:var(--muted);margin-top:60px}
   .not-found .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
-  /* Boutons like + commentaires */
+  /* Compat modal — keep .soc-action for modal only */
   .social-actions{display:flex;gap:8px;align-items:center;margin-top:14px}
   .soc-action{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;
     border-radius:999px;border:1px solid var(--border);background:var(--card);
@@ -66,14 +86,14 @@
   /* ── Carrousel de pochettes ─────────────────────────────────────── */
   .cr{position:relative}
   .cr-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;
-    width:34px;height:34px;padding:0;border-radius:50%;display:flex;align-items:center;
+    width:32px;height:32px;padding:0;border-radius:50%;display:flex;align-items:center;
     justify-content:center;border:1px solid var(--border);background:var(--card);
     color:var(--fg);cursor:pointer;opacity:0;transition:opacity .15s,border-color .15s}
   .cr:hover .cr-arrow,.cr-arrow:focus-visible{opacity:.95}
   .cr-arrow:hover{border-color:var(--accent)}
-  .cr-arrow.prev{left:-14px}
-  .cr-arrow.next{right:-14px}
-  .cr-arrow .material-symbols-outlined{font-size:20px}
+  .cr-arrow.prev{left:-12px}
+  .cr-arrow.next{right:-12px}
+  .cr-arrow .material-symbols-outlined{font-size:18px}
   .cr-count{position:absolute;top:8px;right:8px;z-index:2;font-size:11px;font-weight:600;
     padding:2px 8px;border-radius:999px;background:rgba(6,7,10,.72);color:#fff;
     backdrop-filter:blur(4px);font-variant-numeric:tabular-nums}
@@ -81,27 +101,26 @@
     justify-content:center;width:24px;height:24px;border-radius:50%;
     background:rgba(6,7,10,.72);color:var(--accent);backdrop-filter:blur(4px)}
   .cr-pin .material-symbols-outlined{font-size:14px;font-variation-settings:'FILL' 1}
-  .cr-dots{display:flex;justify-content:center;gap:5px;margin-top:10px}
+  .cr-dots{display:flex;justify-content:center;gap:5px;margin-top:8px}
   .cr-dot{width:6px;height:6px;border-radius:50%;padding:0;border:none;cursor:pointer;
     background:var(--border);transition:background .15s,transform .15s}
   .cr-dot.on{background:var(--accent);transform:scale(1.25)}
-  /* Une face tray card se distingue de sa pochette : puce creuse, même rang. */
   .cr-dot.tray{background:none;border:1.5px solid var(--border)}
   .cr-dot.tray.on{border-color:var(--accent)}
-  .cr-credit{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
-  /* Actions de la pochette regardée : mêmes boutons que ceux de l'album
-     (.soc-action), simplement étalés sur la largeur de la colonne. */
-  .cr-actions.social-actions{margin-top:12px}
-  .cr-actions .soc-action{flex:1;justify-content:center}
-  .cr-add{margin-top:10px;width:100%;justify-content:center}
+  .cr-footer{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:12px}
+  .cr-footer .soc-poster{font-size:12px}
+  .cr-add-sm{display:inline-flex;align-items:center;gap:4px;margin-left:auto;
+    padding:3px 10px;height:26px;border-radius:999px;border:1px solid var(--border);
+    background:var(--card);color:var(--muted);font-size:11.5px;font-weight:500;
+    cursor:pointer;font-family:inherit;transition:border-color .15s,color .15s}
+  .cr-add-sm:hover{border-color:var(--accent);color:var(--accent)}
+  .cr-add-sm .material-symbols-outlined{font-size:14px}
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
     color:var(--muted);cursor:pointer;font-family:inherit;
     transition:border-color .15s,color .15s}
   .cr-tray-badge:hover,.cr-tray-badge.on{border-color:var(--accent);color:var(--accent)}
   .cr-tray-badge .material-symbols-outlined{font-size:13px}
-  /* Tray card : format libre (souvent large, parfois PDF) — logée en entier
-     dans le cadre carré de la pochette plutôt que rognée. */
   .al-cover.is-tray{background:var(--bg)}
   .al-cover.is-tray img,.cr-fit{object-fit:contain!important}
   .al-cover.is-tray:hover img{transform:none}
@@ -367,9 +386,9 @@ function renderAlbum(d){
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
     if(d.has_cover)links+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t('cover')}</a>`;
     if(d.has_traycard)links+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t('traycard')}</a>`;
-    if(links)dlHtml=`<div class="sec"><h3>${t('downloads')}</h3><div class="dlgrid">${links}</div></div>`;
+    if(links)dlHtml=`<div class="al-dl">${links}</div>`;
   }else{
-    dlHtml=`<div class="sec"><h3>${t('downloads')}</h3><div class="lock-note"><span class="material-symbols-outlined">lock</span>${t('lockdl')}<a class="icon-btn" style="margin-left:auto" href="/outpost.goauthentik.io/start?rd=/album/${slug}"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
+    dlHtml=`<div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div>`;
   }
 
   const srcUrl=d.source_url||'';
@@ -392,19 +411,21 @@ function renderAlbum(d){
       <div class="al-info">
         ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
         <h1 class="al-title">${L2M.esc(a.title||slug)}</h1>
-        <div class="al-line${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</div>
-        <div class="al-line${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</div>
-        ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${L2M.esc(a.festival)}</div>`:''}
+        <div class="al-meta">
+          <span class="al-meta-item${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</span>
+          <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</span>
+          ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${L2M.esc(a.festival)}</span>`:''}
+        </div>
         ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
-        <div class="social-actions">
-          <button id="like-btn" class="soc-action"><span class="material-symbols-outlined">favorite</span><span id="like-count">—</span></button>
-          <button id="comment-btn" class="soc-action" onclick="scrollToComments()"><span class="material-symbols-outlined">comment</span><span id="comment-count">—</span></button>
+        <div class="al-social">
+          <button id="like-btn" class="soc-btn is-like"><span class="material-symbols-outlined">favorite</span><span id="like-count">—</span></button>
+          <button id="comment-btn" class="soc-btn is-comment" onclick="scrollToComments()"><span class="material-symbols-outlined">chat_bubble</span><span id="comment-count">—</span></button>
         </div>
+        ${dlHtml}
       </div>
     </div>
-    ${dlHtml}
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
@@ -431,7 +452,7 @@ async function initSocialActions(){
   let {likes,liked,comments:commentCount}=s;
 
   function paintLike(){
-    btnLike.className='soc-action'+(liked?' liked':'');
+    btnLike.className='soc-btn is-like'+(liked?' liked':'');
     btnLike.innerHTML=`<span class="material-symbols-outlined">favorite</span>${likes}`;
     btnLike.title=ME.authenticated?(liked?t('liked'):t('like')):t('login_to_like');
   }
@@ -490,30 +511,17 @@ const curSlide=()=>SLIDES[IDX]||null;
 const coverById=id=>COVERS.find(c=>c.id===id)||null;
 const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
-function creditHtml(c,kind){
+function footerHtml(c,kind){
+  if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
-  // Le badge n'étiquette plus la présence d'une tray card, il bascule vers
-  // elle : c'est le geste attendu quand on regarde une pochette.
   const tray=c.has_traycard
     ? `<button class="cr-tray-badge${kind==='traycard'?' on':''}" id="cr-flip"
          title="${kind==='traycard'?t('cv_see_cover'):t('cv_see_tray')}">
          <span class="material-symbols-outlined">${kind==='traycard'?'image':'description'}</span>${
          kind==='traycard'?t('cv_cover'):t('cv_tray')}</button>`
     : '';
-  return `<div class="cr-credit">${poster}${tray}</div>`;
-}
-
-// Les actions portent sur la pochette regardée, jamais sur la tray card : une
-// tray card est une face de sa cover, ses likes et commentaires sont les siens.
-function actionsHtml(c){
-  return `<div class="social-actions cr-actions">
-    <button class="soc-action${c.liked?' liked':''}" id="cr-like"
-      title="${ME.authenticated?t('like'):t('login_to_like')}">
-      <span class="material-symbols-outlined">favorite</span>${c.likes}</button>
-    <button class="soc-action" id="cr-comment" title="${t('cv_comments')}">
-      <span class="material-symbols-outlined">comment</span>${c.comments}</button>
-  </div>`;
+  return `<div class="cr-footer">${poster}${tray}</div>`;
 }
 
 // La face d'une tray card n'est pas carrée et peut être un PDF : on la loge en
@@ -532,6 +540,10 @@ function renderCarousel(){
   const s=curSlide(), c=curCover(), multi=SLIDES.length>1;
   const kind=s?s.kind:'cover';
 
+  const addBtn=ME.authenticated
+    ?`<button class="cr-add-sm" id="cr-add" title="${t('cv_add')}"><span class="material-symbols-outlined">add_photo_alternate</span>${t('cv_add')}</button>`
+    :`<a class="cr-add-sm" href="${L2M.loginUrl()}" title="${t('cv_login')}"><span class="material-symbols-outlined">add_photo_alternate</span></a>`;
+
   col.innerHTML=`
     <div class="cr">
       <div class="al-cover${kind==='traycard'?' is-tray':''}" id="cr-art">${faceHtml(c,kind)}</div>
@@ -543,14 +555,10 @@ function renderCarousel(){
     ${multi?`<div class="cr-dots">${SLIDES.map((sl,i)=>
       `<button class="cr-dot${sl.kind==='traycard'?' tray':''}${i===IDX?' on':''}" data-i="${i}"
         title="${sl.kind==='traycard'?t('cv_tray'):t('cv_cover')}"></button>`).join('')}</div>`:''}
-    ${c?actionsHtml(c):''}
-    ${c?creditHtml(c,kind):`<div class="cr-credit" style="color:var(--muted);font-size:13px">${t('cv_none')}</div>`}
-    ${ME.authenticated
-      ?`<button class="icon-btn cr-add" id="cr-add"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_add')}</button>`
-      :`<a class="icon-btn cr-add" href="${L2M.loginUrl()}"><span class="material-symbols-outlined">add_photo_alternate</span> ${t('cv_login')}</a>`}
+    ${footerHtml(c,kind)}
+    ${COVERS.length>0||ME.authenticated?`<div class="cr-footer">${addBtn}</div>`:''}
   `;
 
-  // Un PDF capte le clic : la face entière n'est cliquable que pour une image.
   if(c&&!(kind==='traycard'&&c.traycard_kind==='pdf'))
     document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
   const prev=document.getElementById('cr-prev'), next=document.getElementById('cr-next');
@@ -559,10 +567,6 @@ function renderCarousel(){
   col.querySelectorAll('.cr-dot').forEach(d=>d.onclick=()=>{IDX=+d.dataset.i;renderCarousel();});
   const add=document.getElementById('cr-add');
   if(add&&ME.authenticated)add.onclick=()=>openUpload();
-  const like=document.getElementById('cr-like');
-  if(like)like.onclick=()=>toggleCoverLike(c.id);
-  const cmt=document.getElementById('cr-comment');
-  if(cmt)cmt.onclick=()=>openCoverModal(c.id);
   const flip=document.getElementById('cr-flip');
   if(flip)flip.onclick=()=>{
     focusSlide(c.id,kind==='traycard'?'cover':'traycard');
