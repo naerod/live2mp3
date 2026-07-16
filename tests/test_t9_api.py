@@ -122,11 +122,16 @@ def test_vitrine_public(client):
     assert r.status_code == 200 and isinstance(r.json(), list)
 
 
-def test_tool_requires_gestionnaire(client):
+def test_tool_shell_public_but_backend_gated(client):
+    """Depuis 4bb250b, /app sert le shell HTML à tous : le verrouillage est
+    côté client (overlay selon le rôle). Les routes sensibles restent
+    protégées serveur : /app/album/{slug} et /api/jobs exigent gestionnaire."""
     c, _ = client
-    assert c.get("/app").status_code == 401                 # non connecté
-    assert c.get("/app", headers=USER).status_code == 403    # user pas gestionnaire
+    assert c.get("/app").status_code == 200                  # shell public
+    assert c.get("/app", headers=USER).status_code == 200
     assert c.get("/app", headers=GEST).status_code == 200
+    assert c.get("/app/album/x").status_code == 401          # non connecté
+    assert c.get("/app/album/x", headers=USER).status_code == 403
 
 
 def test_download_requires_user(client):
