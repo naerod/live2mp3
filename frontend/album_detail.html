@@ -60,6 +60,20 @@
   .al-dl .lock-inline{display:inline-flex;align-items:center;gap:5px;color:var(--muted);
     font-size:12.5px}
   .al-dl .lock-inline .material-symbols-outlined{font-size:15px}
+  /* Dropdown format (PNG/PDF) */
+  .dl-split{position:relative;display:inline-flex}
+  .dl-split>.icon-btn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
+  .dl-split>.dl-toggle{border-top-left-radius:0;border-bottom-left-radius:0;
+    padding:0 6px;min-width:0;margin:0;height:32px;font-size:12.5px}
+  .dl-split>.dl-toggle .material-symbols-outlined{font-size:14px}
+  .dl-menu{position:absolute;top:100%;left:0;margin-top:4px;min-width:160px;z-index:20;
+    background:var(--card);border:1px solid var(--border);border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.3);padding:4px;display:none}
+  .dl-menu.open{display:block}
+  .dl-menu a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;
+    font-size:12.5px;color:var(--fg);text-decoration:none;margin:0}
+  .dl-menu a:hover{background:var(--bg)}
+  .dl-menu a .material-symbols-outlined{font-size:16px;color:var(--muted)}
   /* ── Sections setlist / commentaires ────────────────────────────── */
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;
     padding:16px 18px;margin-top:14px}
@@ -209,7 +223,7 @@
     </div>
     <div class="up-field" id="up-tray-field">
       <label id="up-tray-lbl" for="up-tray"></label>
-      <input type="file" id="up-tray" accept="image/jpeg,image/png,image/webp,application/pdf">
+      <input type="file" id="up-tray" accept="image/jpeg,image/png,image/webp">
     </div>
     <div class="up-field" id="up-caption-field">
       <label id="up-caption-lbl" for="up-caption"></label>
@@ -256,7 +270,8 @@ const T={
       cv_add_tray:"Ajouter une tray card",cv_replace_tray:"Remplacer la tray card",
       cv_tray:"Tray card",cv_no_tray:"Pas de tray card",
       up_title:"Proposer une pochette",
-      up_hint:"La tray card est optionnelle et reste liée à cette pochette. JPEG, PNG ou WebP — PDF accepté pour la tray card.",
+      dl_png:"Image (PNG)",dl_pdf:"PDF imprimable",
+      up_hint:"La tray card est optionnelle et reste liée à cette pochette. JPEG, PNG ou WebP.",
       up_cover:"Pochette (obligatoire)",up_tray:"Tray card (optionnelle)",
       up_caption:"Légende (optionnelle)",up_send:"Envoyer",up_cancel:"Annuler",
       up_need_cover:"Choisissez une image de pochette.",up_failed:"Échec de l'envoi.",
@@ -281,7 +296,8 @@ const T={
       cv_add_tray:"Add a tray card",cv_replace_tray:"Replace tray card",
       cv_tray:"Tray card",cv_no_tray:"No tray card",
       up_title:"Submit a cover",
-      up_hint:"The tray card is optional and stays tied to this cover. JPEG, PNG or WebP — PDF also accepted for the tray card.",
+      dl_png:"Image (PNG)",dl_pdf:"Printable PDF",
+      up_hint:"The tray card is optional and stays tied to this cover. JPEG, PNG or WebP.",
       up_cover:"Cover (required)",up_tray:"Tray card (optional)",
       up_caption:"Caption (optional)",up_send:"Send",up_cancel:"Cancel",
       up_need_cover:"Pick a cover image.",up_failed:"Upload failed.",
@@ -373,6 +389,17 @@ function posterFor(username){
   return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},prefix||undefined);
 }
 
+function dlSplit(icon,label,pngUrl,pdfUrl){
+  return `<div class="dl-split">
+    <a class="icon-btn" href="${pngUrl}"><span class="material-symbols-outlined">${icon}</span> ${label}</a>
+    <button class="icon-btn dl-toggle" onclick="this.nextElementSibling.classList.toggle('open');event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px">expand_more</span></button>
+    <div class="dl-menu">
+      <a href="${pngUrl}"><span class="material-symbols-outlined">image</span> ${t('dl_png')}</a>
+      <a href="${pdfUrl}"><span class="material-symbols-outlined">picture_as_pdf</span> ${t('dl_pdf')}</a>
+    </div>
+  </div>`;
+}
+
 function renderAlbum(d){
   const a=d.album||{};
   const tags=(d.labels||[]).map(l=>`<span class="tag">${L2M.esc(l)}</span>`).join('');
@@ -388,8 +415,8 @@ function renderAlbum(d){
     let links='';
     if(d.has_mp3)links+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t('full')}</a>`;
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-    if(d.has_cover)links+=`<a class="icon-btn" href="/download/${slug}/cover"><span class="material-symbols-outlined">image</span> ${t('cover')}</a>`;
-    if(d.has_traycard)links+=`<a class="icon-btn" href="/download/${slug}/traycard"><span class="material-symbols-outlined">description</span> ${t('traycard')}</a>`;
+    if(d.has_cover)links+=dlSplit('image',t('cover'),`/download/${slug}/cover`,`/download/${slug}/cover/pdf`);
+    if(d.has_traycard)links+=dlSplit('description',t('traycard'),`/download/${slug}/traycard`,`/download/${slug}/traycard/pdf`);
     if(links)dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl">${links}</div></div>`;
   }else{
     dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
@@ -437,6 +464,7 @@ function renderAlbum(d){
     <div class="sec" id="sec-comments"></div>
   `;
 
+  document.addEventListener('click',()=>document.querySelectorAll('.dl-menu.open').forEach(m=>m.classList.remove('open')));
   initSocialActions();
   renderCarousel();
   L2M.comments(document.getElementById('sec-comments'),slug);
@@ -636,10 +664,8 @@ function paintModal(id){
             <span class="material-symbols-outlined">comment</span>${c.comments}</button>
         </div>
         <div class="cm-actions">
-          ${ME.authenticated?`<a class="icon-btn" href="/download/cover/${c.id}">
-            <span class="material-symbols-outlined">image</span> ${t('cv_dl_cover')}</a>`:''}
-          ${ME.authenticated&&c.has_traycard?`<a class="icon-btn" href="/download/traycard/${c.id}">
-            <span class="material-symbols-outlined">description</span> ${t('cv_dl_tray')}</a>`:''}
+          ${ME.authenticated?dlSplit('image',t('cv_dl_cover'),`/download/cover/${c.id}`,`/download/cover/${c.id}/pdf`):''}
+          ${ME.authenticated&&c.has_traycard?dlSplit('description',t('cv_dl_tray'),`/download/traycard/${c.id}`,`/download/traycard/${c.id}/pdf`):''}
           ${mine?`<button class="icon-btn" id="cm-tray">
             <span class="material-symbols-outlined">note_add</span>
             ${c.has_traycard?t('cv_replace_tray'):t('cv_add_tray')}</button>`:''}

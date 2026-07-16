@@ -5,6 +5,7 @@ redis
 pyyaml
 mutagen
 Pillow
+reportlab
 requests
 python-multipart
 jinja2

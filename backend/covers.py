@@ -23,11 +23,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
 from .manifest import PROJECTS_DIR
+from .printable import cover_pdf, traycard_pdf
 from .social import _album_exists, _ensure_profile, _is_moderator, _profiles_map
 
 router = APIRouter()
@@ -36,10 +37,10 @@ COVER_MAX_BYTES = 15 * 1024 * 1024
 TRAYCARD_MAX_BYTES = 25 * 1024 * 1024
 CAPTION_MAX = 300
 
-# Formats acceptés. La cover est une image (embarquée en APIC dans les MP3), la
-# tray card est un imprimable : PDF accepté en plus.
+# Formats acceptés à l'import (images uniquement — le PDF imprimable est
+# généré à la volée au téléchargement).
 COVER_EXTS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-TRAYCARD_EXTS = {**COVER_EXTS, "application/pdf": ".pdf"}
+TRAYCARD_EXTS = {**COVER_EXTS}
 
 MEDIA_TYPES = {
     ".jpg": "image/jpeg", ".png": "image/png",
@@ -281,6 +282,35 @@ def download_one_cover(cover_id: int,
 def download_one_traycard(cover_id: int,
                           identity: dict = Depends(require_user)) -> FileResponse:
     return _serve(cover_id, "traycard", download=True)
+
+
+def _serve_pdf(cover_id: int, kind: str) -> Response:
+    with get_conn() as conn:
+        row = _get_cover(conn, cover_id)
+    ext = row["cover_ext"] if kind == "cover" else row["traycard_ext"]
+    if not ext:
+        raise HTTPException(404, "fichier absent")
+    fn = cover_file if kind == "cover" else traycard_file
+    path = fn(row["slug"], row["file_key"], ext)
+    if not path.exists():
+        raise HTTPException(404, "fichier absent")
+    gen = cover_pdf if kind == "cover" else traycard_pdf
+    data = gen(path)
+    name = f"{row['slug']}-{_slug_token(row['username'])}_{kind}_print.pdf"
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/download/cover/{cover_id}/pdf")
+def download_cover_pdf(cover_id: int,
+                       identity: dict = Depends(require_user)) -> Response:
+    return _serve_pdf(cover_id, "cover")
+
+
+@router.get("/download/traycard/{cover_id}/pdf")
+def download_traycard_pdf(cover_id: int,
+                          identity: dict = Depends(require_user)) -> Response:
+    return _serve_pdf(cover_id, "traycard")
 
 
 # =====================================================================
