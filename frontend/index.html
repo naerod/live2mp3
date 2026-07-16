@@ -23,6 +23,18 @@
 </header>
 
 <main>
+  <h1 class="page-title"><span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;margin-right:8px;color:var(--accent)">auto_fix_high</span><span data-i18n="app_title">Créateur de concerts — découpe automatique et mastering IA</span></h1>
+
+  <!-- Overlay d'accès conditionnel -->
+  <div id="access-overlay" class="access-overlay hidden">
+    <div class="access-box">
+      <span class="material-symbols-outlined access-icon">lock</span>
+      <p id="access-msg" class="access-msg"></p>
+      <a id="access-btn" class="primary hidden" href="/outpost.goauthentik.io/start?rd=/app"><span class="material-symbols-outlined">login</span> <span data-i18n="login">Se connecter</span></a>
+    </div>
+  </div>
+
+  <div id="app-content">
   <!-- Étape 1 : formulaire -->
   <section id="step-form" class="card">
     <h1 data-i18n="form_title">Nouveau concert</h1>
@@ -72,6 +84,7 @@
     <div id="summary"></div>
     <a id="btn-download" class="primary" href="#"><span class="material-symbols-outlined">download</span> <span data-i18n="download">Télécharger le bundle</span></a>
   </section>
+  </div><!-- /app-content -->
 </main>
 
 <script src="/static/i18n.js"></script>

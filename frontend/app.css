@@ -61,6 +61,21 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .actions{display:flex;gap:10px}
 @media(max-width:640px){.grid{grid-template-columns:1fr}}
 
+/* Titre de page */
+.page-title{font-size:24px;font-weight:700;margin:0 0 24px;display:flex;align-items:center}
+
+/* Overlay d'accès */
+.access-overlay{position:relative;display:flex;align-items:center;justify-content:center;
+  min-height:340px;margin-bottom:20px}
+.access-overlay::before{content:"";position:absolute;inset:0;
+  background:var(--card);border:1px solid var(--border);border-radius:16px;opacity:.6}
+.access-box{position:relative;z-index:1;text-align:center;padding:40px 24px}
+.access-icon{font-size:48px;color:var(--muted);margin-bottom:12px;display:block}
+.access-msg{font-size:15px;color:var(--muted);max-width:400px;margin:0 auto 16px;line-height:1.5}
+
+/* Grisage du contenu */
+.app-locked #app-content{filter:grayscale(1) brightness(.5);pointer-events:none;user-select:none}
+
 /* ============ Composants sociaux (profils, likes, commentaires) ============ */
 .soc-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
   display:inline-flex;align-items:center;justify-content:center;background:var(--bg);

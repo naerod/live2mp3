@@ -1,3 +1,35 @@
+// --- Accès conditionnel ---
+(async()=>{
+  let me={authenticated:false,is_gestionnaire:false,is_admin:false};
+  try{me=await(await fetch("/api/me")).json();}catch(e){}
+  const overlay=document.getElementById("access-overlay");
+  const msg=document.getElementById("access-msg");
+  const btn=document.getElementById("access-btn");
+  const lang=()=>localStorage.getItem("l2m-lang")||"fr";
+  const msgs={
+    guest:{fr:"Connectez-vous pour accéder à toutes les fonctionnalités du site.",
+           en:"Log in to access all features."},
+    user:{fr:"Cette fonctionnalité est réservée aux gestionnaires de l'application.",
+          en:"This feature is restricted to application managers."},
+    wip:{fr:"Cette fonctionnalité est encore en cours de développement…",
+         en:"This feature is still under development…"}
+  };
+  if(me.is_admin){
+    // admin : accès complet pour tests
+  }else{
+    document.body.classList.add("app-locked");
+    overlay.classList.remove("hidden");
+    if(!me.authenticated){
+      msg.textContent=msgs.guest[lang()];
+      btn.classList.remove("hidden");
+    }else if(!me.is_gestionnaire){
+      msg.textContent=msgs.user[lang()];
+    }else{
+      msg.textContent=msgs.wip[lang()];
+    }
+  }
+})();
+
 // --- Thème (localStorage) ---
 const themeBtn=document.getElementById("theme");
 function setTheme(t){document.documentElement.dataset.theme=t;
