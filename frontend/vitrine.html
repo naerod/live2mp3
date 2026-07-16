@@ -734,7 +734,7 @@ async function load(){
     ["login","lang","theme"].forEach(id=>document.getElementById(id).style.display="none");
     um.style.display="";
     const sm=await L2M.me();
-    const extraItems=ME.is_admin?[{icon:"visibility",label:T[L2M.getLang()].preview_visitor,onclick:togglePreviewVisitor}]:[];
+    const extraItems=ME.is_gestionnaire?[{icon:"visibility",label:T[L2M.getLang()].preview_visitor,onclick:togglePreviewVisitor}]:[];
     L2M.userMenu(um,{username:sm.username||ME.username,display_name:sm.display_name,avatar:sm.avatar},
       {extraItems,onChange:k=>{ if(k==="lang"){ setLang(L2M.getLang()); if(um._refreshExtra) um._refreshExtra([{label:T[L2M.getLang()].preview_visitor}]); } }});
   }else{
