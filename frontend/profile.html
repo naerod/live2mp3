@@ -25,7 +25,7 @@
 </head>
 <body>
 <header>
-  <a class="back-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></a>
+  <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
     <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span id="t-tool">Outil</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
@@ -36,6 +36,9 @@
 </header>
 
 <main id="main">
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+  </div>
   <div id="content"></div>
 </main>
 

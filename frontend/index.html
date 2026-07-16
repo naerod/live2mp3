@@ -16,13 +16,15 @@
 <header>
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
-    <a class="icon-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span data-i18n="back">Retour</span></a>
     <button id="lang" class="icon-btn" title="Langue"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only" title="Thème"><span class="material-symbols-outlined">dark_mode</span></button>
   </div>
 </header>
 
 <main>
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span data-i18n="back">Retour</span></button>
+  </div>
   <h1 class="page-title"><span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;margin-right:8px;color:var(--accent)">auto_fix_high</span><span data-i18n="app_title">Créateur de concerts — découpe automatique et mastering IA</span></h1>
 
   <!-- Overlay d'accès conditionnel -->

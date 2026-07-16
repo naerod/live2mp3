@@ -93,13 +93,15 @@
 <header>
   <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
   <div class="tools">
-    <a class="icon-btn" href="/"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Vitrine</span></a>
     <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label">FR</span></button>
     <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined">dark_mode</span></button>
   </div>
 </header>
 
 <main>
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+  </div>
   <div class="layout">
     <!-- Colonne gauche -->
     <div class="visual">
@@ -187,7 +189,7 @@ setTheme(localStorage.getItem("l2m-theme")||"dark");
 themeBtn.onclick=()=>setTheme(document.documentElement.dataset.theme==="dark"?"light":"dark");
 
 const TT={
-  fr:{back:"Vitrine",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
+  fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
       f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       save_meta:"Enregistrer",save_tracks:"Enregistrer les pistes",save_labels:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",traycard:"Tray card",
