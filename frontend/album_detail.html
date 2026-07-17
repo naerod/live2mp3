@@ -20,7 +20,8 @@
   .al-cover img{width:100%;height:100%;object-fit:cover;display:block;
     transition:transform .25s ease}
   .al-cover:hover img{transform:scale(1.03)}
-  .al-cover .cover-generic{width:100%;height:100%}
+  .al-cover .cover-generic{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0a0a0a}
+  .al-cover .cover-generic svg{width:48%;height:48%;opacity:.55}
   .al-info{display:flex;flex-direction:column;gap:4px}
   .al-artist{color:var(--accent);font-size:20px;font-weight:700;line-height:1.15}
   .al-title{font-size:24px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 2px}
@@ -362,11 +363,18 @@ function setLang(l){
 // ── Cover générique ──────────────────────────────────────────────────────
 const GENERIC_COVER=`<div class="cover-generic">
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="4" opacity=".3"/>
-    <circle cx="50" cy="50" r="10" fill="currentColor" opacity=".25"/>
-    <line x1="50" y1="20" x2="50" y2="80" stroke="currentColor" stroke-width="3" opacity=".15"/>
-    <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3" opacity=".15"/>
-  </svg></div>`;
+    <circle cx="50" cy="50" r="42" fill="#2a2d38"/>
+    <circle cx="50" cy="50" r="14" fill="#1a1c22"/>
+    <circle cx="50" cy="50" r="4" fill="#3a3d4a"/>
+    <g fill="#6b7080" transform="translate(50,50)">
+      <rect x="-1" y="-18" width="2.5" height="14" rx="1"/>
+      <rect x="5" y="-22" width="2.5" height="10" rx="1"/>
+      <rect x="-1" y="-6" width="8.5" height="2" rx="1"/>
+      <ellipse cx="-3" cy="-4" rx="4" ry="3" transform="rotate(-15,-3,-4)"/>
+      <ellipse cx="9" cy="-12" rx="4" ry="3" transform="rotate(-15,9,-12)"/>
+    </g>
+  </svg>
+</div>`;
 
 // ── Main ─────────────────────────────────────────────────────────────────
 let ME={authenticated:false,is_gestionnaire:false};
@@ -892,30 +900,23 @@ function closeLbx(e){
 }
 
 // ── Navigation prev/next album ────────────────────────────────────────────
-(function initAlbumNav(){
-  const key='l2m-album-nav';
-  const data=JSON.parse(sessionStorage.getItem(key)||'null');
-  if(!data||!Array.isArray(data.slugs))return;
-  const slugs=data.slugs;
-  const idx=slugs.indexOf(slug);
-  if(idx<0)return;
+let _navData={prev:null,next:null};
+
+async function initAlbumNav(){
   const prev=document.getElementById('nav-prev');
   const next=document.getElementById('nav-next');
   if(!prev||!next)return;
+  try{
+    _navData=await fetch(`/api/catalogue/${slug}/nav`).then(r=>r.json());
+  }catch(e){return;}
   prev.classList.add('visible');
   next.classList.add('visible');
-  if(idx===0)prev.classList.add('disabled');
-  if(idx===slugs.length-1)next.classList.add('disabled');
-})();
+  if(!_navData.prev)prev.classList.add('disabled');
+  if(!_navData.next)next.classList.add('disabled');
+}
 
 function navAlbum(dir){
-  const key='l2m-album-nav';
-  const data=JSON.parse(sessionStorage.getItem(key)||'null');
-  if(!data)return;
-  const slugs=data.slugs;
-  const idx=slugs.indexOf(slug);
-  if(idx<0)return;
-  const target=slugs[idx+dir];
+  const target=dir===-1?_navData.prev:_navData.next;
   if(target)location.href='/album/'+target;
 }
 
@@ -930,6 +931,7 @@ async function loadVersion(){
 }
 loadPage();
 loadVersion();
+initAlbumNav();
 </script>
   <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent"><span class="material-symbols-outlined">chevron_left</span></button>
   <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant"><span class="material-symbols-outlined">chevron_right</span></button>
