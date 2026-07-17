@@ -529,7 +529,10 @@ document.getElementById("ptc-chk").addEventListener("change",async e=>{
     PER_TRACK=v;
     if(v){
       await loadTrackCovers();
-      if(Object.keys(TC_MAP).length===0)await syncFromApic();
+      if(Object.keys(TC_MAP).length===0){
+        const sr=await fetch(`/api/albums/${SLUG}/sync-track-covers`,{method:"POST"});
+        if(sr.ok){const sd=await sr.json();TC_MAP={};for(const tc of sd.track_covers)TC_MAP[tc.track_n]=tc;}
+      }
     }
     renderTracks();
   }else{e.target.checked=!v;toast("Erreur",true);}
@@ -548,28 +551,31 @@ function openTcv(n){
 function closeTcv(e){if(e&&e.target!==document.getElementById("tcv-overlay"))return;document.getElementById("tcv-overlay").classList.remove("open");TCV_N=null;}
 function closeTcvModal(){document.getElementById("tcv-overlay").classList.remove("open");TCV_N=null;}
 
-document.getElementById("tcv-file").addEventListener("change",async e=>{
-  const file=e.target.files[0];if(!file||TCV_N===null)return;
-  const t=TT[L()];
-  const fd=new FormData();fd.append("file",file);
-  const r=await fetch(`/api/albums/${SLUG}/tracks/${TCV_N}/cover`,{method:"POST",body:fd});
-  if(r.ok){
-    const d=await r.json();
-    for(const tc of d.track_covers)TC_MAP[tc.track_n]=tc;
-    openTcv(TCV_N);
-    renderTracks();
-    toast(t.saved+" ✓");
-  }else toast("Erreur upload ("+r.status+")",true);
-  e.target.value="";
-});
-
-document.getElementById("tcv-del").addEventListener("click",async()=>{
-  if(TCV_N===null)return;
-  const tc=TC_MAP[TCV_N];if(!tc)return;
-  const r=await fetch(`/api/track-covers/${tc.id}`,{method:"DELETE"});
-  if(r.ok){delete TC_MAP[TCV_N];closeTcvModal();renderTracks();}
-  else toast("Erreur",true);
-});
+function _bindTcvEvents(){
+  const tcvFile=document.getElementById("tcv-file");
+  if(tcvFile)tcvFile.addEventListener("change",async e=>{
+    const file=e.target.files[0];if(!file||TCV_N===null)return;
+    const t=TT[L()];
+    const fd=new FormData();fd.append("file",file);
+    const r=await fetch(`/api/albums/${SLUG}/tracks/${TCV_N}/cover`,{method:"POST",body:fd});
+    if(r.ok){
+      const d=await r.json();
+      for(const tc of d.track_covers)TC_MAP[tc.track_n]=tc;
+      openTcv(TCV_N);
+      renderTracks();
+      toast(t.saved+" ✓");
+    }else toast("Erreur upload ("+r.status+")",true);
+    e.target.value="";
+  });
+  const tcvDel=document.getElementById("tcv-del");
+  if(tcvDel)tcvDel.addEventListener("click",async()=>{
+    if(TCV_N===null)return;
+    const tc=TC_MAP[TCV_N];if(!tc)return;
+    const r=await fetch(`/api/track-covers/${tc.id}`,{method:"DELETE"});
+    if(r.ok){delete TC_MAP[TCV_N];closeTcvModal();renderTracks();}
+    else toast("Erreur",true);
+  });
+}
 
 // ── Track meta modal ─────────────────────────────────────────────────────────
 let TM_N=null,TM_I=null;
@@ -624,6 +630,7 @@ async function load(){
   document.getElementById("ptc-chk").checked=PER_TRACK;
   if(PER_TRACK)await loadTrackCovers();
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
+  _bindTcvEvents();
 }
 applyLang();load();
 </script>
