@@ -285,9 +285,9 @@ def catalogue_detail(slug: str) -> dict:
 
 @app.get("/api/catalogue/{slug}/nav")
 def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
-    """Album précédent / suivant dans l'ordre date_concert (desc)."""
+    """Album précédent / suivant dans l'ordre date_import (desc)."""
     include_drafts = identity.get("is_gestionnaire", False)
-    albums = catalogue.list_albums(sort="date_concert", include_drafts=include_drafts)
+    albums = catalogue.list_albums(sort="date_import", include_drafts=include_drafts)
     slugs = [a["slug"] for a in albums]
     if slug not in slugs:
         raise HTTPException(404, "album introuvable")
