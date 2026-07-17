@@ -180,3 +180,27 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_profiles_artist ON profiles(artist_id)"
         )
+        _migrate_track_covers(conn)
+
+
+
+
+
+def _migrate_track_covers(conn) -> None:
+    if conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='track_covers'"
+    ).fetchone():
+        return
+    conn.executescript(
+        "CREATE TABLE track_covers ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "slug TEXT NOT NULL,"
+        "track_n INTEGER NOT NULL,"
+        "username TEXT NOT NULL,"
+        "file_key TEXT NOT NULL,"
+        "cover_ext TEXT NOT NULL,"
+        "created_at TEXT NOT NULL,"
+        "updated_at TEXT NOT NULL,"
+        "UNIQUE(slug, track_n));"
+        "CREATE INDEX idx_tc_slug ON track_covers(slug);"
+    )

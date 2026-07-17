@@ -88,6 +88,20 @@
   .toast.show{opacity:1}
   .toast.err{background:#e57373;color:#fff}
   input[type="file"]{display:none}
+  .ptc-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
+  .ptc-toggle-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
+  .ptc-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);white-space:nowrap}
+  .tc-slot{width:48px;height:48px;flex-shrink:0;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+  .tc-slot img{width:100%;height:100%;object-fit:cover;display:block}
+  .tc-slot-ph{color:var(--muted)}
+  .tc-slot-ph .material-symbols-outlined{font-size:22px}
+  .tc-slot:hover .tc-slot-hint,.tc-slot:focus .tc-slot-hint{opacity:1}
+  .tc-slot-hint{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;border-radius:7px;pointer-events:none}
+  .tc-slot-hint .material-symbols-outlined{font-size:18px;color:#fff}
+  .tc-del{all:unset;position:absolute;top:2px;right:2px;cursor:pointer;background:rgba(0,0,0,.65);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;z-index:2}
+  .tc-del .material-symbols-outlined{font-size:12px;color:#fff}
+  .tc-del:hover{background:#e57373}
+  input.tc-file{display:none}
 </style>
 </head>
 <body>
@@ -113,6 +127,10 @@
         </div>
         <input type="file" id="cover-file" accept="image/jpeg,image/png,image/webp">
         <input type="file" id="traycard-file" accept="application/pdf">
+      </div>
+      <div class="ptc-toggle-row" id="ptc-row">
+        <input type="checkbox" id="ptc-chk">
+        <label for="ptc-chk" id="t-ptc-label" style="cursor:pointer;flex:1"></label>
       </div>
       <div id="traycard-wrap"></div>
       <div class="dl" id="dl"></div>
@@ -189,7 +207,7 @@ const TT={
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
       new_track:"Nouveau titre…",add_label:"Ajouter un label…",
-      del_t:"Supprimer",
+      del_t:"Supprimer",ptc_label:"Pochettes individuelles par titre",tc_upload:"Importer la pochette de cette piste",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
       status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
@@ -199,7 +217,7 @@ const TT={
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
-      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",
+      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Individual track covers",tc_upload:"Import this track's cover",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
       status_pub:"Visible in the catalogue",status_draft:"Hidden from public"}
 };
@@ -224,6 +242,7 @@ function applyLang(){
   document.getElementById("t-save-labels").textContent=t.save_labels;
   document.getElementById("t-labels").textContent=t.labels;
   document.getElementById("t-no-cover").textContent=t.no_cover;
+  document.getElementById("t-ptc-label").textContent=t.ptc_label;
   const chint=document.getElementById("t-cover-hint");
   if(chint) chint.textContent=DATA&&DATA.has_cover?t.cover_replace:t.cover_hint;
   document.getElementById("new-track").placeholder=t.new_track;
@@ -299,15 +318,58 @@ document.getElementById("cover-file").addEventListener("change",async e=>{
 
 // Tracks
 let dragSrcIdx=null;
+let PER_TRACK=false, TC_MAP={};
+
+async function loadTrackCovers(){
+  const r=await fetch(`/api/albums/${SLUG}/track-covers`);
+  if(!r.ok)return;
+  const d=await r.json();
+  TC_MAP={};
+  for(const tc of(d.track_covers||[]))TC_MAP[tc.track_n]=tc;
+}
+
 function renderTracks(){
   const ul=document.getElementById("tracks-list");
-  ul.innerHTML=tracks.map((t,i)=>`<li data-i="${i}">
+  const t=TT[L()];
+  ul.innerHTML=tracks.map((tr,i)=>{
+    const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+    const slot=PER_TRACK?`<div class="tc-slot" tabindex="0" data-n="${tr.n}" title="${t.tc_upload}">
+      ${TC_MAP[tr.n]?`<img src="${TC_MAP[tr.n].cover_url}?t=${Date.now()}" alt=""><button class="tc-del" data-n="${tr.n}" data-id="${TC_MAP[tr.n].id}"><span class="material-symbols-outlined">close</span></button>`:`<span class="tc-slot-ph"><span class="material-symbols-outlined">image</span></span>`}
+      <div class="tc-slot-hint"><span class="material-symbols-outlined">upload</span></div>
+    </div><input type="file" class="tc-file" data-n="${tr.n}" accept="image/jpeg,image/png,image/webp">`:"";
+    return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
-    <input type="text" value="${(t.title||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;")}" data-i="${i}">
-    <button class="del-btn" data-i="${i}" title="${TT[L()].del_t}"><span class="material-symbols-outlined">delete</span></button>
-  </li>`).join("");
+    <input type="text" value="${esc(tr.title)}" data-i="${i}">
+    <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
+    </li>`;
+  }).join("");
   ul.querySelectorAll("input[data-i]").forEach(inp=>{inp.oninput=()=>{tracks[+inp.dataset.i].title=inp.value;};});
   ul.querySelectorAll(".del-btn").forEach(btn=>{btn.onclick=()=>{tracks.splice(+btn.dataset.i,1);renderTracks();};});
+  if(PER_TRACK){
+    ul.querySelectorAll(".tc-slot").forEach(slot=>{
+      slot.addEventListener("click",e=>{if(e.target.closest(".tc-del"))return;slot.closest("li").querySelector(".tc-file").click();});
+      slot.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();slot.click();}});
+    });
+    ul.querySelectorAll(".tc-del").forEach(btn=>{
+      btn.onclick=async e=>{
+        e.stopPropagation();
+        const id=+btn.dataset.id,n=+btn.dataset.n;
+        const r=await fetch(`/api/track-covers/${id}`,{method:"DELETE"});
+        if(r.ok){delete TC_MAP[n];renderTracks();}else toast("Erreur",true);
+      };
+    });
+    ul.querySelectorAll(".tc-file").forEach(inp=>{
+      inp.addEventListener("change",async e=>{
+        const file=e.target.files[0];if(!file)return;
+        const n=+inp.dataset.n;
+        const fd=new FormData();fd.append("file",file);
+        const r=await fetch(`/api/albums/${SLUG}/tracks/${n}/cover`,{method:"POST",body:fd});
+        if(r.ok){const d=await r.json();for(const tc of d.track_covers)TC_MAP[tc.track_n]=tc;toast(t.saved+" ✓");renderTracks();}
+        else toast("Erreur upload ("+r.status+")",true);
+        e.target.value="";
+      });
+    });
+  }
   ul.querySelectorAll(".drag-handle").forEach(handle=>{
     const li=handle.closest("li");
     handle.addEventListener("dragstart",e=>{dragSrcIdx=+handle.dataset.i;e.dataTransfer.effectAllowed="move";li.style.opacity="0.4";});
@@ -316,10 +378,10 @@ function renderTracks(){
   ul.querySelectorAll("li").forEach(li=>{
     li.addEventListener("dragover",e=>{e.preventDefault();e.dataTransfer.dropEffect="move";
       ul.querySelectorAll("li").forEach(l=>l.classList.remove("drag-over"));
-      if(+li.dataset.i!==dragSrcIdx) li.classList.add("drag-over");});
+      if(+li.dataset.i!==dragSrcIdx)li.classList.add("drag-over");});
     li.addEventListener("drop",e=>{e.stopPropagation();
       const dst=+li.dataset.i;
-      if(dragSrcIdx===null||dragSrcIdx===dst) return;
+      if(dragSrcIdx===null||dragSrcIdx===dst)return;
       const moved=tracks.splice(dragSrcIdx,1)[0];
       tracks.splice(dst,0,moved);
       dragSrcIdx=null;
@@ -428,6 +490,19 @@ document.addEventListener("DOMContentLoaded",()=>{
   };
 });
 
+document.getElementById("ptc-chk").addEventListener("change",async e=>{
+  const v=e.target.checked;
+  const r=await fetch(`/api/albums/${SLUG}/per-track-covers`,{
+    method:"PATCH",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({per_track_covers:v})
+  });
+  if(r.ok){
+    PER_TRACK=v;
+    if(v)await loadTrackCovers();
+    renderTracks();
+  }else{e.target.checked=!v;toast("Erreur",true);}
+});
+
 async function load(){
   DATA=await(await fetch(`/api/albums/${SLUG}`)).json();
   const a=DATA.album||{};
@@ -443,6 +518,9 @@ async function load(){
   tracks=(DATA.tracks||[]).map(t=>({...t}));
   document.getElementById("suggest").innerHTML=(DATA.all_labels||[]).map(l=>`<option value="${l}">`).join("");
   albumPublished=DATA.published!==false;
+  PER_TRACK=DATA.per_track_covers===true;
+  document.getElementById("ptc-chk").checked=PER_TRACK;
+  if(PER_TRACK)await loadTrackCovers();
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
 }
 applyLang();load();

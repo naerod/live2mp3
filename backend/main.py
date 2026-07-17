@@ -143,6 +143,19 @@ class PublishIn(BaseModel):
     published: bool
 
 
+class PerTrackCoversIn(BaseModel):
+    per_track_covers: bool
+
+
+def _list_track_covers_public(slug: str) -> list:
+    """Pochettes par piste (publiques) — pour catalogue_detail."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, track_n FROM track_covers WHERE slug=? ORDER BY track_n", (slug,)
+        ).fetchall()
+    return [{"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"} for r in rows]
+
+
 # --- Santé & version (public) ---------------------------------------------
 import os
 import httpx
@@ -261,6 +274,8 @@ def catalogue_detail(slug: str) -> dict:
         "imported_at": meta.get("imported_at", ""),
         "source_url": src.get("url", "") or "",
         "source_label": src.get("label", "") or "",
+        "per_track_covers": bool(m.data.get("album", {}).get("per_track_covers", False)),
+        "track_covers": _list_track_covers_public(slug),
     }
 
 
@@ -468,6 +483,7 @@ def album_detail(slug: str,
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
         "published": m.data.get("published", True),
+        "per_track_covers": bool(album.get("per_track_covers", False)),
         "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
     }
 
@@ -619,6 +635,19 @@ def set_published(slug: str, payload: PublishIn,
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------
+
+
+@app.patch("/api/albums/{slug}/per-track-covers")
+def set_per_track_covers(slug: str, payload: PerTrackCoversIn,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    m.data.setdefault("album", {})["per_track_covers"] = payload.per_track_covers
+    m.save()
+    return {"ok": True, "per_track_covers": payload.per_track_covers}
+
 @app.get("/album/{slug}", response_class=HTMLResponse)
 def album_detail_page(slug: str) -> HTMLResponse:
     page = FRONTEND / "album_detail.html"

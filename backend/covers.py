@@ -464,3 +464,116 @@ def pin_cover(cover_id: int, identity: dict = Depends(require_gestionnaire)) -> 
         payload = _list_payload(conn, slug, identity.get("username"))
     _on_covers_changed(slug)
     return {"ok": True, **payload}
+
+
+# =====================================================================
+#  POCHETTES PAR PISTE
+# =====================================================================
+
+def track_covers_dir(slug: str) -> Path:
+    return PROJECTS_DIR / slug / "artwork" / "track-covers"
+
+
+def track_cover_file(slug: str, file_key: str, ext: str) -> Path:
+    return track_covers_dir(slug) / f"{file_key}{ext}"
+
+
+def _get_track_cover(conn, tc_id: int):
+    row = conn.execute("SELECT * FROM track_covers WHERE id=?", (tc_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "pochette introuvable")
+    return row
+
+
+@router.get("/track-cover/{tc_id}")
+def get_track_cover_img(tc_id: int) -> FileResponse:
+    with get_conn() as conn:
+        row = _get_track_cover(conn, tc_id)
+    path = track_cover_file(row["slug"], row["file_key"], row["cover_ext"])
+    if not path.exists():
+        raise HTTPException(404, "fichier absent")
+    return FileResponse(path, media_type=MEDIA_TYPES.get(row["cover_ext"], "application/octet-stream"))
+
+
+@router.get("/api/albums/{slug}/track-covers")
+def list_track_covers(slug: str, identity: dict = Depends(require_gestionnaire)) -> dict:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM track_covers WHERE slug=? ORDER BY track_n", (slug,)
+        ).fetchall()
+    return {
+        "slug": slug,
+        "track_covers": [
+            {"id": r["id"], "track_n": r["track_n"], "username": r["username"],
+             "cover_url": f"/track-cover/{r['id']}", "created_at": r["created_at"]}
+            for r in rows
+        ],
+    }
+
+
+@router.post("/api/albums/{slug}/tracks/{n}/cover")
+async def upload_track_cover(
+    slug: str, n: int,
+    file: UploadFile = File(...),
+    identity: dict = Depends(require_gestionnaire),
+) -> dict:
+    """Import ou remplacement de la pochette d'une piste (gestionnaire, sans tray card)."""
+    if not _album_exists(slug):
+        raise HTTPException(404, "album introuvable")
+    username = identity["username"]
+    cdata, cext = await _read_upload(file, COVER_EXTS, COVER_MAX_BYTES, "pochette")
+    now = _now()
+    key = uuid4().hex
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT * FROM track_covers WHERE slug=? AND track_n=?", (slug, n)
+        ).fetchone()
+        track_covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        if existing:
+            old = track_cover_file(slug, existing["file_key"], existing["cover_ext"])
+            old.unlink(missing_ok=True)
+            track_cover_file(slug, key, cext).write_bytes(cdata)
+            conn.execute(
+                "UPDATE track_covers SET file_key=?, cover_ext=?, username=?, updated_at=? "
+                "WHERE slug=? AND track_n=?",
+                (key, cext, username, now, slug, n),
+            )
+            tc_id = existing["id"]
+        else:
+            track_cover_file(slug, key, cext).write_bytes(cdata)
+            cur = conn.execute(
+                "INSERT INTO track_covers(slug, track_n, username, file_key, cover_ext, "
+                "created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+                (slug, n, username, key, cext, now, now),
+            )
+            tc_id = cur.lastrowid
+        rows = conn.execute(
+            "SELECT id, track_n FROM track_covers WHERE slug=? ORDER BY track_n", (slug,)
+        ).fetchall()
+    return {
+        "ok": True,
+        "track_cover_id": tc_id,
+        "track_covers": [
+            {"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"}
+            for r in rows
+        ],
+    }
+
+
+@router.delete("/api/track-covers/{tc_id}")
+def delete_track_cover(tc_id: int, identity: dict = Depends(require_gestionnaire)) -> dict:
+    with get_conn() as conn:
+        row = _get_track_cover(conn, tc_id)
+        track_cover_file(row["slug"], row["file_key"], row["cover_ext"]).unlink(missing_ok=True)
+        conn.execute("DELETE FROM track_covers WHERE id=?", (tc_id,))
+        rows = conn.execute(
+            "SELECT id, track_n FROM track_covers WHERE slug=? ORDER BY track_n",
+            (row["slug"],),
+        ).fetchall()
+    return {
+        "ok": True,
+        "track_covers": [
+            {"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"}
+            for r in rows
+        ],
+    }

@@ -141,6 +141,11 @@
   .cr-tray-badge:hover,.cr-tray-badge.on{border-color:var(--accent);color:var(--accent)}
   .cr-tray-badge .material-symbols-outlined{font-size:13px}
   .al-cover.is-tray{background:var(--bg)}
+  .setlist li.has-tc{display:flex;align-items:center;gap:10px;padding:6px 0}
+  .tc-thumb,.tc-thumb-ph{width:44px;height:44px;border-radius:6px;flex-shrink:0}
+  .tc-thumb{object-fit:cover}
+  .tc-thumb-ph{background:var(--border);display:flex;align-items:center;justify-content:center}
+  .tc-thumb-ph .material-symbols-outlined{font-size:18px;color:var(--muted)}
   .al-cover.is-tray img,.cr-fit{object-fit:contain!important}
   .al-cover.is-tray:hover img{transform:none}
   .cr-tray-embed{width:100%;height:100%;border:0;display:block;background:#fff}
@@ -377,9 +382,18 @@ function renderAlbum(d){
   const a=d.album||{};
   const tags=(d.labels||[]).map(l=>`<span class="tag">${L2M.esc(l)}</span>`).join('');
 
+  const tcMap={};
+  for(const tc of(d.track_covers||[]))tcMap[tc.track_n]=tc;
   const set=(d.tracks||[]).map(tr=>{
     const dl=(ME.authenticated&&tr.dl)
       ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
+    if(d.per_track_covers){
+      const tc=tcMap[tr.n];
+      const thumb=tc
+        ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
+        :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
+      return `<li class="has-tc">${thumb}<span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
+    }
     return `<li><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
   }).join('');
 
