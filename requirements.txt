@@ -12,3 +12,4 @@ jinja2
 pytest
 faster-whisper
 httpx
+pypdfium2

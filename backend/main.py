@@ -417,6 +417,36 @@ def view_traycard(slug: str, identity: dict = Depends(require_gestionnaire)) -> 
                         content_disposition_type="inline")
 
 
+@app.get("/app/traycard-thumb/{slug}")
+def traycard_thumb(slug: str, identity: dict = Depends(require_gestionnaire)):
+    """Thumbnail JPEG page 1 de la tray card (prévisualisation sans iframe)."""
+    from fastapi.responses import Response as _Resp
+    from PIL import Image as _Image
+    import pypdfium2 as _pdfium
+
+    tc, ext = _album_traycard(slug)
+    thumb = tc.with_suffix(".thumb.jpg")
+
+    if not thumb.exists() or thumb.stat().st_mtime < tc.stat().st_mtime:
+        if ext == ".pdf":
+            pdf = _pdfium.PdfDocument(str(tc))
+            page = pdf[0]
+            bm = page.render(scale=1.5)
+            img = bm.to_pil()
+            pdf.close()
+        else:
+            img = _Image.open(tc)
+
+        if img.mode != "RGB":
+            bg = _Image.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
+            img = bg
+        img.save(str(thumb), "JPEG", quality=85, optimize=True)
+
+    return FileResponse(str(thumb), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
+
+
 from fastapi.responses import Response as _Response
 
 
@@ -590,6 +620,7 @@ async def upload_traycard(slug: str, file: UploadFile = File(...),
     art_dir.mkdir(exist_ok=True)
     tc_path = art_dir / "tray_card.pdf"
     tc_path.write_bytes(await file.read())
+    tc_path.with_suffix(".thumb.jpg").unlink(missing_ok=True)
     return {"ok": True, "traycard": "artwork/tray_card.pdf"}
 
 
