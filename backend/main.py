@@ -266,10 +266,17 @@ def catalogue_detail(slug: str) -> dict:
 
 @app.get("/cover/{slug}")
 def get_cover(slug: str) -> FileResponse:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
+    if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
         raise HTTPException(404, "album introuvable")
-    m = Manifest.load(path)
+    # Priorité à la pochette gagnante de la DB sociale (même source que le carousel).
+    with get_conn() as conn:
+        win = top_cover(conn, slug)
+    if win:
+        p = cover_file(slug, win["file_key"], win["cover_ext"])
+        if p.exists():
+            return FileResponse(p)
+    # Fallback : manifest (covers legacy ou uploadées hors système social).
+    m = Manifest.load(PROJECTS_DIR / slug / "manifest.yaml")
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
         raise HTTPException(404, "pas de pochette")
