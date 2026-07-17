@@ -264,6 +264,9 @@ def catalogue_detail(slug: str) -> dict:
     }
 
 
+_NO_CACHE = {"Cache-Control": "no-store"}
+
+
 @app.get("/cover/{slug}")
 def get_cover(slug: str) -> FileResponse:
     if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
@@ -274,7 +277,7 @@ def get_cover(slug: str) -> FileResponse:
     if win:
         p = cover_file(slug, win["file_key"], win["cover_ext"])
         if p.exists():
-            return FileResponse(p)
+            return FileResponse(p, headers=_NO_CACHE)
     # Fallback : manifest (covers legacy ou uploadées hors système social).
     m = Manifest.load(PROJECTS_DIR / slug / "manifest.yaml")
     cover_rel = m.data.get("album", {}).get("cover")
@@ -283,7 +286,7 @@ def get_cover(slug: str) -> FileResponse:
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    return FileResponse(cover)
+    return FileResponse(cover, headers=_NO_CACHE)
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
