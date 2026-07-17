@@ -641,6 +641,25 @@ def set_published(slug: str, payload: PublishIn,
 # --- Outil (niveau gestionnaire) ------------------------------------------
 
 
+@app.delete("/api/albums/{slug}/cover/auto")
+def delete_album_cover_auto(
+    slug: str, identity: dict = Depends(require_gestionnaire)
+) -> dict:
+    """Supprime la pochette auto-extraite du dossier artwork/ (ne touche pas aux covers piste)."""
+    artwork_dir = PROJECTS_DIR / slug / "artwork"
+    deleted = False
+    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        f = artwork_dir / f"cover{ext}"
+        if f.exists():
+            f.unlink()
+            deleted = True
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if path.exists():
+        m = Manifest.load(path)
+        m.data.setdefault("album", {}).pop("cover", None)
+        m.save()
+    return {"ok": True, "deleted": deleted}
+
 @app.patch("/api/albums/{slug}/per-track-covers")
 def set_per_track_covers(slug: str, payload: PerTrackCoversIn,
                           identity: dict = Depends(require_gestionnaire)) -> dict:

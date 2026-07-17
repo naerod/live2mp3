@@ -728,7 +728,11 @@ document.getElementById("q").addEventListener("input",()=>{render();updateCount(
 document.getElementById("albums").addEventListener("click",e=>{
   if(e.target.closest("a,button")) return;
   const card=e.target.closest(".album");
-  if(card) location.href=`/album/${card.dataset.slug}`;
+  if(card){
+    const slugs=[...document.querySelectorAll('#albums .album')].map(c=>c.dataset.slug);
+    sessionStorage.setItem('l2m-album-nav',JSON.stringify({slugs}));
+    location.href=`/album/${card.dataset.slug}`;
+  }
 });
 
 // ── Version footer ────────────────────────────────────────────────────────

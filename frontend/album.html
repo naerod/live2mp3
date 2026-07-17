@@ -120,7 +120,8 @@
   .tm-fields label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
   .tm-fields input{width:100%;box-sizing:border-box}
   .tm-footer{display:flex;justify-content:flex-end;gap:8px}
-  .tc-del{all:unset;position:absolute;top:2px;right:2px;cursor:pointer;background:rgba(0,0,0,.65);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;z-index:2}
+  .cover-del-btn{display:none;width:100%;margin-top:6px;justify-content:center;align-items:center;gap:6px;color:var(--danger,#e57373);border-color:var(--danger,#e57373)}
+    .tc-del{all:unset;position:absolute;top:2px;right:2px;cursor:pointer;background:rgba(0,0,0,.65);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;z-index:2}
   .tc-del .material-symbols-outlined{font-size:12px;color:#fff}
   .tc-del:hover{background:#e57373}
   input.tc-file{display:none}
@@ -148,6 +149,9 @@
           </div>
         </div>
         <input type="file" id="cover-file" accept="image/jpeg,image/png,image/webp">
+        <button class="icon-btn cover-del-btn" id="cover-del-btn" type="button" onclick="deleteAlbumCover()">
+          <span class="material-symbols-outlined">delete</span><span id="t-cover-del">Supprimer la pochette</span>
+        </button>
         <input type="file" id="traycard-file" accept="application/pdf">
       </div>
       <div class="ptc-toggle-row" id="ptc-row">
@@ -224,7 +228,7 @@ const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
       f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       save_meta:"Enregistrer",save_tracks:"Enregistrer les pistes",save_labels:"Enregistrer",
-      saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",traycard:"Tray card",
+      saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
@@ -235,7 +239,7 @@ const TT={
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       save_meta:"Save",save_tracks:"Save tracks",save_labels:"Save",
-      saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",traycard:"Tray card",
+      saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
@@ -271,6 +275,7 @@ function applyLang(){
   const tArl=document.getElementById("t-tm-artist-lbl");if(tArl)tArl.textContent=t.tc_meta_artist;
   const tSv=document.getElementById("t-tm-save");if(tSv)tSv.textContent=t.tc_meta_save;
   const tCnc=document.getElementById("t-tm-cancel");if(tCnc)tCnc.textContent=t.tc_meta_cancel;
+  const delCoverEl=document.getElementById("t-cover-del");if(delCoverEl)delCoverEl.textContent=t.cover_del;
   const chint=document.getElementById("t-cover-hint");
   if(chint) chint.textContent=DATA&&DATA.has_cover?t.cover_replace:t.cover_hint;
   document.getElementById("new-track").placeholder=t.new_track;
@@ -328,12 +333,21 @@ function savingError(btnId){
 document.getElementById("cover-wrap").onclick=()=>document.getElementById("cover-file").click();
 function renderCover(){
   const wrap=document.getElementById("cover-wrap"),ph=document.getElementById("cover-ph");
+  const delBtn=document.getElementById("cover-del-btn");
   if(DATA.has_cover){
     ph.style.display="none";
     let img=wrap.querySelector("img");
     if(!img){img=document.createElement("img");img.alt="cover";wrap.insertBefore(img,wrap.querySelector("label"));}
     img.src=`/cover/${SLUG}?t=${Date.now()}`;
-  }else{ph.style.display="";const img=wrap.querySelector("img");if(img)img.remove();}
+    if(delBtn)delBtn.style.display="flex";
+  }else{ph.style.display="";const img=wrap.querySelector("img");if(img)img.remove();if(delBtn)delBtn.style.display="none";}
+}
+
+async function deleteAlbumCover(){
+  const t=TT[L()];
+  const r=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
+  if(r.ok){DATA.has_cover=false;renderCover();renderDL();toast(t.cover_del+" ✓");}
+  else toast("Erreur suppression ("+r.status+")",true);
 }
 document.getElementById("cover-file").addEventListener("change",async e=>{
   const file=e.target.files[0];if(!file) return;
