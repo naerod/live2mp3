@@ -129,11 +129,9 @@ const L2M = (function () {
 
     if (meData.is_gestionnaire || meData.is_admin) {
       document.getElementById("tool-link").style.display = "";
-      if (opts.onImport) {
-        const ib = document.getElementById("import-btn");
-        ib.style.display = "";
-        ib.onclick = opts.onImport;
-      }
+      const ib = document.getElementById("import-btn");
+      ib.style.display = "";
+      ib.onclick = opts.onImport || (() => { location.href = "/?import=1"; });
     }
 
     const um = document.getElementById("usermenu");

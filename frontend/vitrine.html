@@ -811,6 +811,10 @@ async function load(){
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
   loadSocialCounts();
+  if(new URLSearchParams(location.search).get("import")==="1"&&(ME.is_gestionnaire||ME.is_admin)){
+    history.replaceState(null,"",location.pathname);
+    openImport();
+  }
 }
 load();
 
