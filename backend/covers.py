@@ -25,6 +25,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
+from mutagen.id3 import ID3, ID3NoHeaderError
+from .albumfiles import MIME_EXT, _file_track_n
 from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
 from .manifest import PROJECTS_DIR
@@ -572,6 +574,76 @@ def delete_track_cover(tc_id: int, identity: dict = Depends(require_gestionnaire
         ).fetchall()
     return {
         "ok": True,
+        "track_covers": [
+            {"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"}
+            for r in rows
+        ],
+    }
+
+
+@router.post("/api/albums/{slug}/sync-track-covers")
+def sync_track_covers_from_apic(
+    slug: str, identity: dict = Depends(require_gestionnaire)
+) -> dict:
+    """Synchronise les pochettes individuelles depuis les tags APIC embarqués dans chaque MP3."""
+    if not _album_exists(slug):
+        raise HTTPException(404, "album introuvable")
+    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
+    if not audio_dir.exists():
+        raise HTTPException(404, "pas de pistes audio")
+
+    username = identity["username"]
+    now = _now()
+    synced = 0
+    errors: list[str] = []
+
+    for mp3_path in sorted(audio_dir.glob("*.mp3")):
+        file_n = _file_track_n(mp3_path.stem)
+        if file_n is None:
+            continue
+        try:
+            tags = ID3(str(mp3_path))
+        except Exception:
+            errors.append(mp3_path.name)
+            continue
+        apics = tags.getall("APIC")
+        if not apics:
+            continue
+        apic = apics[0]
+        ext = MIME_EXT.get(apic.mime, ".jpg")
+        key = uuid4().hex
+        with get_conn() as conn:
+            existing = conn.execute(
+                "SELECT * FROM track_covers WHERE slug=? AND track_n=?", (slug, file_n)
+            ).fetchone()
+            track_covers_dir(slug).mkdir(parents=True, exist_ok=True)
+            if existing:
+                old_f = track_cover_file(slug, existing["file_key"], existing["cover_ext"])
+                old_f.unlink(missing_ok=True)
+                track_cover_file(slug, key, ext).write_bytes(apic.data)
+                conn.execute(
+                    "UPDATE track_covers SET file_key=?, cover_ext=?, username=?, updated_at=? "
+                    "WHERE slug=? AND track_n=?",
+                    (key, ext, username, now, slug, file_n),
+                )
+            else:
+                track_cover_file(slug, key, ext).write_bytes(apic.data)
+                conn.execute(
+                    "INSERT INTO track_covers(slug, track_n, username, file_key, cover_ext, "
+                    "created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+                    (slug, file_n, username, key, ext, now, now),
+                )
+        synced += 1
+
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, track_n FROM track_covers WHERE slug=? ORDER BY track_n", (slug,)
+        ).fetchall()
+
+    return {
+        "ok": True,
+        "synced": synced,
+        "errors": errors,
         "track_covers": [
             {"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"}
             for r in rows
