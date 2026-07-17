@@ -88,6 +88,10 @@
   .toast.show{opacity:1}
   .toast.err{background:#e57373;color:#fff}
   input[type="file"]{display:none}
+  #save-all{background:var(--accent);color:#0d0f13;font-weight:600;border:none}
+  #save-all:hover{background:var(--accent);border-color:var(--accent)}
+  #save-all.saving .save-btn-icon{animation:disk-spin .55s linear infinite}
+  #save-all.saved .save-btn-icon{animation:check-pop .32s cubic-bezier(.34,1.56,.64,1);color:#4ade80}
   .ptc-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
   .ptc-toggle-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
   .ptc-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);white-space:nowrap}
@@ -133,7 +137,7 @@
 <main>
   <div class="page-nav">
     <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
-    <button class="icon-btn primary" id="save-all"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-all">Enregistrer</span></button>
+    <button class="icon-btn" id="save-all"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-all">Enregistrer</span></button>
   </div>
   <div class="layout">
     <!-- Colonne gauche -->
