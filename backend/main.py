@@ -146,6 +146,10 @@ class PublishIn(BaseModel):
 class PerTrackCoversIn(BaseModel):
     per_track_covers: bool
 
+class TrackMetaIn(BaseModel):
+    title: str
+    artist: str | None = None
+
 
 def _list_track_covers_public(slug: str) -> list:
     """Pochettes par piste (publiques) — pour catalogue_detail."""
@@ -484,7 +488,7 @@ def album_detail(slug: str,
         "has_mp4": cat.get("has_mp4", False),
         "published": m.data.get("published", True),
         "per_track_covers": bool(album.get("per_track_covers", False)),
-        "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
+        "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
     }
 
 
@@ -647,6 +651,27 @@ def set_per_track_covers(slug: str, payload: PerTrackCoversIn,
     m.data.setdefault("album", {})["per_track_covers"] = payload.per_track_covers
     m.save()
     return {"ok": True, "per_track_covers": payload.per_track_covers}
+
+@app.patch("/api/albums/{slug}/tracks/{n}/meta")
+def patch_track_meta(
+    slug: str, n: int, payload: TrackMetaIn,
+    identity: dict = Depends(require_gestionnaire),
+) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    track = next((t for t in m.data.get("tracks", []) if t["n"] == n), None)
+    if track is None:
+        raise HTTPException(404, "piste introuvable")
+    track["title"] = payload.title.strip()
+    if payload.artist is not None:
+        if payload.artist.strip():
+            track["artist"] = payload.artist.strip()
+        else:
+            track.pop("artist", None)
+    m.save()
+    return {"ok": True, "track": track}
 
 @app.get("/album/{slug}", response_class=HTMLResponse)
 def album_detail_page(slug: str) -> HTMLResponse:

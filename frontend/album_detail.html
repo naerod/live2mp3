@@ -144,6 +144,13 @@
   .setlist li.has-tc{display:flex;align-items:center;gap:10px;padding:6px 0}
   .setlist li.has-tc .n{margin-left:6px}
   .tc-slot-wrap{position:relative;width:44px;height:44px;border-radius:6px;flex-shrink:0}
+  /* Track cover viewer modal */
+  .tcv2-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;align-items:center;justify-content:center}
+  .tcv2-overlay.open{display:flex}
+  .tcv2-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:14px;position:relative}
+  .tcv2-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
+  .tcv2-close .material-symbols-outlined{font-size:20px}
+  .tcv2-actions{display:flex;gap:8px}
   .tc-slot-wrap.can-upload{cursor:pointer}
   .tc-thumb,.tc-thumb-ph{width:44px;height:44px;border-radius:6px;flex-shrink:0}
   .tc-thumb{object-fit:cover;display:block}
@@ -218,7 +225,7 @@
 </div>
 
 <!-- Import d'une pochette (+ tray card optionnelle) -->
-<input type="file" id="tc-file-input" accept="image/jpeg,image/png,image/webp" style="display:none">
+<input type="file" id="tcv2-file" accept="image/jpeg,image/png,image/webp" style="display:none">
 <div id="up" class="up hidden">
   <div class="up-box">
     <h3 id="up-title">Proposer une pochette</h3>
@@ -282,7 +289,8 @@ const T={
       up_cover:"Pochette (obligatoire)",up_tray:"Tray card (optionnelle)",
       up_caption:"Légende (optionnelle)",up_send:"Envoyer",up_cancel:"Annuler",
       up_need_cover:"Choisissez une image de pochette.",up_failed:"Échec de l'envoi.",
-      tray_title:"Tray card",tray_send:"Envoyer la tray card"},
+      tray_title:"Tray card",tray_send:"Envoyer la tray card",
+      tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_view:"Pochette de la piste"},
   en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
       downloads:"Downloads",setlist:"Setlist",comments:"Comments",
       full:"Full album (MP3)",cover:"Cover",traycard:"Tray card",
@@ -308,7 +316,8 @@ const T={
       up_cover:"Cover (required)",up_tray:"Tray card (optional)",
       up_caption:"Caption (optional)",up_send:"Send",up_cancel:"Cancel",
       up_need_cover:"Pick a cover image.",up_failed:"Upload failed.",
-      tray_title:"Tray card",tray_send:"Send tray card"}
+      tray_title:"Tray card",tray_send:"Send tray card",
+      tc_change:"Change cover",tc_delete:"Remove",tc_view:"Track cover"}
 };
 const L=()=>localStorage.getItem('l2m-lang')||'fr';
 const t=k=>{const v=(T[L()]||T.fr)[k];return typeof v==='function'?v:v||k;};
@@ -318,6 +327,7 @@ function setLang(l){
   const _ll=document.getElementById('lang-label');if(_ll)_ll.textContent=l.toUpperCase();
   document.getElementById('t-back').textContent=t('back');
   const mg=document.getElementById('t-manage');if(mg)mg.textContent=t('manage');
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
   if(window.applyI18n)applyI18n(l);
 }
 
@@ -338,6 +348,7 @@ let POSTERS={};
 
 async function loadPage(){
   setLang(L());
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
   ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
 
   if(ME.is_gestionnaire){
@@ -398,11 +409,14 @@ function renderAlbum(d){
     if(d.per_track_covers){
       const tc=tcMap[tr.n];
       const isGest=ME.is_gestionnaire;
+      const canView=!!tc;
+      const canInteract=canView||isGest;
       const inner=tc
         ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
         :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
-      const hint=isGest?`<div class="tc-upload-hint"><span class="material-symbols-outlined">upload</span></div>`:'';
-      return `<li class="has-tc"><div class="tc-slot-wrap${isGest?' can-upload':''}" data-n="${tr.n}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
+      const hintIcon=tc?'zoom_in':'upload';
+      const hint=canInteract?`<div class="tc-upload-hint"><span class="material-symbols-outlined">${hintIcon}</span></div>`:'';
+      return `<li class="has-tc"><div class="tc-slot-wrap${canInteract?' can-upload':''}" data-n="${tr.n}" data-has-cover="${!!tc}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
     }
     return `<li><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
   }).join('');
@@ -465,37 +479,87 @@ function renderAlbum(d){
   initSocialActions();
   renderCarousel();
   L2M.comments(document.getElementById('sec-comments'),slug);
-  if(d.per_track_covers&&ME.is_gestionnaire)initTrackCoverUpload(slug);
+  if(d.per_track_covers)initTrackCoverInteract(slug,d.track_covers||[]);
 }
 
 function scrollToComments(){
   document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function initTrackCoverUpload(sl){
-  const input=document.getElementById('tc-file-input');
-  let currentN=null;
+let TCV2_SL=null,TCV2_N=null,TCV2_MAP={};
+function initTrackCoverInteract(sl,trackCovers){
+  TCV2_SL=sl;
+  TCV2_MAP={};
+  for(const tc of trackCovers)TCV2_MAP[tc.track_n]=tc;
   document.querySelectorAll('.setlist .tc-slot-wrap.can-upload').forEach(slot=>{
-    slot.addEventListener('click',()=>{currentN=+slot.dataset.n;input.click();});
+    slot.addEventListener('click',()=>openTcv2(+slot.dataset.n));
   });
-  input.addEventListener('change',async e=>{
-    const file=e.target.files[0];if(!file)return;
-    const fd=new FormData();fd.append('file',file);
-    const r=await fetch(`/api/albums/${sl}/tracks/${currentN}/cover`,{method:'POST',body:fd});
-    if(r.ok){
-      const d=await r.json();
-      const tc=d.track_covers.find(t=>t.track_n===currentN);
-      if(tc){
-        const slot=document.querySelector(`.tc-slot-wrap[data-n="${currentN}"]`);
-        if(slot){
-          const ph=slot.querySelector('.tc-thumb-ph');
-          if(ph){const img=document.createElement('img');img.className='tc-thumb';img.src=tc.cover_url+'?t='+Date.now();ph.replaceWith(img);}
-          else{const img=slot.querySelector('img');if(img)img.src=tc.cover_url+'?t='+Date.now();}
+  const fileInp=document.getElementById('tcv2-file');
+  if(fileInp){
+    fileInp.addEventListener('change',async e=>{
+      const file=e.target.files[0];if(!file||TCV2_N===null)return;
+      const fd=new FormData();fd.append('file',file);
+      const r=await fetch(`/api/albums/${TCV2_SL}/tracks/${TCV2_N}/cover`,{method:'POST',body:fd});
+      if(r.ok){
+        const d=await r.json();
+        const tc=d.track_covers.find(x=>x.track_n===TCV2_N);
+        if(tc){
+          TCV2_MAP[TCV2_N]=tc;
+          const slot=document.querySelector(`.tc-slot-wrap[data-n="${TCV2_N}"]`);
+          if(slot){
+            const ph=slot.querySelector('.tc-thumb-ph');
+            if(ph){const img=document.createElement('img');img.className='tc-thumb';img.src=tc.cover_url+'?t='+Date.now();ph.replaceWith(img);}
+            else{const img=slot.querySelector('img');if(img)img.src=tc.cover_url+'?t='+Date.now();}
+            slot.dataset.hasCover='true';
+          }
+          openTcv2(TCV2_N);
         }
       }
+      e.target.value='';
+    });
+    const delBtn=document.getElementById('tcv2-del');
+    if(delBtn){
+      delBtn.addEventListener('click',async()=>{
+        const tc=TCV2_MAP[TCV2_N];if(!tc)return;
+        const r=await fetch(`/api/track-covers/${tc.id}`,{method:'DELETE'});
+        if(r.ok){
+          delete TCV2_MAP[TCV2_N];
+          const slot=document.querySelector(`.tc-slot-wrap[data-n="${TCV2_N}"]`);
+          if(slot){
+            const img=slot.querySelector('img');
+            if(img){const ph=document.createElement('span');ph.className='tc-thumb-ph';ph.innerHTML='<span class="material-symbols-outlined">image</span>';img.replaceWith(ph);}
+            slot.dataset.hasCover='false';
+            slot.querySelector('.tc-upload-hint span').textContent='upload';
+          }
+          closeTcv2();
+        }
+      });
     }
-    e.target.value='';
-  },{once:false});
+  }
+}
+function openTcv2(n){
+  TCV2_N=n;
+  const tc=TCV2_MAP[n];
+  const isGest=ME.is_gestionnaire;
+  const med=document.getElementById('tcv2-media');
+  if(med){
+    if(tc)med.innerHTML=`<img src="${tc.cover_url}?t=${Date.now()}" alt="" style="width:100%;border-radius:8px;max-height:65vh;object-fit:contain">`;
+    else med.innerHTML='<div style="width:100%;aspect-ratio:1;border-radius:8px;background:var(--border);display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined" style="font-size:48px;color:var(--muted)">image</span></div>';
+  }
+  const actions=document.getElementById('tcv2-actions');
+  if(actions)actions.style.display=isGest?'flex':'none';
+  const delBtn=document.getElementById('tcv2-del');
+  if(delBtn)delBtn.style.display=(isGest&&tc)?'flex':'none';
+  document.getElementById('tcv2-overlay')?.classList.add('open');
+}
+function closeTcv2(e){
+  if(e&&e.target!==document.getElementById('tcv2-overlay'))return;
+  document.getElementById('tcv2-overlay')?.classList.remove('open');
+  TCV2_N=null;
+}
+function closeTcv2Modal(){
+  document.getElementById('tcv2-overlay')?.classList.remove('open');
+  TCV2_N=null;
 }
 
 async function initSocialActions(){
@@ -826,5 +890,21 @@ function showNotFound(){
 
 loadPage();
 </script>
+  <!-- Track cover viewer modal -->
+  <div class="tcv2-overlay" id="tcv2-overlay" onclick="closeTcv2(event)">
+    <div class="tcv2-box">
+      <button class="tcv2-close" onclick="closeTcv2Modal()"><span class="material-symbols-outlined">close</span></button>
+      <div id="tcv2-media"></div>
+      <div class="tcv2-actions" id="tcv2-actions" style="display:none">
+        <label for="tcv2-file" class="btn-secondary" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex:1;justify-content:center">
+          <span class="material-symbols-outlined">upload</span> <span data-t="tc_change"></span>
+        </label>
+        <button id="tcv2-del" class="btn-secondary" style="color:var(--danger,#e57373);border-color:var(--danger,#e57373);display:none;align-items:center;gap:4px">
+          <span class="material-symbols-outlined">delete</span> <span data-t="tc_delete"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="tcv2-file" style="display:none" accept="image/jpeg,image/png,image/webp">
 </body>
 </html>

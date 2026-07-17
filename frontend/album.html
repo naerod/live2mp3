@@ -91,8 +91,6 @@
   .ptc-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
   .ptc-toggle-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
   .ptc-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);white-space:nowrap}
-  .ptc-sync-btn{display:none;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:6px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);cursor:pointer;white-space:nowrap}
-  .ptc-sync-btn .material-symbols-outlined{font-size:14px}
   .tc-slot{width:48px;height:48px;flex-shrink:0;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
   .tc-slot img{width:100%;height:100%;object-fit:cover;display:block}
   .tc-slot-ph{color:var(--muted)}
@@ -100,6 +98,28 @@
   .tc-slot:hover .tc-slot-hint,.tc-slot:focus .tc-slot-hint{opacity:1}
   .tc-slot-hint{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;border-radius:7px;pointer-events:none}
   .tc-slot-hint .material-symbols-outlined{font-size:18px;color:#fff}
+  .track-gear{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
+  .track-gear:hover{background:var(--border);color:var(--text)}
+  .track-gear .material-symbols-outlined{font-size:18px}
+  /* Cover viewer modal */
+  .tcv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center}
+  .tcv-overlay.open{display:flex}
+  .tcv-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:16px;position:relative}
+  .tcv-box img{width:100%;border-radius:8px;object-fit:contain;max-height:60vh}
+  .tcv-ph{width:100%;aspect-ratio:1;border-radius:8px;background:var(--border);display:flex;align-items:center;justify-content:center}
+  .tcv-ph .material-symbols-outlined{font-size:48px;color:var(--muted)}
+  .tcv-actions{display:flex;gap:8px}
+  .tcv-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
+  .tcv-close .material-symbols-outlined{font-size:20px}
+  /* Track meta modal */
+  .tm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center}
+  .tm-overlay.open{display:flex}
+  .tm-box{background:var(--card);border-radius:16px;padding:24px;max-width:460px;width:90%;display:flex;flex-direction:column;gap:16px;position:relative}
+  .tm-box h3{margin:0;font-size:15px;font-weight:600;color:var(--muted)}
+  .tm-fields{display:flex;flex-direction:column;gap:10px}
+  .tm-fields label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .tm-fields input{width:100%;box-sizing:border-box}
+  .tm-footer{display:flex;justify-content:flex-end;gap:8px}
   .tc-del{all:unset;position:absolute;top:2px;right:2px;cursor:pointer;background:rgba(0,0,0,.65);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;z-index:2}
   .tc-del .material-symbols-outlined{font-size:12px;color:#fff}
   .tc-del:hover{background:#e57373}
@@ -133,7 +153,6 @@
       <div class="ptc-toggle-row" id="ptc-row">
         <input type="checkbox" id="ptc-chk">
         <label for="ptc-chk" id="t-ptc-label" style="cursor:pointer;flex:1"></label>
-        <button class="ptc-sync-btn" id="ptc-sync-btn" type="button" onclick="syncFromApic()"><span class="material-symbols-outlined">sync</span><span id="t-tc-sync"></span></button>
       </div>
       <div id="traycard-wrap"></div>
       <div class="dl" id="dl"></div>
@@ -210,7 +229,7 @@ const TT={
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
       new_track:"Nouveau titre…",add_label:"Ajouter un label…",
-      del_t:"Supprimer",ptc_label:"Pochettes individuelles par titre",tc_upload:"Importer la pochette de cette piste",tc_sync:"Sync depuis les MP3",
+      del_t:"Supprimer",ptc_label:"Pistes individuelles",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
       status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
@@ -220,7 +239,7 @@ const TT={
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
-      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Individual track covers",tc_upload:"Import this track's cover",tc_sync:"Sync from MP3s",
+      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Individual tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
       status_pub:"Visible in the catalogue",status_draft:"Hidden from public"}
 };
@@ -246,7 +265,12 @@ function applyLang(){
   document.getElementById("t-labels").textContent=t.labels;
   document.getElementById("t-no-cover").textContent=t.no_cover;
   document.getElementById("t-ptc-label").textContent=t.ptc_label;
-  const syncEl=document.getElementById("t-tc-sync");if(syncEl)syncEl.textContent=t.tc_sync;
+  const tChg=document.getElementById("t-tc-change");if(tChg)tChg.textContent=t.tc_change;
+  const tDel=document.getElementById("t-tc-del-lbl");if(tDel)tDel.textContent=t.tc_delete;
+  const tTml=document.getElementById("t-tm-title-lbl");if(tTml)tTml.textContent=t.tc_meta_title;
+  const tArl=document.getElementById("t-tm-artist-lbl");if(tArl)tArl.textContent=t.tc_meta_artist;
+  const tSv=document.getElementById("t-tm-save");if(tSv)tSv.textContent=t.tc_meta_save;
+  const tCnc=document.getElementById("t-tm-cancel");if(tCnc)tCnc.textContent=t.tc_meta_cancel;
   const chint=document.getElementById("t-cover-hint");
   if(chint) chint.textContent=DATA&&DATA.has_cover?t.cover_replace:t.cover_hint;
   document.getElementById("new-track").placeholder=t.new_track;
@@ -337,13 +361,16 @@ function renderTracks(){
   const t=TT[L()];
   ul.innerHTML=tracks.map((tr,i)=>{
     const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+    const tc=TC_MAP[tr.n];
     const slot=PER_TRACK?`<div class="tc-slot" tabindex="0" data-n="${tr.n}" title="${t.tc_upload}">
-      ${TC_MAP[tr.n]?`<img src="${TC_MAP[tr.n].cover_url}?t=${Date.now()}" alt=""><button class="tc-del" data-n="${tr.n}" data-id="${TC_MAP[tr.n].id}"><span class="material-symbols-outlined">close</span></button>`:`<span class="tc-slot-ph"><span class="material-symbols-outlined">image</span></span>`}
-      <div class="tc-slot-hint"><span class="material-symbols-outlined">upload</span></div>
-    </div><input type="file" class="tc-file" data-n="${tr.n}" accept="image/jpeg,image/png,image/webp">`:"";
+      ${tc?`<img src="${tc.cover_url}?t=${Date.now()}" alt="">`:`<span class="tc-slot-ph"><span class="material-symbols-outlined">image</span></span>`}
+      <div class="tc-slot-hint"><span class="material-symbols-outlined">zoom_in</span></div>
+    </div>`:""
+    const gear=PER_TRACK?`<button class="track-gear" data-n="${tr.n}" data-i="${i}" title="Métadonnées"><span class="material-symbols-outlined">tune</span></button>`:"";
     return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
     <input type="text" value="${esc(tr.title)}" data-i="${i}">
+    ${gear}
     <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
     </li>`;
   }).join("");
@@ -351,27 +378,11 @@ function renderTracks(){
   ul.querySelectorAll(".del-btn").forEach(btn=>{btn.onclick=()=>{tracks.splice(+btn.dataset.i,1);renderTracks();};});
   if(PER_TRACK){
     ul.querySelectorAll(".tc-slot").forEach(slot=>{
-      slot.addEventListener("click",e=>{if(e.target.closest(".tc-del"))return;slot.closest("li").querySelector(".tc-file").click();});
-      slot.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();slot.click();}});
+      slot.addEventListener("click",()=>openTcv(+slot.dataset.n));
+      slot.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openTcv(+slot.dataset.n);}});
     });
-    ul.querySelectorAll(".tc-del").forEach(btn=>{
-      btn.onclick=async e=>{
-        e.stopPropagation();
-        const id=+btn.dataset.id,n=+btn.dataset.n;
-        const r=await fetch(`/api/track-covers/${id}`,{method:"DELETE"});
-        if(r.ok){delete TC_MAP[n];renderTracks();}else toast("Erreur",true);
-      };
-    });
-    ul.querySelectorAll(".tc-file").forEach(inp=>{
-      inp.addEventListener("change",async e=>{
-        const file=e.target.files[0];if(!file)return;
-        const n=+inp.dataset.n;
-        const fd=new FormData();fd.append("file",file);
-        const r=await fetch(`/api/albums/${SLUG}/tracks/${n}/cover`,{method:"POST",body:fd});
-        if(r.ok){const d=await r.json();for(const tc of d.track_covers)TC_MAP[tc.track_n]=tc;toast(t.saved+" ✓");renderTracks();}
-        else toast("Erreur upload ("+r.status+")",true);
-        e.target.value="";
-      });
+    ul.querySelectorAll(".track-gear").forEach(btn=>{
+      btn.addEventListener("click",()=>openTmModal(+btn.dataset.n,+btn.dataset.i));
     });
   }
   ul.querySelectorAll(".drag-handle").forEach(handle=>{
@@ -402,7 +413,7 @@ document.getElementById("save-tracks").onclick=async()=>{
   savingStart("save-tracks");
   const r=await fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title}))})});
+    body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})});
   if(r.ok){showSaved("save-tracks");}else{savingError("save-tracks");toast("Erreur ("+r.status+")",true);}};
 
 // Labels
@@ -506,26 +517,78 @@ document.getElementById("ptc-chk").addEventListener("change",async e=>{
       await loadTrackCovers();
       if(Object.keys(TC_MAP).length===0)await syncFromApic();
     }
-    const syncBtn=document.getElementById("ptc-sync-btn");
-    if(syncBtn)syncBtn.style.display=v?"flex":"none";
     renderTracks();
   }else{e.target.checked=!v;toast("Erreur",true);}
 });
 
-async function syncFromApic(){
-  const btn=document.getElementById("ptc-sync-btn");
-  if(btn){btn.disabled=true;btn.style.opacity="0.6";}
-  try{
-    const r=await fetch(`/api/albums/${SLUG}/sync-track-covers`,{method:"POST"});
-    if(!r.ok){toast("Erreur sync",true);return;}
+// ── Cover viewer modal ──────────────────────────────────────────────────────
+let TCV_N=null;
+function openTcv(n){
+  TCV_N=n;
+  const tc=TC_MAP[n];
+  const med=document.getElementById("tcv-media");
+  if(tc){med.innerHTML=`<img src="${tc.cover_url}?t=${Date.now()}" alt="">`;}
+  else{med.innerHTML='<div class="tcv-ph"><span class="material-symbols-outlined">image</span></div>';}
+  document.getElementById("tcv-overlay").classList.add("open");
+}
+function closeTcv(e){if(e&&e.target!==document.getElementById("tcv-overlay"))return;document.getElementById("tcv-overlay").classList.remove("open");TCV_N=null;}
+function closeTcvModal(){document.getElementById("tcv-overlay").classList.remove("open");TCV_N=null;}
+
+document.getElementById("tcv-file").addEventListener("change",async e=>{
+  const file=e.target.files[0];if(!file||TCV_N===null)return;
+  const t=TT[L()];
+  const fd=new FormData();fd.append("file",file);
+  const r=await fetch(`/api/albums/${SLUG}/tracks/${TCV_N}/cover`,{method:"POST",body:fd});
+  if(r.ok){
     const d=await r.json();
-    TC_MAP={};
     for(const tc of d.track_covers)TC_MAP[tc.track_n]=tc;
-    toast(`${d.synced} pochette${d.synced>1?"s":""} synchronisée${d.synced>1?"s":""} ✓`);
+    openTcv(TCV_N);
     renderTracks();
-  }finally{
-    if(btn){btn.disabled=false;btn.style.opacity="";}
-  }
+    toast(t.saved+" ✓");
+  }else toast("Erreur upload ("+r.status+")",true);
+  e.target.value="";
+});
+
+document.getElementById("tcv-del").addEventListener("click",async()=>{
+  if(TCV_N===null)return;
+  const tc=TC_MAP[TCV_N];if(!tc)return;
+  const r=await fetch(`/api/track-covers/${tc.id}`,{method:"DELETE"});
+  if(r.ok){delete TC_MAP[TCV_N];closeTcvModal();renderTracks();}
+  else toast("Erreur",true);
+});
+
+// ── Track meta modal ─────────────────────────────────────────────────────────
+let TM_N=null,TM_I=null;
+function openTmModal(n,i){
+  TM_N=n;TM_I=i;
+  const tr=tracks[i];
+  const t=TT[L()];
+  document.getElementById("tm-subtitle").textContent=`Piste ${String(n).padStart(2,"0")}`;
+  document.getElementById("tm-title-inp").value=tr.title||"";
+  document.getElementById("tm-artist-inp").value=tr.artist||"";
+  document.getElementById("tm-overlay").classList.add("open");
+  document.getElementById("tm-title-inp").focus();
+}
+function closeTmv(e){if(e&&e.target!==document.getElementById("tm-overlay"))return;closeTmModal();}
+function closeTmModal(){document.getElementById("tm-overlay").classList.remove("open");TM_N=null;TM_I=null;}
+
+async function saveTmModal(){
+  if(TM_N===null||TM_I===null)return;
+  const title=document.getElementById("tm-title-inp").value.trim();
+  const artist=document.getElementById("tm-artist-inp").value.trim();
+  if(!title)return;
+  const r=await fetch(`/api/albums/${SLUG}/tracks/${TM_N}/meta`,{
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({title,artist:artist||null})
+  });
+  if(r.ok){
+    tracks[TM_I].title=title;
+    tracks[TM_I].artist=artist||null;
+    closeTmModal();
+    renderTracks();
+    toast(TT[L()].saved+" ✓");
+  }else toast("Erreur",true);
 }
 
 async function load(){
@@ -545,12 +608,43 @@ async function load(){
   albumPublished=DATA.published!==false;
   PER_TRACK=DATA.per_track_covers===true;
   document.getElementById("ptc-chk").checked=PER_TRACK;
-  const syncBtnInit=document.getElementById("ptc-sync-btn");
-  if(syncBtnInit)syncBtnInit.style.display=PER_TRACK?"flex":"none";
   if(PER_TRACK)await loadTrackCovers();
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
 }
 applyLang();load();
 </script>
+  <!-- Cover viewer modal -->
+  <div class="tcv-overlay" id="tcv-overlay" onclick="closeTcv(event)">
+    <div class="tcv-box">
+      <button class="tcv-close" onclick="closeTcvModal()"><span class="material-symbols-outlined">close</span></button>
+      <div id="tcv-media"></div>
+      <div class="tcv-actions" id="tcv-actions">
+        <label for="tcv-file" class="btn-secondary" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex:1">
+          <span class="material-symbols-outlined">upload</span><span id="t-tc-change"></span>
+        </label>
+        <input type="file" id="tcv-file" style="display:none" accept="image/jpeg,image/png,image/webp">
+        <button id="tcv-del" class="btn-secondary" style="color:var(--danger,#e57373);border-color:var(--danger,#e57373);display:flex;align-items:center;gap:4px">
+          <span class="material-symbols-outlined">delete</span><span id="t-tc-del-lbl"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- Track meta modal -->
+  <div class="tm-overlay" id="tm-overlay" onclick="closeTmv(event)">
+    <div class="tm-box">
+      <button class="tcv-close" onclick="closeTmModal()"><span class="material-symbols-outlined">close</span></button>
+      <h3 id="tm-subtitle"></h3>
+      <div class="tm-fields">
+        <label id="t-tm-title-lbl"></label>
+        <input type="text" id="tm-title-inp">
+        <label id="t-tm-artist-lbl"></label>
+        <input type="text" id="tm-artist-inp" id="t-tm-artist-ph">
+      </div>
+      <div class="tm-footer">
+        <button class="btn-secondary" onclick="closeTmModal()" id="t-tm-cancel"></button>
+        <button class="btn-primary" onclick="saveTmModal()" id="t-tm-save"></button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
