@@ -167,16 +167,15 @@
   .tcv2-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:14px;position:relative}
   .tcv2-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
   .tcv2-close .material-symbols-outlined{font-size:20px}
-  .tcv2-actions{display:flex;gap:8px}
-  .tc-slot-wrap.can-upload{cursor:pointer}
+  .tc-slot-wrap.can-view{cursor:pointer}
   .tc-thumb,.tc-thumb-ph{width:44px;height:44px;border-radius:6px;flex-shrink:0}
   .tc-thumb{object-fit:cover;display:block}
   .tc-thumb-ph{background:var(--border);display:flex;align-items:center;justify-content:center}
   .tc-thumb-ph .material-symbols-outlined{font-size:18px;color:var(--muted)}
-  .tc-upload-hint{position:absolute;inset:0;background:rgba(0,0,0,.6);border-radius:6px;
+  .tc-view-hint{position:absolute;inset:0;background:rgba(0,0,0,.6);border-radius:6px;
     display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;pointer-events:none}
-  .tc-upload-hint .material-symbols-outlined{font-size:18px;color:#fff}
-  .tc-slot-wrap.can-upload:hover .tc-upload-hint{opacity:1}
+  .tc-view-hint .material-symbols-outlined{font-size:18px;color:#fff}
+  .tc-slot-wrap.can-view:hover .tc-view-hint{opacity:1}
   .al-cover.is-tray img,.cr-fit{object-fit:contain!important}
   .al-cover.is-tray:hover img{transform:none}
   .cr-tray-embed{width:100%;height:100%;border:0;display:block;background:#fff}
@@ -435,15 +434,12 @@ function renderAlbum(d){
       ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
     if(d.per_track_covers){
       const tc=tcMap[tr.n];
-      const isGest=ME.is_gestionnaire;
       const canView=!!tc;
-      const canInteract=canView||isGest;
       const inner=tc
         ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
         :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
-      const hintIcon=tc?'zoom_in':'upload';
-      const hint=canInteract?`<div class="tc-upload-hint"><span class="material-symbols-outlined">${hintIcon}</span></div>`:'';
-      return `<li class="has-tc"><div class="tc-slot-wrap${canInteract?' can-upload':''}" data-n="${tr.n}" data-has-cover="${!!tc}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
+      const hint=canView?`<div class="tc-view-hint"><span class="material-symbols-outlined">zoom_in</span></div>`:'';
+      return `<li class="has-tc"><div class="tc-slot-wrap${canView?' can-view':''}" data-n="${tr.n}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
     }
     return `<li><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
   }).join('');
@@ -518,65 +514,16 @@ function initTrackCoverInteract(sl,trackCovers){
   TCV2_SL=sl;
   TCV2_MAP={};
   for(const tc of trackCovers)TCV2_MAP[tc.track_n]=tc;
-  document.querySelectorAll('.setlist .tc-slot-wrap.can-upload').forEach(slot=>{
+  document.querySelectorAll('.setlist .tc-slot-wrap.can-view').forEach(slot=>{
     slot.addEventListener('click',()=>openTcv2(+slot.dataset.n));
   });
-  const fileInp=document.getElementById('tcv2-file');
-  if(fileInp){
-    fileInp.addEventListener('change',async e=>{
-      const file=e.target.files[0];if(!file||TCV2_N===null)return;
-      const fd=new FormData();fd.append('file',file);
-      const r=await fetch(`/api/albums/${TCV2_SL}/tracks/${TCV2_N}/cover`,{method:'POST',body:fd});
-      if(r.ok){
-        const d=await r.json();
-        const tc=d.track_covers.find(x=>x.track_n===TCV2_N);
-        if(tc){
-          TCV2_MAP[TCV2_N]=tc;
-          const slot=document.querySelector(`.tc-slot-wrap[data-n="${TCV2_N}"]`);
-          if(slot){
-            const ph=slot.querySelector('.tc-thumb-ph');
-            if(ph){const img=document.createElement('img');img.className='tc-thumb';img.src=tc.cover_url+'?t='+Date.now();ph.replaceWith(img);}
-            else{const img=slot.querySelector('img');if(img)img.src=tc.cover_url+'?t='+Date.now();}
-            slot.dataset.hasCover='true';
-          }
-          openTcv2(TCV2_N);
-        }
-      }
-      e.target.value='';
-    });
-    const delBtn=document.getElementById('tcv2-del');
-    if(delBtn){
-      delBtn.addEventListener('click',async()=>{
-        const tc=TCV2_MAP[TCV2_N];if(!tc)return;
-        const r=await fetch(`/api/track-covers/${tc.id}`,{method:'DELETE'});
-        if(r.ok){
-          delete TCV2_MAP[TCV2_N];
-          const slot=document.querySelector(`.tc-slot-wrap[data-n="${TCV2_N}"]`);
-          if(slot){
-            const img=slot.querySelector('img');
-            if(img){const ph=document.createElement('span');ph.className='tc-thumb-ph';ph.innerHTML='<span class="material-symbols-outlined">image</span>';img.replaceWith(ph);}
-            slot.dataset.hasCover='false';
-            slot.querySelector('.tc-upload-hint span').textContent='upload';
-          }
-          closeTcv2();
-        }
-      });
-    }
-  }
 }
 function openTcv2(n){
   TCV2_N=n;
   const tc=TCV2_MAP[n];
-  const isGest=ME.is_gestionnaire;
+  if(!tc)return;
   const med=document.getElementById('tcv2-media');
-  if(med){
-    if(tc)med.innerHTML=`<img src="${tc.cover_url}?t=${Date.now()}" alt="" style="width:100%;border-radius:8px;max-height:65vh;object-fit:contain">`;
-    else med.innerHTML='<div style="width:100%;aspect-ratio:1;border-radius:8px;background:var(--border);display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined" style="font-size:48px;color:var(--muted)">image</span></div>';
-  }
-  const actions=document.getElementById('tcv2-actions');
-  if(actions)actions.style.display=isGest?'flex':'none';
-  const delBtn=document.getElementById('tcv2-del');
-  if(delBtn)delBtn.style.display=(isGest&&tc)?'flex':'none';
+  if(med)med.innerHTML=`<img src="${tc.cover_url}?t=${Date.now()}" alt="" style="width:100%;border-radius:8px;max-height:70vh;object-fit:contain">`;
   document.getElementById('tcv2-overlay')?.classList.add('open');
 }
 function closeTcv2(e){
@@ -992,17 +939,8 @@ loadVersion();
     <div class="tcv2-box">
       <button class="tcv2-close" onclick="closeTcv2Modal()"><span class="material-symbols-outlined">close</span></button>
       <div id="tcv2-media"></div>
-      <div class="tcv2-actions" id="tcv2-actions" style="display:none">
-        <label for="tcv2-file" class="btn-secondary" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex:1;justify-content:center">
-          <span class="material-symbols-outlined">upload</span> <span data-t="tc_change"></span>
-        </label>
-        <button id="tcv2-del" class="btn-secondary" style="color:var(--danger,#e57373);border-color:var(--danger,#e57373);display:none;align-items:center;gap:4px">
-          <span class="material-symbols-outlined">delete</span> <span data-t="tc_delete"></span>
-        </button>
-      </div>
     </div>
   </div>
-  <input type="file" id="tcv2-file" style="display:none" accept="image/jpeg,image/png,image/webp">
   <!-- Lightbox cover/traycard -->
   <div class="lbx-overlay" id="lbx-overlay" onclick="closeLbx(event)">
     <button class="lbx-close" onclick="closeLbx()"><span class="material-symbols-outlined">close</span></button>
