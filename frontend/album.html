@@ -92,7 +92,7 @@
   #save-all:hover{background:var(--accent);border-color:var(--accent)}
   #save-all.saving .save-btn-icon{animation:disk-spin .55s linear infinite}
   #save-all.saved .save-btn-icon{animation:check-pop .32s cubic-bezier(.34,1.56,.64,1);color:#4ade80}
-  .ptc-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
+  .ptc-toggle-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);cursor:pointer;user-select:none}
   .ptc-toggle-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);flex-shrink:0}
   .ptc-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);white-space:nowrap}
   .tc-slot{width:48px;height:48px;flex-shrink:0;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
@@ -159,10 +159,6 @@
         </button>
         <input type="file" id="traycard-file" accept="application/pdf">
       </div>
-      <div class="ptc-toggle-row" id="ptc-row">
-        <input type="checkbox" id="ptc-chk">
-        <label for="ptc-chk" id="t-ptc-label" style="cursor:pointer;flex:1"></label>
-      </div>
       <div id="traycard-wrap"></div>
       <div class="dl" id="dl"></div>
     </div>
@@ -180,6 +176,10 @@
           <div class="fg"><label id="t-f-festival">Festival</label><input id="e-festival" type="text"></div>
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
+        </div>
+        <div class="ptc-toggle-row" id="ptc-row">
+          <input type="checkbox" id="ptc-chk">
+          <label for="ptc-chk" id="t-ptc-label" style="cursor:pointer;flex:1"></label>
         </div>
       </div>
 
@@ -229,7 +229,7 @@ const TT={
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
       new_track:"Nouveau titre…",add_label:"Ajouter un label…",
-      del_t:"Supprimer",ptc_label:"Pistes individuelles",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
+      del_t:"Supprimer",ptc_label:"Dissocier les pistes",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
       status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
@@ -239,7 +239,7 @@ const TT={
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
-      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Individual tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
+      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Split tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
       status_pub:"Visible in the catalogue",status_draft:"Hidden from public"}
 };
