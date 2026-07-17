@@ -23,14 +23,21 @@
 ## Workflow
 1. Développement → commits sur `preprod`, `git push origin preprod`.
 2. Déployer la preprod : `ssh root@192.168.1.110 /opt/apps/deploy-preprod-live2mp3.sh`
+   → bumpe automatiquement le **patch** (ex: v1.4.6 → v1.4.7), commit + push.
 3. Validation sur https://preprod-live2mp3.naerod.com
 4. Promotion en prod (merge preprod→main + tag) :
-   `ssh root@192.168.1.110 /opt/apps/deploy-prod-live2mp3.sh [patch|minor|major]`
+   `ssh root@192.168.1.110 /opt/apps/deploy-prod-live2mp3.sh`
+   → bumpe automatiquement le **minor** (ex: v1.4.x → v1.5.0).
 
 ## Versionning
 - `VERSION` (semver) à la racine ; `GET /api/version` → `{version, env, commit}`.
 - Badge « vX.Y.Z · env » dans le footer de la vitrine.
-- `deploy-prod` bump le `VERSION`, crée un tag git `vX.Y.Z` et pousse.
+- **Convention :**
+  - Chaque déploiement sur **preprod** → bump **patch** : `v1.4.6 → v1.4.7 → 1.4.8 …`
+  - **Promotion en prod** → bump **minor**, patch remis à 0 : `v1.4.x → v1.5.0`
+  - `deploy-prod [major]` si rupture de compatibilité majeure.
+- `deploy-preprod` bump patch, commit `Release vX.Y.Z`, pousse sur `preprod`.
+- `deploy-prod` merge `preprod→main`, bump minor, crée tag git `vX.Y.Z`, pousse.
 
 ## Système social (profils / favoris / commentaires)
 - Base **SQLite** dédiée : `projects/.l2m-social/<APP_ENV>/live2mp3.db` (+ `avatars/`).
