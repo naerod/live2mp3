@@ -258,7 +258,7 @@ const T={
       cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
       cv_comments:"Voir les commentaires",
       cv_pinned:"Pochette épinglée",cv_pin:"Épingler",cv_unpin:"Désépingler",
-      cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",
+      cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",cv_del_failed:"Erreur lors de la suppression.",
       cv_login:"Connectez-vous pour proposer une pochette",
       cv_dl_cover:"Télécharger la pochette",cv_dl_tray:"Télécharger la tray card",
       cv_add_tray:"Ajouter une tray card",cv_replace_tray:"Remplacer la tray card",
@@ -284,7 +284,7 @@ const T={
       cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
       cv_comments:"View comments",
       cv_pinned:"Pinned cover",cv_pin:"Pin",cv_unpin:"Unpin",
-      cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",
+      cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",cv_del_failed:"Error while deleting.",
       cv_login:"Log in to submit a cover",
       cv_dl_cover:"Download cover",cv_dl_tray:"Download tray card",
       cv_add_tray:"Add a tray card",cv_replace_tray:"Replace tray card",
@@ -672,8 +672,13 @@ function paintModal(id){
   const del=document.getElementById('cm-del');
   if(del)del.onclick=async()=>{
     if(!confirm(t('cv_del_confirm')))return;
-    const d=await fetch(`/api/social/covers/${c.id}`,{method:'DELETE'}).then(r=>r.json());
-    // La cover et sa tray card disparaissent ensemble : aucune face à retrouver.
+    // id=0 = pochette de manifeste (pas en base) : endpoint dédié avec le slug.
+    const url=c.id===0
+      ?`/api/albums/${slug}/cover`
+      :`/api/social/covers/${c.id}`;
+    const r=await fetch(url,{method:'DELETE'});
+    if(!r.ok){alert(t('cv_del_failed')||'Erreur lors de la suppression.');return;}
+    const d=await r.json();
     COVERS=d.covers||[];buildSlides();IDX=0;
     closeModal();renderCarousel();
   };

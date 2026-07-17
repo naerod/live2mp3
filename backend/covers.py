@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, Response
 
 from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
-from .manifest import PROJECTS_DIR
+from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
 from .social import _album_exists, _ensure_profile, _is_moderator, _profiles_map
 
@@ -398,6 +398,28 @@ def delete_traycard(cover_id: int, identity: dict = Depends(require_user)) -> di
         )
         payload = _list_payload(conn, row["slug"], identity.get("username"))
     _on_covers_changed(row["slug"])
+    return {"ok": True, **payload}
+
+
+@router.delete("/api/albums/{slug}/cover")
+def delete_manifest_cover(slug: str, identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Supprime la pochette de manifeste (album.cover) — gestionnaires uniquement.
+
+    Appelé quand l'utilisateur supprime une cover virtuelle id=0, c'est-à-dire
+    une pochette qui n'est enregistrée qu'en YAML (ancienne couche, avant la
+    collection sociale), pas en base de données.
+    """
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    if not mpath.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(mpath)
+    cover_rel = m.data.get("album", {}).get("cover")
+    if cover_rel:
+        (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
+        m.data.get("album", {}).pop("cover", None)
+        m.save()
+    with get_conn() as conn:
+        payload = _list_payload(conn, slug, identity.get("username"))
     return {"ok": True, **payload}
 
 
