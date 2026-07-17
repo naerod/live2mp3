@@ -27,8 +27,8 @@
   .upload-hint .material-symbols-outlined{font-size:36px;color:#fff}
   .upload-hint .txt{color:#fff;font-size:12.5px;font-weight:500;text-align:center}
   .tray-zone{position:relative;cursor:pointer;border-radius:12px;overflow:hidden}
-  .tray-zone iframe{width:100%;height:240px;background:#fff;display:block;
-    border-radius:12px;border:1px solid var(--border);pointer-events:none}
+  .tray-zone img{width:100%;height:240px;display:block;object-fit:contain;
+    border-radius:12px;border:1px solid var(--border);background:var(--bg)}
   .tray-ph{padding:24px 16px;color:var(--muted);font-size:13px;text-align:center;
     border:1px dashed var(--border);border-radius:12px;display:flex;flex-direction:column;
     align-items:center;gap:8px;justify-content:center;min-height:100px;
@@ -133,6 +133,7 @@
 <main>
   <div class="page-nav">
     <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+    <button class="primary" id="save-all"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-all">Enregistrer</span></button>
   </div>
   <div class="layout">
     <!-- Colonne gauche -->
@@ -176,9 +177,6 @@
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
         </div>
-        <div class="save-row">
-          <button class="primary" id="save-meta"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-meta">Enregistrer</span></button>
-        </div>
       </div>
 
       <!-- Pistes -->
@@ -188,9 +186,6 @@
         <div class="add-track-row">
           <input id="new-track" type="text" placeholder="Nouveau titre…">
           <button class="icon-btn" id="add-track" style="margin:0;height:34px"><span class="material-symbols-outlined">add</span></button>
-        </div>
-        <div class="save-row">
-          <button class="primary" id="save-tracks"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-tracks">Enregistrer les pistes</span></button>
         </div>
       </div>
 
@@ -202,9 +197,6 @@
           <input id="newlabel" list="suggest" placeholder="Ajouter un label…">
           <datalist id="suggest"></datalist>
           <button class="primary" id="add-label" style="margin:0"><span class="material-symbols-outlined">add</span></button>
-        </div>
-        <div class="save-row">
-          <button class="primary" id="save-labels"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-labels">Enregistrer</span></button>
         </div>
       </div>
       <!-- Publication -->
@@ -227,7 +219,7 @@ L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
       f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
-      save_meta:"Enregistrer",save_tracks:"Enregistrer les pistes",save_labels:"Enregistrer",
+      save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
@@ -238,7 +230,7 @@ const TT={
       status_pub:"Visible dans la vitrine",status_draft:"Masqué au public"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
-      save_meta:"Save",save_tracks:"Save tracks",save_labels:"Save",
+      save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
@@ -254,6 +246,7 @@ function applyLang(){
   refreshPublishBtn();
   document.getElementById("lang-label").textContent=L().toUpperCase();
   document.getElementById("t-back").textContent=t.back;
+  document.getElementById("t-save-all").textContent=t.save_all;
   document.getElementById("t-meta").textContent=t.meta;
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
@@ -262,10 +255,7 @@ function applyLang(){
   document.getElementById("t-f-festival").textContent=t.f_festival;
   document.getElementById("t-f-src-label").textContent=t.f_src_label;
   document.getElementById("t-f-src-url").textContent=t.f_src_url;
-  document.getElementById("t-save-meta").textContent=t.save_meta;
   document.getElementById("t-tracks-h").textContent=t.tracks_h;
-  document.getElementById("t-save-tracks").textContent=t.save_tracks;
-  document.getElementById("t-save-labels").textContent=t.save_labels;
   document.getElementById("t-labels").textContent=t.labels;
   document.getElementById("t-no-cover").textContent=t.no_cover;
   document.getElementById("t-ptc-label").textContent=t.ptc_label;
@@ -423,12 +413,6 @@ document.getElementById("add-track").onclick=()=>{
   tracks.push({n,title:v,start:null,end:null,locked:false});inp.value="";renderTracks();};
 document.getElementById("new-track").addEventListener("keydown",e=>{
   if(e.key==="Enter"){e.preventDefault();document.getElementById("add-track").click();}});
-document.getElementById("save-tracks").onclick=async()=>{
-  savingStart("save-tracks");
-  const r=await fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})});
-  if(r.ok){showSaved("save-tracks");}else{savingError("save-tracks");toast("Erreur ("+r.status+")",true);}};
 
 // Labels
 function renderChips(){
@@ -445,15 +429,8 @@ function addLabel(){
   if(v&&!labels.map(x=>x.toLowerCase()).includes(v.toLowerCase())){labels.push(v);renderChips();}inp.value="";}
 document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
-document.getElementById("save-labels").onclick=async()=>{
-  savingStart("save-labels");
-  const r=await fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",
-    headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})});
-  if(r.ok){const d=await r.json();labels=d.labels;renderChips();showSaved("save-labels");}
-  else{savingError("save-labels");toast("Erreur ("+r.status+")",true);}};
-
-// Meta
-document.getElementById("save-meta").onclick=async()=>{
+// Save all
+document.getElementById("save-all").onclick=async()=>{
   const p={artist:document.getElementById("e-artist").value.trim(),
     title:document.getElementById("e-title").value.trim(),
     date:document.getElementById("e-date").value.trim(),
@@ -462,11 +439,17 @@ document.getElementById("save-meta").onclick=async()=>{
     source_url:document.getElementById("e-src-url").value.trim(),
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
-  savingStart("save-meta");
-  const r=await fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",
-    headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
-  if(r.ok){showSaved("save-meta");document.title=`live2mp3 — ${p.title}`;}
-  else{savingError("save-meta");toast("Erreur ("+r.status+")",true);}};
+  savingStart("save-all");
+  const [rMeta,rTracks,rLabels]=await Promise.all([
+    fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}),
+    fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})  }),
+    fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})})
+  ]);
+  if(rMeta.ok) document.title=`live2mp3 — ${p.title}`;
+  if(rLabels.ok){const d=await rLabels.json();labels=d.labels;renderChips();}
+  if(rMeta.ok&&rTracks.ok&&rLabels.ok){showSaved("save-all");}
+  else{savingError("save-all");toast("Erreur lors de l'enregistrement",true);}
+};
 
 // Downloads
 function renderDL(){
@@ -482,7 +465,7 @@ function renderTraycard(){
   const wrap=document.getElementById("traycard-wrap"),t=TT[L()];
   if(DATA.has_traycard){
     wrap.innerHTML=`<div class="tray-zone" id="tray-zone">
-      <iframe src="/app/traycard/${SLUG}#toolbar=0" title="tray card"></iframe>
+      <img src="/app/traycard-thumb/${SLUG}" alt="tray card" loading="lazy">
       <div class="upload-hint">
         <span class="material-symbols-outlined">upload</span>
         <span class="txt">${t.replace_traycard}</span>
