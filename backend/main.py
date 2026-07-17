@@ -143,6 +143,23 @@ class PublishIn(BaseModel):
     published: bool
 
 
+class PerTrackCoversIn(BaseModel):
+    per_track_covers: bool
+
+class TrackMetaIn(BaseModel):
+    title: str
+    artist: str | None = None
+
+
+def _list_track_covers_public(slug: str) -> list:
+    """Pochettes par piste (publiques) — pour catalogue_detail."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, track_n FROM track_covers WHERE slug=? ORDER BY track_n", (slug,)
+        ).fetchall()
+    return [{"id": r["id"], "track_n": r["track_n"], "cover_url": f"/track-cover/{r['id']}"} for r in rows]
+
+
 # --- Santé & version (public) ---------------------------------------------
 import os
 import httpx
@@ -261,32 +278,40 @@ def catalogue_detail(slug: str) -> dict:
         "imported_at": meta.get("imported_at", ""),
         "source_url": src.get("url", "") or "",
         "source_label": src.get("label", "") or "",
+        "per_track_covers": bool(m.data.get("album", {}).get("per_track_covers", False)),
+        "track_covers": _list_track_covers_public(slug),
     }
 
 
-_NO_CACHE = {"Cache-Control": "no-store"}
+@app.get("/api/catalogue/{slug}/nav")
+def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
+    """Album précédent / suivant dans l'ordre date_concert (desc)."""
+    include_drafts = identity.get("is_gestionnaire", False)
+    albums = catalogue.list_albums(sort="date_concert", include_drafts=include_drafts)
+    slugs = [a["slug"] for a in albums]
+    if slug not in slugs:
+        raise HTTPException(404, "album introuvable")
+    idx = slugs.index(slug)
+    return {
+        "prev": slugs[idx - 1] if idx > 0 else None,
+        "next": slugs[idx + 1] if idx < len(slugs) - 1 else None,
+    }
+
 
 
 @app.get("/cover/{slug}")
 def get_cover(slug: str) -> FileResponse:
-    if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
         raise HTTPException(404, "album introuvable")
-    # Priorité à la pochette gagnante de la DB sociale (même source que le carousel).
-    with get_conn() as conn:
-        win = top_cover(conn, slug)
-    if win:
-        p = cover_file(slug, win["file_key"], win["cover_ext"])
-        if p.exists():
-            return FileResponse(p, headers=_NO_CACHE)
-    # Fallback : manifest (covers legacy ou uploadées hors système social).
-    m = Manifest.load(PROJECTS_DIR / slug / "manifest.yaml")
+    m = Manifest.load(path)
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
         raise HTTPException(404, "pas de pochette")
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    return FileResponse(cover, headers=_NO_CACHE)
+    return FileResponse(cover)
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
@@ -508,7 +533,8 @@ def album_detail(slug: str,
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
         "published": m.data.get("published", True),
-        "tracks": [{"n": t.get("n"), "title": t.get("title")} for t in m.tracks],
+        "per_track_covers": bool(album.get("per_track_covers", False)),
+        "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
     }
 
 
@@ -660,6 +686,59 @@ def set_published(slug: str, payload: PublishIn,
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------
+
+
+@app.delete("/api/albums/{slug}/cover/auto")
+def delete_album_cover_auto(
+    slug: str, identity: dict = Depends(require_gestionnaire)
+) -> dict:
+    """Supprime la pochette auto-extraite du dossier artwork/ (ne touche pas aux covers piste)."""
+    artwork_dir = PROJECTS_DIR / slug / "artwork"
+    deleted = False
+    for ext in [".jpg", ".jpeg", ".png", ".webp"]:
+        f = artwork_dir / f"cover{ext}"
+        if f.exists():
+            f.unlink()
+            deleted = True
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if path.exists():
+        m = Manifest.load(path)
+        m.data.setdefault("album", {}).pop("cover", None)
+        m.save()
+    return {"ok": True, "deleted": deleted}
+
+@app.patch("/api/albums/{slug}/per-track-covers")
+def set_per_track_covers(slug: str, payload: PerTrackCoversIn,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    m.data.setdefault("album", {})["per_track_covers"] = payload.per_track_covers
+    m.save()
+    return {"ok": True, "per_track_covers": payload.per_track_covers}
+
+@app.patch("/api/albums/{slug}/tracks/{n}/meta")
+def patch_track_meta(
+    slug: str, n: int, payload: TrackMetaIn,
+    identity: dict = Depends(require_gestionnaire),
+) -> dict:
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    track = next((t for t in m.data.get("tracks", []) if t["n"] == n), None)
+    if track is None:
+        raise HTTPException(404, "piste introuvable")
+    track["title"] = payload.title.strip()
+    if payload.artist is not None:
+        if payload.artist.strip():
+            track["artist"] = payload.artist.strip()
+        else:
+            track.pop("artist", None)
+    m.save()
+    return {"ok": True, "track": track}
+
 @app.get("/album/{slug}", response_class=HTMLResponse)
 def album_detail_page(slug: str) -> HTMLResponse:
     page = FRONTEND / "album_detail.html"

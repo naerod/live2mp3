@@ -340,3 +340,82 @@ def test_migration_credits_importer_and_is_idempotent(client):
     # L'original reste en place : la migration copie, elle ne déplace pas.
     assert (art / "cover.jpg").exists()
     assert Manifest.load(mpath).data["album"]["cover"] == "artwork/covers/legacy_cover.jpg"
+
+
+# --- Pochettes par piste ---------------------------------------------------
+def test_track_cover_upload_requires_gestionnaire(client):
+    c, _ = client
+    slug = _album(c)
+    files = {"file": ("c.png", _png(), "image/png")}
+    assert c.post(f"/api/albums/{slug}/tracks/1/cover", files=files, headers=USER).status_code == 403
+    assert c.post(f"/api/albums/{slug}/tracks/1/cover", files=files, headers={}).status_code == 401
+
+
+def test_track_cover_upload_and_serve(client):
+    c, _ = client
+    slug = _album(c)
+    files = {"file": ("c.png", _png((0, 200, 0)), "image/png")}
+    r = c.post(f"/api/albums/{slug}/tracks/1/cover", files=files, headers=GEST)
+    assert r.status_code == 200
+    d = r.json()
+    assert d["ok"]
+    assert len(d["track_covers"]) == 1
+    assert d["track_covers"][0]["track_n"] == 1
+    # serve
+    tc_id = d["track_covers"][0]["id"]
+    img = c.get(f"/track-cover/{tc_id}")
+    assert img.status_code == 200
+    assert img.headers["content-type"].startswith("image/")
+
+
+def test_track_cover_replace(client):
+    c, _ = client
+    slug = _album(c)
+    files1 = {"file": ("c.png", _png((255, 0, 0)), "image/png")}
+    r1 = c.post(f"/api/albums/{slug}/tracks/1/cover", files=files1, headers=GEST)
+    id1 = r1.json()["track_covers"][0]["id"]
+    files2 = {"file": ("c.png", _png((0, 0, 255)), "image/png")}
+    r2 = c.post(f"/api/albums/{slug}/tracks/1/cover", files=files2, headers=GEST)
+    assert r2.status_code == 200
+    # still 1 entry (upsert)
+    assert len(r2.json()["track_covers"]) == 1
+
+
+def test_track_cover_delete(client):
+    c, _ = client
+    slug = _album(c)
+    files = {"file": ("c.png", _png(), "image/png")}
+    r = c.post(f"/api/albums/{slug}/tracks/1/cover", files=files, headers=GEST)
+    tc_id = r.json()["track_covers"][0]["id"]
+    d = c.delete(f"/api/track-covers/{tc_id}", headers=GEST)
+    assert d.status_code == 200
+    assert d.json()["track_covers"] == []
+    assert c.get(f"/track-cover/{tc_id}").status_code == 404
+
+
+def test_per_track_covers_flag(client):
+    c, _ = client
+    slug = _album(c)
+    # default false
+    d = c.get(f"/api/albums/{slug}", headers=GEST).json()
+    assert d["per_track_covers"] is False
+    # toggle on
+    r = c.patch(f"/api/albums/{slug}/per-track-covers",
+                json={"per_track_covers": True}, headers=GEST)
+    assert r.status_code == 200
+    assert r.json()["per_track_covers"] is True
+    # reflected in album detail
+    assert c.get(f"/api/albums/{slug}", headers=GEST).json()["per_track_covers"] is True
+    # catalogue detail (public)
+    assert c.get(f"/api/catalogue/{slug}").json()["per_track_covers"] is True
+
+
+def test_track_covers_in_catalogue(client):
+    c, _ = client
+    slug = _album(c)
+    files = {"file": ("c.png", _png((100, 200, 50)), "image/png")}
+    c.post(f"/api/albums/{slug}/tracks/1/cover", files=files, headers=GEST)
+    d = c.get(f"/api/catalogue/{slug}").json()
+    assert len(d["track_covers"]) == 1
+    assert d["track_covers"][0]["track_n"] == 1
+    assert "/track-cover/" in d["track_covers"][0]["cover_url"]

@@ -21,7 +21,7 @@
     transition:transform .25s ease}
   .al-cover:hover img{transform:scale(1.03)}
   .al-cover .cover-generic{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0a0a0a}
-  .al-cover .cover-generic svg{width:65%;height:65%;opacity:.6}
+  .al-cover .cover-generic svg{width:48%;height:48%;opacity:.55}
   .al-info{display:flex;flex-direction:column;gap:4px}
   .al-artist{color:var(--accent);font-size:20px;font-weight:700;line-height:1.15}
   .al-title{font-size:24px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 2px}
@@ -65,7 +65,7 @@
   /* Dropdown format (PNG/PDF) */
   .dl-split{position:relative;display:inline-flex}
   .dl-split>.icon-btn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
-  .dl-split>.dl-toggle{border-top-left-radius:0;border-bottom-left-radius:0;
+  .dl-split>.dl-toggle{border-top-left-radius:0;border-bottom-left-radius:0;border-top-right-radius:10px;border-bottom-right-radius:10px;
     padding:0 6px;min-width:0;margin:0;height:32px;font-size:12.5px}
   .dl-split>.dl-toggle .material-symbols-outlined{font-size:14px}
   .dl-menu{position:absolute;top:100%;left:0;margin-top:4px;min-width:160px;z-index:20;
@@ -128,6 +128,7 @@
   .cr-dot.tray.on{border-color:var(--accent)}
   .cr-footer{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:12px}
   .cr-footer .soc-poster{font-size:12px}
+  .cr-footer .soc-poster-pre{margin-right:0}
   .cr-upload-overlay{position:absolute;bottom:0;left:0;right:0;z-index:3;
     display:flex;align-items:center;justify-content:center;gap:6px;
     padding:8px;background:linear-gradient(transparent,rgba(6,7,10,.75));
@@ -142,6 +143,41 @@
   .cr-tray-badge:hover,.cr-tray-badge.on{border-color:var(--accent);color:var(--accent)}
   .cr-tray-badge .material-symbols-outlined{font-size:13px}
   .al-cover.is-tray{background:var(--bg)}
+  .setlist li.has-tc{display:flex;align-items:center;gap:10px;padding:6px 0}
+  .setlist li.has-tc .n{margin-left:6px}
+  .tc-slot-wrap{position:relative;width:44px;height:44px;border-radius:6px;flex-shrink:0}
+  /* Track cover viewer modal */
+  /* Navigation prev/next album */
+  .album-nav-btn{position:fixed;top:50%;transform:translateY(-50%);z-index:900;
+    width:48px;height:48px;border-radius:50%;background:var(--card);border:1px solid var(--border);
+    display:none;align-items:center;justify-content:center;cursor:pointer;
+    transition:background .15s,opacity .15s;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+  .album-nav-btn.visible{display:flex}
+  .album-nav-btn.disabled{opacity:.3;cursor:default;pointer-events:none}
+  .album-nav-btn:hover:not(.disabled){background:var(--border)}
+  .album-nav-btn.prev{left:14px}
+  .album-nav-btn.next{right:14px}
+  .album-nav-btn .material-symbols-outlined{font-size:28px}
+  @media(max-width:860px){.album-nav-btn{display:none!important}}
+  .tcv2-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;align-items:center;justify-content:center}
+  .tcv2-overlay.open{display:flex}
+  /* Footer version */
+  .site-foot{margin:40px 0 18px;text-align:center;color:var(--muted);font-size:12px}
+  .site-foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
+    border:1px solid var(--border);border-radius:999px;background:var(--card)}
+  .site-foot .env-preprod{color:var(--run,#f59e0b);border-color:var(--run,#f59e0b)}
+  .tcv2-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:14px;position:relative}
+  .tcv2-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
+  .tcv2-close .material-symbols-outlined{font-size:20px}
+  .tc-slot-wrap.can-view{cursor:pointer}
+  .tc-thumb,.tc-thumb-ph{width:44px;height:44px;border-radius:6px;flex-shrink:0}
+  .tc-thumb{object-fit:cover;display:block}
+  .tc-thumb-ph{background:var(--border);display:flex;align-items:center;justify-content:center}
+  .tc-thumb-ph .material-symbols-outlined{font-size:18px;color:var(--muted)}
+  .tc-view-hint{position:absolute;inset:0;background:rgba(0,0,0,.6);border-radius:6px;
+    display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;pointer-events:none}
+  .tc-view-hint .material-symbols-outlined{font-size:18px;color:#fff}
+  .tc-slot-wrap.can-view:hover .tc-view-hint{opacity:1}
   .al-cover.is-tray img,.cr-fit{object-fit:contain!important}
   .al-cover.is-tray:hover img{transform:none}
   .cr-tray-embed{width:100%;height:100%;border:0;display:block;background:#fff}
@@ -157,7 +193,17 @@
   .cm-top{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
   @media(max-width:640px){.cm-top{grid-template-columns:1fr}}
   .cm-art{display:flex;flex-direction:column;gap:10px}
-  .cm-art img{width:100%;border-radius:12px;border:1px solid var(--border);display:block}
+  .cm-art img{width:100%;border-radius:12px;border:1px solid var(--border);display:block;cursor:zoom-in}
+  /* Lightbox pour agrandir cover/traycard dans la modale */
+  .lbx-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:none;
+    align-items:center;justify-content:center}
+  .lbx-overlay.open{display:flex}
+  .lbx-inner{position:relative;max-width:90vw;max-height:90vh;display:flex;align-items:center;justify-content:center}
+  .lbx-inner img{max-width:90vw;max-height:88vh;border-radius:8px;object-fit:contain;display:block}
+  .lbx-inner iframe{width:min(80vw,700px);height:min(90vh,900px);border-radius:8px;border:none}
+  .lbx-close{position:fixed;top:14px;right:14px;all:unset;cursor:pointer;padding:6px;
+    border-radius:50%;background:rgba(255,255,255,.12);display:flex;z-index:2001}
+  .lbx-close .material-symbols-outlined{font-size:28px;color:#fff}
   .cm-art .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
     color:var(--muted);font-weight:700}
   .cm-tray-embed{width:100%;height:200px;border-radius:12px;border:1px solid var(--border);
@@ -207,6 +253,7 @@
 </div>
 
 <!-- Import d'une pochette (+ tray card optionnelle) -->
+<input type="file" id="tcv2-file" accept="image/jpeg,image/png,image/webp" style="display:none">
 <div id="up" class="up hidden">
   <div class="up-box">
     <h3 id="up-title">Proposer une pochette</h3>
@@ -259,7 +306,7 @@ const T={
       cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
       cv_comments:"Voir les commentaires",
       cv_pinned:"Pochette épinglée",cv_pin:"Épingler",cv_unpin:"Désépingler",
-      cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",cv_del_failed:"Erreur lors de la suppression.",
+      cv_delete:"Supprimer",cv_del_confirm:"Supprimer cette pochette et sa tray card ?",
       cv_login:"Connectez-vous pour proposer une pochette",
       cv_dl_cover:"Télécharger la pochette",cv_dl_tray:"Télécharger la tray card",
       cv_add_tray:"Ajouter une tray card",cv_replace_tray:"Remplacer la tray card",
@@ -270,7 +317,8 @@ const T={
       up_cover:"Pochette (obligatoire)",up_tray:"Tray card (optionnelle)",
       up_caption:"Légende (optionnelle)",up_send:"Envoyer",up_cancel:"Annuler",
       up_need_cover:"Choisissez une image de pochette.",up_failed:"Échec de l'envoi.",
-      tray_title:"Tray card",tray_send:"Envoyer la tray card"},
+      tray_title:"Tray card",tray_send:"Envoyer la tray card",
+      tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_view:"Pochette de la piste"},
   en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
       downloads:"Downloads",setlist:"Setlist",comments:"Comments",
       full:"Full album (MP3)",cover:"Cover",traycard:"Tray card",
@@ -285,7 +333,7 @@ const T={
       cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
       cv_comments:"View comments",
       cv_pinned:"Pinned cover",cv_pin:"Pin",cv_unpin:"Unpin",
-      cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",cv_del_failed:"Error while deleting.",
+      cv_delete:"Delete",cv_del_confirm:"Delete this cover and its tray card?",
       cv_login:"Log in to submit a cover",
       cv_dl_cover:"Download cover",cv_dl_tray:"Download tray card",
       cv_add_tray:"Add a tray card",cv_replace_tray:"Replace tray card",
@@ -296,7 +344,8 @@ const T={
       up_cover:"Cover (required)",up_tray:"Tray card (optional)",
       up_caption:"Caption (optional)",up_send:"Send",up_cancel:"Cancel",
       up_need_cover:"Pick a cover image.",up_failed:"Upload failed.",
-      tray_title:"Tray card",tray_send:"Send tray card"}
+      tray_title:"Tray card",tray_send:"Send tray card",
+      tc_change:"Change cover",tc_delete:"Remove",tc_view:"Track cover"}
 };
 const L=()=>localStorage.getItem('l2m-lang')||'fr';
 const t=k=>{const v=(T[L()]||T.fr)[k];return typeof v==='function'?v:v||k;};
@@ -306,6 +355,7 @@ function setLang(l){
   const _ll=document.getElementById('lang-label');if(_ll)_ll.textContent=l.toUpperCase();
   document.getElementById('t-back').textContent=t('back');
   const mg=document.getElementById('t-manage');if(mg)mg.textContent=t('manage');
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
   if(window.applyI18n)applyI18n(l);
 }
 
@@ -314,14 +364,16 @@ function setLang(l){
 // ── Cover générique ──────────────────────────────────────────────────────
 const GENERIC_COVER=`<div class="cover-generic">
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="44" fill="#2a2d38"/>
-    <circle cx="50" cy="50" r="43" fill="none" stroke="#4a4d5a" stroke-width="1.5" opacity=".5"/>
-    <circle cx="50" cy="50" r="38" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".4"/>
-    <circle cx="50" cy="50" r="33" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".3"/>
-    <circle cx="50" cy="50" r="26" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".25"/>
-    <circle cx="50" cy="50" r="20" fill="#1a1c22"/>
-    <circle cx="50" cy="50" r="19" fill="none" stroke="#4a4d5a" stroke-width="1" opacity=".4"/>
-    <circle cx="50" cy="50" r="5" fill="#0a0a0a"/>
+    <circle cx="50" cy="50" r="42" fill="#2a2d38"/>
+    <circle cx="50" cy="50" r="14" fill="#1a1c22"/>
+    <circle cx="50" cy="50" r="4" fill="#3a3d4a"/>
+    <g fill="#6b7080" transform="translate(50,50)">
+      <rect x="-1" y="-18" width="2.5" height="14" rx="1"/>
+      <rect x="5" y="-22" width="2.5" height="10" rx="1"/>
+      <rect x="-1" y="-6" width="8.5" height="2" rx="1"/>
+      <ellipse cx="-3" cy="-4" rx="4" ry="3" transform="rotate(-15,-3,-4)"/>
+      <ellipse cx="9" cy="-12" rx="4" ry="3" transform="rotate(-15,9,-12)"/>
+    </g>
   </svg>
 </div>`;
 
@@ -331,6 +383,7 @@ let POSTERS={};
 
 async function loadPage(){
   setLang(L());
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
   ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
 
   if(ME.is_gestionnaire){
@@ -364,7 +417,7 @@ function posterFor(username){
   if(!username)return '';
   const p=POSTERS[username]||{};
   const prefixFn=T[L()].imported_by;
-  const prefix=typeof prefixFn==='function'?prefixFn(p.display_name||username,null):'';
+  const prefix=typeof prefixFn==='function'?prefixFn('',null).trim():'';
   return L2M.poster({username,display_name:p.display_name||username,avatar:!!p.avatar},prefix||undefined);
 }
 
@@ -383,9 +436,20 @@ function renderAlbum(d){
   const a=d.album||{};
   const tags=(d.labels||[]).map(l=>`<span class="tag">${L2M.esc(l)}</span>`).join('');
 
+  const tcMap={};
+  for(const tc of(d.track_covers||[]))tcMap[tc.track_n]=tc;
   const set=(d.tracks||[]).map(tr=>{
     const dl=(ME.authenticated&&tr.dl)
       ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
+    if(d.per_track_covers){
+      const tc=tcMap[tr.n];
+      const canView=!!tc;
+      const inner=tc
+        ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
+        :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
+      const hint=canView?`<div class="tc-view-hint"><span class="material-symbols-outlined">zoom_in</span></div>`:'';
+      return `<li class="has-tc"><div class="tc-slot-wrap${canView?' can-view':''}" data-n="${tr.n}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
+    }
     return `<li><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
   }).join('');
 
@@ -447,10 +511,38 @@ function renderAlbum(d){
   initSocialActions();
   renderCarousel();
   L2M.comments(document.getElementById('sec-comments'),slug);
+  if(d.per_track_covers)initTrackCoverInteract(slug,d.track_covers||[]);
 }
 
 function scrollToComments(){
   document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+let TCV2_SL=null,TCV2_N=null,TCV2_MAP={};
+function initTrackCoverInteract(sl,trackCovers){
+  TCV2_SL=sl;
+  TCV2_MAP={};
+  for(const tc of trackCovers)TCV2_MAP[tc.track_n]=tc;
+  document.querySelectorAll('.setlist .tc-slot-wrap.can-view').forEach(slot=>{
+    slot.addEventListener('click',()=>openTcv2(+slot.dataset.n));
+  });
+}
+function openTcv2(n){
+  TCV2_N=n;
+  const tc=TCV2_MAP[n];
+  if(!tc)return;
+  const med=document.getElementById('tcv2-media');
+  if(med)med.innerHTML=`<img src="${tc.cover_url}?t=${Date.now()}" alt="" style="width:100%;border-radius:8px;max-height:70vh;object-fit:contain">`;
+  document.getElementById('tcv2-overlay')?.classList.add('open');
+}
+function closeTcv2(e){
+  if(e&&e.target!==document.getElementById('tcv2-overlay'))return;
+  document.getElementById('tcv2-overlay')?.classList.remove('open');
+  TCV2_N=null;
+}
+function closeTcv2Modal(){
+  document.getElementById('tcv2-overlay')?.classList.remove('open');
+  TCV2_N=null;
 }
 
 async function initSocialActions(){
@@ -662,6 +754,14 @@ function paintModal(id){
       </div>
     </div>`;
 
+  // Click to enlarge cover
+  const cmCoverImg=document.querySelector('#cm-body .cm-art img:first-child');
+  if(cmCoverImg)cmCoverImg.onclick=e=>{e.stopPropagation();openLbx('image',c.cover_url);};
+  // Click to enlarge traycard
+  const cmTrayImg=document.querySelector('#cm-body .cm-art img:not(:first-child)');
+  if(cmTrayImg){cmTrayImg.style.cursor='zoom-in';cmTrayImg.onclick=e=>{e.stopPropagation();openLbx('img',c.traycard_url);};}
+  const cmTrayFrame=document.querySelector('#cm-body .cm-tray-embed');
+  if(cmTrayFrame){cmTrayFrame.style.cursor='zoom-in';cmTrayFrame.style.pointerEvents='none';cmTrayFrame.parentElement.style.cursor='zoom-in';cmTrayFrame.parentElement.onclick=e=>{e.stopPropagation();openLbx('pdf',c.traycard_url);};}
   document.getElementById('cm-like').onclick=()=>toggleCoverLike(c.id);
   // Dans la modale les commentaires sont déjà rendus plus bas : on y amène.
   document.getElementById('cm-comment').onclick=()=>
@@ -678,13 +778,8 @@ function paintModal(id){
   const del=document.getElementById('cm-del');
   if(del)del.onclick=async()=>{
     if(!confirm(t('cv_del_confirm')))return;
-    // id=0 = pochette de manifeste (pas en base) : endpoint dédié avec le slug.
-    const url=c.id===0
-      ?`/api/albums/${slug}/cover`
-      :`/api/social/covers/${c.id}`;
-    const r=await fetch(url,{method:'DELETE'});
-    if(!r.ok){alert(t('cv_del_failed')||'Erreur lors de la suppression.');return;}
-    const d=await r.json();
+    const d=await fetch(`/api/social/covers/${c.id}`,{method:'DELETE'}).then(r=>r.json());
+    // La cover et sa tray card disparaissent ensemble : aucune face à retrouver.
     COVERS=d.covers||[];buildSlides();IDX=0;
     closeModal();renderCarousel();
   };
@@ -775,6 +870,8 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape')return;
+  const lbx=document.getElementById('lbx-overlay');
+  if(lbx&&lbx.classList.contains('open')){closeLbx();return;}
   if(!up.classList.contains('hidden')){closeUpload();return;}
   if(!cm.classList.contains('hidden'))closeModal();
 });
@@ -784,7 +881,73 @@ function showNotFound(){
     `<div class="not-found"><span class="material-symbols-outlined">album</span>${t('not_found')}</div>`;
 }
 
+// ── Lightbox (agrandir image dans la modale pochette) ────────────────────────
+function openLbx(type,url){
+  const inner=document.getElementById('lbx-inner');
+  if(!inner)return;
+  if(type==='image'){
+    inner.innerHTML=`<img src="${url}" alt="">`;
+  }else if(type==='pdf'){
+    inner.innerHTML=`<iframe src="${url}" title="Tray card"></iframe>`;
+  }else if(type==='img'){
+    inner.innerHTML=`<img src="${url}" alt="">`;
+  }
+  document.getElementById('lbx-overlay').classList.add('open');
+}
+function closeLbx(e){
+  if(e&&e.target!==document.getElementById('lbx-overlay'))return;
+  document.getElementById('lbx-overlay').classList.remove('open');
+  document.getElementById('lbx-inner').innerHTML='';
+}
+
+// ── Navigation prev/next album ────────────────────────────────────────────
+let _navData={prev:null,next:null};
+
+async function initAlbumNav(){
+  const prev=document.getElementById('nav-prev');
+  const next=document.getElementById('nav-next');
+  if(!prev||!next)return;
+  try{
+    _navData=await fetch(`/api/catalogue/${slug}/nav`).then(r=>r.json());
+  }catch(e){return;}
+  prev.classList.add('visible');
+  next.classList.add('visible');
+  if(!_navData.prev)prev.classList.add('disabled');
+  if(!_navData.next)next.classList.add('disabled');
+}
+
+function navAlbum(dir){
+  const target=dir===-1?_navData.prev:_navData.next;
+  if(target)location.href='/album/'+target;
+}
+
+async function loadVersion(){
+  try{
+    const v=await(await fetch("/api/version")).json();
+    const cls=v.env==="prod"?"":"env-preprod";
+    const commit=v.commit?` · ${v.commit}`:"";
+    const el=document.getElementById("site-foot");
+    if(el)el.innerHTML=`<span class="badge ${cls}">v${v.version} · ${v.env}${commit}</span>`;
+  }catch(e){}
+}
 loadPage();
+loadVersion();
+initAlbumNav();
 </script>
+  <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent"><span class="material-symbols-outlined">chevron_left</span></button>
+  <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant"><span class="material-symbols-outlined">chevron_right</span></button>
+  <div class="site-foot" id="site-foot"></div>
+  <!-- Track cover viewer modal -->
+  <div class="tcv2-overlay" id="tcv2-overlay" onclick="closeTcv2(event)">
+    <div class="tcv2-box">
+      <button class="tcv2-close" onclick="closeTcv2Modal()"><span class="material-symbols-outlined">close</span></button>
+      <div id="tcv2-media"></div>
+    </div>
+  </div>
+  <!-- Lightbox cover/traycard -->
+  <div class="lbx-overlay" id="lbx-overlay" onclick="closeLbx(event)">
+    <button class="lbx-close" onclick="closeLbx()"><span class="material-symbols-outlined">close</span></button>
+    <div class="lbx-inner" id="lbx-inner"></div>
+  </div>
 </body>
 </html>
