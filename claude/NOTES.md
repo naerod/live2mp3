@@ -33,8 +33,16 @@
   épinglées en bas des cartes, alignées entre cartes d'une même rangée quel
   que soit le nombre de lignes de texte (retour utilisateur après validation
   mobile réussie sur son Pixel).
-- Reste : validation visuelle par l'utilisateur sur son téléphone (mode
-  desktop Chrome désactivé — confirmé fonctionnel le 18/07), puis promotion prod.
+- Validation utilisateur OK sur son Pixel → **prod v1.5.0 promue** (6dc94fe,
+  tag v1.5.0). Le script deploy-prod a dû être réécrit : il mergait
+  `origin/preprod` qui n'existe plus sur le repo public → merge depuis
+  `preprod-origin` (repo privé), exclusion de `claude/` du repo public
+  (modify/delete attendu), résolution auto du conflit `VERSION` (systématique :
+  bump patch preprod vs minor prod), garde-fou qui stoppe sur tout autre
+  conflit. Conflit one-shot vitrine.html (fixes du matin commités en double
+  main/preprod) résolu en faveur preprod (sur-ensemble vérifié par diff,
+  précédent 206f50b). Backup ancien script : /opt/apps/*.bak.20260718 +
+  workspace/backups/.
 
 2026-07-02: PLAN.md rédigé, en attente de validation utilisateur avant Lot 1.
 
