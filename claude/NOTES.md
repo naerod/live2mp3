@@ -29,8 +29,12 @@
   `preprod-origin` (naerod/preprod-live2mp3, privé) ajouté, tracking corrigé
   (voir DEPLOY.md). WIP orphelin des sessions du matin sur CT110 (pochette
   vinyle générique + suppression cover différée) commité en d286048.
-- Reste : validation visuelle par l'utilisateur sur son téléphone (après
-  désactivation du mode desktop Chrome), puis promotion prod.
+- v1.4.31 : `.album .body{flex:1}` — rangées sociales + téléchargement
+  épinglées en bas des cartes, alignées entre cartes d'une même rangée quel
+  que soit le nombre de lignes de texte (retour utilisateur après validation
+  mobile réussie sur son Pixel).
+- Reste : validation visuelle par l'utilisateur sur son téléphone (mode
+  desktop Chrome désactivé — confirmé fonctionnel le 18/07), puis promotion prod.
 
 2026-07-02: PLAN.md rédigé, en attente de validation utilisateur avant Lot 1.
 
