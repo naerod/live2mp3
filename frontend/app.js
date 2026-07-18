@@ -281,9 +281,16 @@ async function openEditor(){
   });
   const PeaksLib=window.Peaks||window.peaks;  // global UMD : `peaks` en v3
   if(!PeaksLib){console.warn("peaks.js non chargé");return;}
+  // Couleurs explicites : les défauts de peaks.js sont noirs (fond blanc).
+  const acc=getComputedStyle(document.documentElement)
+    .getPropertyValue("--accent").trim()||"#8893f2";
+  const muted=getComputedStyle(document.documentElement)
+    .getPropertyValue("--muted").trim()||"#8b90a0";
   const options={
-    zoomview:{container:$("zoom")},
-    overview:{container:$("overview")},
+    zoomview:{container:$("zoom"),waveformColor:acc,playedWaveformColor:muted,
+      playheadColor:muted,axisLabelColor:muted,axisGridlineColor:"#44485a"},
+    overview:{container:$("overview"),waveformColor:muted,highlightColor:acc,
+      playheadColor:muted},
     mediaElement:audio,
     dataUri:{arraybuffer:`/api/jobs/${slug}/waveform.dat`},
     zoomLevels:[256,512,1024,2048,4096],
