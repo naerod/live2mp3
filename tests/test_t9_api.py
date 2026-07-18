@@ -140,6 +140,7 @@ def test_download_requires_user(client):
                "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
                "target": "data_disc"}
     slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
     _seed_master(projects / slug)
     c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
     # attendre le rendu
@@ -191,6 +192,7 @@ def test_cover_download_requires_user(client, tmp_path):
                "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
                "target": "data_disc"}
     slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
     art = projects / slug / "artwork"; art.mkdir(parents=True, exist_ok=True)
     (art / "c.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     assert c.get(f"/download/{slug}/cover").status_code == 401
@@ -204,6 +206,7 @@ def test_catalogue_detail_public(client, tmp_path):
                           {"n": 2, "title": "B", "start": 3.0, "end": 6.0, "locked": True}],
                "target": "data_disc"}
     slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
     _seed_master(projects / slug)
     c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
     with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
@@ -222,6 +225,7 @@ def test_track_download_requires_user(client, tmp_path):
                "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
                "target": "data_disc"}
     slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
     _seed_master(projects / slug)
     c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
     with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:

@@ -41,7 +41,13 @@ from .albumfiles import (
     _write_album_cover,
     _write_album_tags,
 )
-from .auth import require_gestionnaire, require_user, roles
+from .auth import (
+    GROUP_GESTIONNAIRE,
+    SUPERUSER_GROUPS,
+    require_gestionnaire,
+    require_user,
+    roles,
+)
 from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
@@ -270,15 +276,37 @@ def _track_file(project_dir: Path, n: int) -> Path | None:
     return None
 
 
-@app.get("/api/catalogue/{slug}")
-def catalogue_detail(slug: str) -> dict:
-    """Fiche publique d'un album : métadonnées, labels, setlist (titres)."""
+def _is_gestionnaire_identity(identity: dict) -> bool:
+    """Vrai pour un gestionnaire/admin, quel que soit le Depends d'origine."""
+    if identity.get("is_gestionnaire"):
+        return True
+    groups = identity.get("groups") or set()
+    return bool(set(groups) & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+
+
+def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
+    """404 si l'album est dépublié et que le lecteur n'est pas gestionnaire.
+
+    Un album dépublié n'existe pas pour le public : même code de réponse
+    qu'un slug inconnu, pour ne pas révéler sa présence.
+    """
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    if not m.data.get("published", True) and not _is_gestionnaire_identity(identity):
+        raise HTTPException(404, "album introuvable")
+    return m
+
+
+@app.get("/api/catalogue/{slug}")
+def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
+    """Fiche d'un album : métadonnées, labels, setlist (titres)."""
+    m = _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    cat = {a["slug"]: a for a in
+           catalogue.list_albums(include_drafts=_is_gestionnaire_identity(identity))
+           }.get(slug, {})
     tracks = []
     for t in m.tracks:
         tracks.append({
@@ -303,6 +331,7 @@ def catalogue_detail(slug: str) -> dict:
         "source_label": src.get("label", "") or "",
         "per_track_covers": bool(m.data.get("album", {}).get("per_track_covers", False)),
         "track_covers": _list_track_covers_public(slug),
+        "published": m.data.get("published", True),
     }
 
 
@@ -323,11 +352,8 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 
 
 @app.get("/cover/{slug}")
-def get_cover(slug: str) -> FileResponse:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    m = Manifest.load(path)
+def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
+    m = _ensure_album_visible(slug, identity)
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
         raise HTTPException(404, "pas de pochette")
@@ -411,9 +437,8 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
 @app.get("/download/{slug}/track/{n}")
 def download_track(slug: str, n: int,
                    identity: dict = Depends(require_user)) -> FileResponse:
+    _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
-        raise HTTPException(404, "album introuvable")
     f = _track_file(project_dir, n)
     if not f:
         raise HTTPException(404, "piste introuvable")
@@ -422,10 +447,8 @@ def download_track(slug: str, n: int,
 
 @app.get("/download/{slug}/cover")
 def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    m = _ensure_album_visible(slug, identity)
+    cover_rel = m.data.get("album", {}).get("cover")
     cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
     if not cover or not cover.exists():
         raise HTTPException(404, "pas de pochette")
@@ -452,6 +475,7 @@ def _album_traycard(slug: str) -> tuple[Path, str]:
 
 @app.get("/download/{slug}/traycard")
 def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
     return FileResponse(tc, filename=f"{slug}-traycard{ext}",
                         media_type=MEDIA_TYPES.get(ext, "application/pdf"))
@@ -501,10 +525,8 @@ from fastapi.responses import Response as _Response
 @app.get("/download/{slug}/cover/pdf")
 def download_cover_printable(slug: str,
                              identity: dict = Depends(require_user)) -> _Response:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    m = _ensure_album_visible(slug, identity)
+    cover_rel = m.data.get("album", {}).get("cover")
     cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
     if not cover or not cover.exists():
         raise HTTPException(404, "pas de pochette")
@@ -516,6 +538,7 @@ def download_cover_printable(slug: str,
 @app.get("/download/{slug}/traycard/pdf")
 def download_traycard_printable(slug: str,
                                 identity: dict = Depends(require_user)) -> _Response:
+    _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
     data = traycard_pdf(tc)
     return _Response(data, media_type="application/pdf",
@@ -527,9 +550,8 @@ def download_media(slug: str, kind: str,
                    identity: dict = Depends(require_user)) -> FileResponse:
     if kind not in ("mp3", "mp4"):
         raise HTTPException(400, "type invalide (mp3|mp4)")
+    _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
-        raise HTTPException(404, "album introuvable")
     zip_path = _zip_media(project_dir, kind)
     return FileResponse(zip_path, filename=f"{slug}-{kind}.zip",
                         media_type="application/zip")
@@ -816,6 +838,9 @@ def create_job(job: JobIn,
         "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "import_source": "url",
     }
+    # Un album créé par l'outil naît dépublié : le volume est partagé
+    # prod/preprod, rien ne doit devenir public avant validation explicite.
+    m.data["published"] = False
     project_dir.mkdir(parents=True, exist_ok=True)
     m.save(project_dir / "manifest.yaml")
     return {"slug": m.slug, "manifest": str(project_dir / "manifest.yaml")}

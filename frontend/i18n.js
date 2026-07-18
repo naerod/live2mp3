@@ -49,6 +49,8 @@ const I18N = {
     // Étape 6 — terminé
     done_title:"Album créé",view_album:"Voir l'album",
     download:"Bundle ZIP",new_album:"Nouvel album",
+    manage_album:"Gérer / publier",
+    done_draft_note:"L'album est créé en mode dépublié : seuls les gestionnaires le voient. Vérifiez le résultat puis publiez-le depuis « Gérer / publier ».",
     tracks_word:"pistes",
     err_generic:"Une erreur est survenue."},
   en:{app_title:"Album creator — from a link to a split concert",
@@ -96,6 +98,8 @@ const I18N = {
     err_times:"Invalid timecodes",
     done_title:"Album created",view_album:"View album",
     download:"ZIP bundle",new_album:"New album",
+    manage_album:"Manage / publish",
+    done_draft_note:"The album was created unpublished: only managers can see it. Review the result, then publish it from “Manage / publish”.",
     tracks_word:"tracks",
     err_generic:"Something went wrong."}
 };

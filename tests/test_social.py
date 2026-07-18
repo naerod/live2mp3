@@ -30,7 +30,10 @@ def _make_album(c, artist="A", title="Live", date="2026-01-01", headers=GEST) ->
     payload = {"album": {"artist": artist, "title": title, "date": date},
                "tracks": [{"n": 1, "title": "Song", "start": 0.0, "end": 3.0, "locked": True}],
                "target": "data_disc"}
-    return c.post("/api/jobs", json=payload, headers=headers).json()["slug"]
+    slug = c.post("/api/jobs", json=payload, headers=headers).json()["slug"]
+    # L'outil crée des brouillons ; ces tests portent sur des albums publics.
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
+    return slug
 
 
 # --- Favoris / likes -------------------------------------------------------

@@ -323,3 +323,41 @@ def test_track_filename_library_format():
                        "target": "data_disc",
                        "tracks": [{"n": 1, "title": "AC/DC: Redux?"}]})
     assert m.track_filename(m.data["tracks"][0], "mp3") == "01. ACDC Redux.mp3"
+
+
+# --- Publication : brouillon par défaut, visibilité par rôle ---------------
+def test_tool_album_starts_unpublished_and_publish_flow(client):
+    c, projects = client
+    slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]
+    m = c.get(f"/api/jobs/{slug}/manifest", headers=GEST).json()
+    assert m["published"] is False
+
+    # rendu simulé : un MP3 suffit pour être candidat au catalogue
+    audio = projects / slug / "build" / "audio"
+    audio.mkdir(parents=True)
+    (audio / "01. A.mp3").write_bytes(b"\xff\xfb\x90\x00" + b"\x00" * 64)
+
+    # public / user simple : l'album n'existe pas
+    assert all(a["slug"] != slug for a in c.get("/api/catalogue").json())
+    assert c.get(f"/api/catalogue/{slug}").status_code == 404
+    assert c.get(f"/api/catalogue/{slug}", headers=USER).status_code == 404
+    assert c.get(f"/download/{slug}/track/1", headers=USER).status_code == 404
+    assert c.get(f"/download/{slug}/mp3", headers=USER).status_code == 404
+    assert c.get(f"/api/social/albums/{slug}/covers",
+                 headers=USER).status_code == 404
+    assert c.get(f"/api/social/albums/{slug}/comments",
+                 headers=USER).status_code == 404
+
+    # gestionnaire : visible partout, drapeau published exposé
+    entry = [a for a in c.get("/api/catalogue", headers=GEST).json()
+             if a["slug"] == slug]
+    assert entry and entry[0]["published"] is False
+    assert c.get(f"/api/catalogue/{slug}", headers=GEST).json()["published"] is False
+    assert c.get(f"/download/{slug}/track/1", headers=GEST).status_code == 200
+
+    # publication -> visible du public
+    r = c.patch(f"/api/albums/{slug}/published", json={"published": True},
+                headers=GEST)
+    assert r.status_code == 200
+    assert c.get(f"/api/catalogue/{slug}").status_code == 200
+    assert c.get(f"/download/{slug}/track/1", headers=USER).status_code == 200

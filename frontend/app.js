@@ -428,8 +428,11 @@ async function finish(){
   const m=await(await fetch(`/api/jobs/${slug}/manifest`)).json();
   $("summary").innerHTML=
     `<p><strong>${m.album.artist}</strong> — ${m.album.title}<br>`+
-    `${m.tracks.length} ${T("tracks_word")}</p>`;
+    `${m.tracks.length} ${T("tracks_word")}</p>`+
+    `<p class="note"><span class="material-symbols-outlined">visibility_off</span>`+
+    `<span>${T("done_draft_note")}</span></p>`;
   $("btn-album").href=`/album/${slug}`;
+  $("btn-manage").href=`/app/album/${slug}`;
   $("btn-download").href=`/api/jobs/${slug}/bundle`;
   show("step-done");
 }
