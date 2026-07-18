@@ -282,7 +282,7 @@
 
 <script src="/static/social.js"></script>
 <script>
-const slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
+let slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
 
 function goBack(){
   location.href='/';
@@ -377,16 +377,10 @@ const GENERIC_COVER=`<div class="cover-generic">
 let ME={authenticated:false,is_gestionnaire:false};
 let POSTERS={};
 
-async function loadPage(){
-  setLang(L());
-  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
-  ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
-
-  if(ME.is_gestionnaire){
-    const gb=document.getElementById('gear-btn');
-    gb.href=`/app/album/${slug}`;
-    gb.style.display='';
-  }
+async function loadContent(){
+  const gb=document.getElementById('gear-btn');
+  if(ME.is_gestionnaire){gb.href=`/app/album/${slug}`;gb.style.display='';}
+  else{gb.style.display='none';}
 
   let d;
   try{const r=await fetch(`/api/catalogue/${slug}`);if(!r.ok)throw 0;d=await r.json();}
@@ -395,7 +389,6 @@ async function loadPage(){
 
   document.title=`live2mp3 — ${d.album.title||slug}`;
 
-  // Résoudre le posteur
   if(d.imported_by){
     const ps=await fetch(`/api/social/profiles?u=${encodeURIComponent(d.imported_by)}`).then(r=>r.json()).catch(()=>({}));
     POSTERS=ps;
@@ -407,6 +400,13 @@ async function loadPage(){
   if(location.hash==='#comments'){
     setTimeout(()=>document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'}),350);
   }
+}
+
+async function loadPage(){
+  setLang(L());
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
+  ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
+  await loadContent();
 }
 
 function posterFor(username){
@@ -912,12 +912,22 @@ async function initAlbumNav(){
   if(!_navData.next)next.classList.add('disabled');
 }
 
-function navAlbum(dir){
+async function navAlbum(dir){
   const target=dir===-1?_navData.prev:_navData.next;
   if(!target)return;
-  const _m=document.querySelector('main');_m.style.transition='opacity .2s ease';
+  const _m=document.querySelector('main');
+  _m.style.transition='opacity .2s ease';
   _m.style.opacity='0';
-  setTimeout(()=>location.href='/album/'+target,200);
+  await new Promise(r=>setTimeout(r,200));
+  history.pushState(null,'','/album/'+target);
+  slug=target;
+  window.scrollTo(0,0);
+  _m.style.transition='none';
+  _m.style.opacity='0';
+  await loadContent();
+  await initAlbumNav();
+  _m.style.transition='opacity .25s ease';
+  _m.style.opacity='1';
 }
 
 async function loadVersion(){
@@ -932,6 +942,14 @@ async function loadVersion(){
 loadPage();
 loadVersion();
 setTimeout(initAlbumNav, 0);
+window.addEventListener('popstate',async()=>{
+  slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
+  const _m=document.querySelector('main');
+  _m.style.transition='none';_m.style.opacity='0';
+  await loadContent();
+  await initAlbumNav();
+  _m.style.transition='opacity .25s ease';_m.style.opacity='1';
+});
 </script>
   <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent"><span class="material-symbols-outlined">chevron_left</span></button>
   <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant"><span class="material-symbols-outlined">chevron_right</span></button>
