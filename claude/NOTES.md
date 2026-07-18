@@ -1,4 +1,59 @@
 # Notes
+
+2026-07-18 (après-midi) : **Outil « album depuis un lien » rendu 100 % fonctionnel**
+(preprod v1.6.0 → v1.6.4). C'était la raison d'être du site ; le code existant
+était inachevé : le formulaire créait un manifest mais aucune route ne lançait
+download/preanalyze, `/api/jobs/{slug}/audio` n'existait pas, et le global
+Peaks.js était mal référencé (`Peaks` vs `peaks`) — l'éditeur n'avait donc
+jamais fonctionné.
+
+Flux complet livré (assistant 5 étapes sur /app, accès gestionnaires) :
+1. **Analyse** — POST /api/tool/analyze : sonde `yt-dlp --dump-single-json
+   --no-playlist` (⚠ les liens copiés portent souvent `&list=` radio) puis
+   DeepSeek (`llm.extract_album_info`) : artiste, titre album, **date du
+   concert** (pas de l'upload), lieu/ville, événement, setlist avec artistes
+   par piste et timecodes si chapitres/description. Fallback heuristique sans
+   LLM (chapitres → setlist). Testé sur U2 Times Square 2014 : 4/4 pistes,
+   invités Chris Martin/Springsteen corrects.
+2. **Formulaire vérifiable** pré-rempli (carte source + chip « Pré-rempli par
+   IA — à vérifier », setlist en lignes éditables, option vidéo MP4).
+3. **Préparation** — POST /api/jobs/{slug}/prepare (thread + SSE) :
+   download audio seul par défaut (`source.media`, % dans SSE) ou mkv complet,
+   preview.mp3 128k (l'éditeur ne charge pas le wav de 200 Mo), waveform.dat,
+   pochette = miniature YouTube (convertie jpg si webp, créditée via la
+   collection covers → APIC/tray card gratuits), marqueurs : timecodes fournis
+   → rien à faire ; sinon silences + faster-whisper (CPU : `small`,
+   WHISPER_MODEL_CPU) + DeepSeek ; **setlist vide → l'IA identifie les
+   chansons à l'écoute** (`request_auto_setlist`) ; échec LLM → découpe de
+   secours sur les n-1 plus longs silences (l'éditeur reste utilisable).
+4. **Éditeur de coupes** (vérification humaine obligatoire) : Peaks.js v3.4.2
+   (global UMD `peaks` !), segments draggables ⇄ table (titre/artiste/
+   start/end/écoute/suppression), ajout de piste au playhead, zoom, couleurs
+   thème (défauts Peaks noirs). PUT /api/jobs/{slug}/setlist trie/renumérote/
+   verrouille. Reprise de session via `/app#slug`.
+5. **Rendu** — render/tags/artwork/disc/bundle en SSE, puis album visible dans
+   la bibliothèque (catalogue scanne manifest + build/audio), crédité
+   meta.imported_by, source URL affichée.
+
+Pièges corrigés en E2E : (a) écriture périmée du manifest dans le thread de
+préparation (recharger après download.run sinon download reste `pending` et la
+reprise re-télécharge) ; (b) `new_manifest` perdait `tracks[].artist` ;
+(c) SSE derrière nginx/Cloudflare → `X-Accel-Buffering: no` ; (d) tags :
+TPE1 = artiste de la piste, TPE2 = artiste album ; (e) `track_filename`
+aligné sur la convention bibliothèque « 01. Titre.mp3 » (source unique
+`manifest.sanitize_filename`).
+
+E2E réel complet sur preprod avec la vidéo U2 (20 min) : analyse parfaite,
+préparation ~6 min (dont whisper small + téléchargement du modèle), coupes IA
+plausibles (piste 4 détectée à 984,5 s, l'URL utilisateur pointait t=978s),
+rendu ~2 min, 4 MP3 tagués + APIC + PDF + ISO + ZIP 63 Mo, album au catalogue.
+**Projet de test supprimé ensuite** (fichiers + lignes covers/likes/comments)
+pour laisser l'utilisateur rejouer le test. 143 tests verts.
+
+⚠ Volume partagé prod/preprod : un album créé par l'outil preprod apparaît
+aussi en prod. Le rendu est rapide mais whisper CPU est le poste lent ;
+premier usage = téléchargement du modèle (~460 Mo) dans le conteneur
+(perdu au rebuild).
 2026-07-18: Responsive mobile complet — preprod v1.4.30 (commit 188a769).
 - **Constat clé** : le site s'affichait "comme sur PC" sur le Pixel de
   l'utilisateur alors que la balise viewport est servie partout (vérifié par
