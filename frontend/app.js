@@ -293,11 +293,14 @@ async function openEditor(){
       playheadColor:muted},
     mediaElement:audio,
     dataUri:{arraybuffer:`/api/jobs/${slug}/waveform.dat`},
-    zoomLevels:[256,512,1024,2048,4096],
+    zoomLevels:[512,1024,2048,4096,8192],
+    segmentOptions:{markers:true,overlay:true,overlayOpacity:0.2,
+      overlayBorderWidth:1.5},
   };
   PeaksLib.init(options,(err,peaks)=>{
     if(err||!peaks){console.warn("Peaks indisponible:",err);return;}
     peaksInstance=peaks;
+    peaks.zoom.setZoom(2);   // ~1 min visible : transitions repérables d'un coup d'œil
     m.tracks.forEach((t,i)=>{
       if(t.start==null||t.end==null)return;
       peaks.segments.add({
