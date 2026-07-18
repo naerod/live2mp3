@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import struct
@@ -118,10 +119,15 @@ def detect_gpu() -> bool:
 
 
 def whisper_model_choice() -> tuple[str, str]:
-    """Retourne (device, model) selon la présence d'un GPU."""
+    """Retourne (device, model) selon la présence d'un GPU.
+
+    Surchargeable par env : WHISPER_MODEL (GPU) / WHISPER_MODEL_CPU. Sur CPU
+    le défaut est `small` — la transcription ne sert qu'à situer les chansons,
+    pas à produire un texte parfait, et `medium` est prohibitif sur le CT110.
+    """
     if detect_gpu():
-        return "cuda", "large-v3"
-    return "cpu", "medium"
+        return "cuda", os.environ.get("WHISPER_MODEL", "large-v3")
+    return "cpu", os.environ.get("WHISPER_MODEL_CPU", "small")
 
 
 def transcribe(master_wav: Path, model_size: str | None = None,

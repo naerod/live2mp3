@@ -65,9 +65,8 @@ def build_user_prompt(setlist: list[dict], transcript: list[dict],
     return "\n".join(lines)
 
 
-def request_markers(setlist: list[dict], transcript: list[dict],
-                    silences: list[dict], *, timeout: int = 120) -> dict[int, dict[str, float]]:
-    """Appelle DeepSeek et renvoie les timecodes proposés."""
+def _chat(system: str, user: str, *, timeout: int = 120) -> str:
+    """Appel ChatCompletions JSON-only ; renvoie le contenu brut."""
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         raise RuntimeError("DEEPSEEK_API_KEY absent de l'environnement.")
@@ -77,8 +76,8 @@ def request_markers(setlist: list[dict], transcript: list[dict],
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(setlist, transcript, silences)},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
         "temperature": 0.1,
         "response_format": {"type": "json_object"},
@@ -90,5 +89,141 @@ def request_markers(setlist: list[dict], transcript: list[dict],
         json=payload, timeout=timeout,
     )
     resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def request_markers(setlist: list[dict], transcript: list[dict],
+                    silences: list[dict], *, timeout: int = 120) -> dict[int, dict[str, float]]:
+    """Appelle DeepSeek et renvoie les timecodes proposés."""
+    content = _chat(SYSTEM_PROMPT,
+                    build_user_prompt(setlist, transcript, silences),
+                    timeout=timeout)
     return parse_markers(content)
+
+
+# --- Extraction des métadonnées d'album depuis une vidéo -------------------
+ALBUM_INFO_PROMPT = (
+    "Tu extrais les métadonnées d'un enregistrement de concert depuis les "
+    "informations d'une vidéo (titre, chaîne, date de mise en ligne, durée en "
+    "secondes, description, chapitres). Réponds UNIQUEMENT avec un objet JSON, "
+    "sans markdown : {\"artist\": str, \"title\": str, \"date\": \"YYYY-MM-DD\" ou null, "
+    "\"venue\": str, \"city\": str, \"festival\": str, "
+    "\"tracks\": [{\"n\": int, \"title\": str, \"artist\": str ou null, "
+    "\"start\": float ou null, \"end\": float ou null}]}. Règles : "
+    "artist = artiste principal du concert (pas le nom de la chaîne, sauf chaîne "
+    "officielle de l'artiste). title = titre d'album court et évocateur (ex. "
+    "\"Live in Times Square 2014\"), sans le nom de l'artiste ni les mots parasites "
+    "(full show, HD, 4K, pro shot). date = date du CONCERT si déductible du titre "
+    "ou de la description (jamais la date de mise en ligne si le concert a une "
+    "autre date), sinon null. venue = salle/lieu précis, city = ville, festival = "
+    "tournée/festival/événement — chaîne vide si inconnu. tracks = setlist dans "
+    "l'ordre : utilise en priorité les chapitres, sinon les timecodes de la "
+    "description, sinon les titres de chansons mentionnés ; n'invente JAMAIS un "
+    "titre absent des données ; renvoie [] si aucune setlist n'est déductible. "
+    "Nettoie les titres de piste (retire numéros, timecodes, emojis). "
+    "tracks[].artist uniquement si la piste est interprétée par un autre artiste "
+    "que l'artiste principal (invité, duo) explicitement mentionné. start/end en "
+    "secondes si des timecodes existent ; end d'une piste = start de la suivante "
+    "si non précisé, end de la dernière = durée de la vidéo ; sinon null."
+)
+
+
+def parse_album_info(response_text: str, duration: float = 0.0) -> dict:
+    """Valide et normalise la réponse LLM d'extraction d'album."""
+    data = _extract_json(response_text)
+    out = {
+        "artist": str(data.get("artist") or "").strip(),
+        "title": str(data.get("title") or "").strip(),
+        "date": None,
+        "venue": str(data.get("venue") or "").strip(),
+        "city": str(data.get("city") or "").strip(),
+        "festival": str(data.get("festival") or "").strip(),
+        "tracks": [],
+    }
+    date = str(data.get("date") or "").strip()
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        out["date"] = date
+    for t in data.get("tracks") or []:
+        title = str(t.get("title") or "").strip()
+        if not title:
+            continue
+        track = {"n": 0, "title": title,
+                 "artist": (str(t.get("artist")).strip()
+                            if t.get("artist") else None),
+                 "start": None, "end": None}
+        try:
+            start = float(t["start"]) if t.get("start") is not None else None
+            end = float(t["end"]) if t.get("end") is not None else None
+        except (TypeError, ValueError):
+            start = end = None
+        if start is not None and start >= 0:
+            if duration:
+                start = min(start, duration)
+            track["start"] = start
+        if end is not None and end > 0:
+            if duration:
+                end = min(end, duration)
+            track["end"] = end
+        out["tracks"].append(track)
+    for i, track in enumerate(out["tracks"], start=1):
+        track["n"] = i
+    return out
+
+
+def extract_album_info(video: dict, *, timeout: int = 120) -> dict:
+    """Vidéo sondée -> proposition artiste/titre/date/lieu/setlist."""
+    payload = {
+        "titre": video.get("title", ""),
+        "chaine": video.get("channel", ""),
+        "date_mise_en_ligne": video.get("upload_date", ""),
+        "duree_secondes": video.get("duration", 0),
+        "chapitres": video.get("chapters", []),
+        "description": video.get("description", ""),
+    }
+    content = _chat(ALBUM_INFO_PROMPT,
+                    json.dumps(payload, ensure_ascii=False), timeout=timeout)
+    return parse_album_info(content, duration=float(video.get("duration") or 0))
+
+
+# --- Setlist automatique depuis la transcription ---------------------------
+AUTO_SETLIST_PROMPT = (
+    "Tu identifies les chansons d'un enregistrement de concert à partir d'une "
+    "transcription horodatée des paroles et des silences détectés. L'artiste "
+    "principal et la durée totale sont fournis. Réponds UNIQUEMENT en JSON : "
+    "{\"tracks\": [{\"n\": 1, \"title\": str, \"artist\": str ou null, "
+    "\"start\": float, \"end\": float}]}. Identifie chaque chanson d'après ses "
+    "paroles (titre réel quand tu le reconnais, sinon un titre descriptif "
+    "court). tracks[].artist uniquement si un autre interprète est identifiable. "
+    "Frontières en secondes, alignées sur les silences quand c'est cohérent, "
+    "couvrant tout l'enregistrement sans chevauchement, dans l'ordre."
+)
+
+
+def request_auto_setlist(transcript: list[dict], silences: list[dict],
+                         artist: str, duration: float,
+                         *, timeout: int = 180) -> list[dict]:
+    """Transcription -> pistes complètes (titres + timecodes)."""
+    lines = [f"ARTISTE PRINCIPAL: {artist}",
+             f"DUREE TOTALE (s): {duration:.1f}",
+             "\nTRANSCRIPTION (start,end,text):"]
+    for seg in transcript:
+        lines.append(f"  [{seg['start']:.1f}-{seg['end']:.1f}] {seg['text']}")
+    lines.append("\nSILENCES (start,end):")
+    for s in silences:
+        lines.append(f"  [{s['start']:.1f}-{s['end']:.1f}]")
+    content = _chat(AUTO_SETLIST_PROMPT, "\n".join(lines), timeout=timeout)
+    data = _extract_json(content)
+    tracks: list[dict] = []
+    for i, t in enumerate(data.get("tracks") or [], start=1):
+        title = str(t.get("title") or "").strip()
+        try:
+            start, end = float(t["start"]), float(t["end"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not title or end <= start:
+            continue
+        tracks.append({"n": i, "title": title,
+                       "artist": (str(t.get("artist")).strip()
+                                  if t.get("artist") else None),
+                       "start": start, "end": min(end, duration) if duration else end})
+    return tracks

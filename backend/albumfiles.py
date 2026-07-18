@@ -42,8 +42,12 @@ def _file_track_n(stem: str) -> int | None:
 
 
 def _sanitize_filename(title: str) -> str:
-    """Supprime les caractères interdits dans un nom de fichier."""
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', title).strip(' .')
+    """Supprime les caractères interdits dans un nom de fichier.
+
+    Délègue à `manifest.sanitize_filename` — source unique de la convention
+    « 01. Titre.mp3 », partagée avec le pipeline de rendu.
+    """
+    return _manifest.sanitize_filename(title)
 
 
 def _rename_audio_files(slug: str, m: Manifest) -> int:
