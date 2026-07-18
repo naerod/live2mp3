@@ -142,9 +142,25 @@ const L2M = (function () {
       const extraItems = opts.extraItems ? (typeof opts.extraItems === "function" ? opts.extraItems(meData) : opts.extraItems) : [];
       userMenu(um, { username: sm.username || meData.username, display_name: sm.display_name, avatar: sm.avatar },
         { extraItems, onChange: k => {
-          if (k === "lang" && opts.onLangChange) opts.onLangChange(getLang());
+          if (k === "lang") { refreshHeaderTexts(); if (opts.onLangChange) opts.onLangChange(getLang()); }
           if (opts.onMenuChange) opts.onMenuChange(k);
         }});
+      // Mobile : Outil + Importer vivent dans le menu avatar (.um-mobile, cachés
+      // en desktop par app.css) — le header n'a pas la place pour eux.
+      if (meData.is_gestionnaire || meData.is_admin) {
+        const sep = um.querySelector(".um-sep");
+        const tool = document.createElement("a");
+        tool.className = "um-item um-mobile";
+        tool.href = "/app";
+        tool.innerHTML = `<span class="material-symbols-outlined">build</span><span data-hk="tool"></span>`;
+        const imp = document.createElement("button");
+        imp.className = "um-item um-mobile";
+        imp.innerHTML = `<span class="material-symbols-outlined">library_add</span><span data-hk="import"></span>`;
+        imp.onclick = () => { um.classList.remove("open"); (opts.onImport || (() => { location.href = "/?import=1"; }))(); };
+        sep.parentNode.insertBefore(tool, sep);
+        sep.parentNode.insertBefore(imp, sep);
+        refreshHeaderTexts();
+      }
     } else {
       um.style.display = "none";
       const loginEl = document.getElementById("login");

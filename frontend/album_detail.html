@@ -231,6 +231,31 @@
     background:var(--bg);color:var(--fg)}
   .up-err{color:#e85d75;font-size:12.5px;margin-bottom:10px;display:none}
   .up-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+  /* ── Mobile ─────────────────────────────────────────────────────────── */
+  /* Tactile : flèches et overlay d'upload du carrousel n'ont pas de survol */
+  @media(hover:none){
+    .cr-arrow,.cr-upload-overlay{opacity:1}
+  }
+  @media(max-width:700px){
+    .al-cover-col{max-width:330px;width:100%;margin:0 auto}
+    .al-title{font-size:22px}
+    .al-meta{font-size:14px}
+    .soc-btn{height:40px;padding:0 18px;font-size:14px}
+    .soc-btn .material-symbols-outlined{font-size:18px}
+    .al-dl{gap:8px}
+    .al-dl a,.al-dl button{height:40px;font-size:13.5px}
+    .dl-split>.dl-toggle{height:40px}
+    .setlist li{padding:9px 0;font-size:14.5px}
+    .sec{padding:14px}
+    .cm{padding:16px 8px}
+    .cm-box{padding:16px}
+    .soc-action{height:40px;font-size:14px}
+    .cr-arrow{width:38px;height:38px}
+    .cr-arrow.prev{left:6px}
+    .cr-arrow.next{right:6px}
+    .cr-dot{width:9px;height:9px}
+  }
 </style>
 </head>
 <body>
