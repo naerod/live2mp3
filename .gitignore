@@ -16,3 +16,4 @@ __pycache__/
 # Divers
 node_modules/
 *.log
+claude/
