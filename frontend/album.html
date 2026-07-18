@@ -15,11 +15,11 @@
   .layout{display:grid;grid-template-columns:280px 1fr;gap:20px;margin-top:16px}
   @media(max-width:760px){.layout{grid-template-columns:1fr}}
   .visual{display:flex;flex-direction:column;gap:12px}
-    .cover-wrap{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border);
-    aspect-ratio:1;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .cover-wrap{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0a0a0a;
+    aspect-ratio:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
-  .cover-ph{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);font-size:13px}
-  .cover-ph .material-symbols-outlined{font-size:48px}
+  .cover-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;width:100%;height:100%}
+  .cover-ph svg{width:65%;height:65%;opacity:.6}
   .upload-hint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:6px;background:rgba(0,0,0,0);opacity:0;
     transition:opacity .2s,background .2s;border-radius:11px;z-index:3;pointer-events:none}
@@ -136,7 +136,7 @@
 
 <main>
   <div class="page-nav">
-    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+    <button class="icon-btn" onclick="location.href='/album/'+SLUG"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
     <button class="icon-btn" id="save-all"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-all">Enregistrer</span></button>
   </div>
   <div class="layout">
@@ -145,7 +145,17 @@
       <div>
         <div class="cover-wrap" id="cover-wrap">
           <div class="cover-ph" id="cover-ph">
-            <span class="material-symbols-outlined">album</span>
+            
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="44" fill="#2a2d38"/>
+    <circle cx="50" cy="50" r="43" fill="none" stroke="#4a4d5a" stroke-width="1.5" opacity=".5"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".4"/>
+    <circle cx="50" cy="50" r="33" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".3"/>
+    <circle cx="50" cy="50" r="26" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".25"/>
+    <circle cx="50" cy="50" r="20" fill="#1a1c22"/>
+    <circle cx="50" cy="50" r="19" fill="none" stroke="#4a4d5a" stroke-width="1" opacity=".4"/>
+    <circle cx="50" cy="50" r="5" fill="#0a0a0a"/>
+  </svg>
             <span id="t-no-cover">Aucune pochette</span>
           </div>
           <div class="upload-hint">
@@ -295,7 +305,7 @@ function refreshPublishBtn(){
     btn.className="primary"; status.textContent=t.status_draft;
   }
 }
-let DATA=null,labels=[],tracks=[];
+let DATA=null,labels=[],tracks=[],PENDING_COVER_DELETE=false;
 
 function toast(msg,err=false){
   const el=document.getElementById("toast");el.textContent=msg;
@@ -328,7 +338,7 @@ document.getElementById("cover-wrap").onclick=()=>document.getElementById("cover
 function renderCover(){
   const wrap=document.getElementById("cover-wrap"),ph=document.getElementById("cover-ph");
   const delBtn=document.getElementById("cover-del-btn");
-  if(DATA.has_cover){
+  if(DATA.has_cover&&!PENDING_COVER_DELETE){
     ph.style.display="none";
     let img=wrap.querySelector("img");
     if(!img){img=document.createElement("img");img.alt="cover";wrap.insertBefore(img,wrap.querySelector("label"));}
@@ -337,17 +347,16 @@ function renderCover(){
   }else{ph.style.display="";const img=wrap.querySelector("img");if(img)img.remove();if(delBtn)delBtn.style.display="none";}
 }
 
-async function deleteAlbumCover(){
-  const t=TT[L()];
-  const r=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
-  if(r.ok){DATA.has_cover=false;renderCover();renderDL();toast(t.cover_del+" ✓");}
-  else toast("Erreur suppression ("+r.status+")",true);
+function deleteAlbumCover(){
+  PENDING_COVER_DELETE=true;
+  renderCover();renderDL();
+  toast(TT[L()].cover_del+" ✓ (enregistrer pour confirmer)");
 }
 document.getElementById("cover-file").addEventListener("change",async e=>{
   const file=e.target.files[0];if(!file) return;
   const fd=new FormData();fd.append("file",file);
   const r=await fetch(`/api/albums/${SLUG}/cover`,{method:"POST",body:fd});
-  if(r.ok){DATA.has_cover=true;renderCover();renderDL();toast(TT[L()].cover+" ✓");}
+  if(r.ok){DATA.has_cover=true;PENDING_COVER_DELETE=false;renderCover();renderDL();toast(TT[L()].cover+" ✓");}
   else toast("Erreur upload ("+r.status+")",true);
   e.target.value="";
 });
@@ -444,6 +453,11 @@ document.getElementById("save-all").onclick=async()=>{
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
   savingStart("save-all");
+  if(PENDING_COVER_DELETE){
+    const rDel=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
+    if(rDel.ok){DATA.has_cover=false;PENDING_COVER_DELETE=false;}
+    else{savingError("save-all");toast("Erreur suppression pochette ("+rDel.status+")",true);return;}
+  }
   const [rMeta,rTracks,rLabels]=await Promise.all([
     fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}),
     fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})  }),
@@ -460,7 +474,7 @@ function renderDL(){
   const t=TT[L()],dl=document.getElementById("dl");let h="";
   if(DATA.has_mp3)h+=`<a class="icon-btn" href="/download/${SLUG}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`;
   if(DATA.has_mp4)h+=`<a class="icon-btn" href="/download/${SLUG}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-  if(DATA.has_cover)h+=`<a class="icon-btn" href="/download/${SLUG}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
+  if(DATA.has_cover&&!PENDING_COVER_DELETE)h+=`<a class="icon-btn" href="/download/${SLUG}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
   if(DATA.has_traycard)h+=`<a class="icon-btn" href="/download/${SLUG}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
   dl.innerHTML=h;}
 
