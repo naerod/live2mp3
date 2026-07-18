@@ -1,4 +1,37 @@
 # Notes
+2026-07-18: Responsive mobile complet — preprod v1.4.30 (commit 188a769).
+- **Constat clé** : le site s'affichait "comme sur PC" sur le Pixel de
+  l'utilisateur alors que la balise viewport est servie partout (vérifié par
+  curl sur prod ET sur Authentik). Cause côté téléphone : mode « Version pour
+  ordinateur » de Chrome Android. Rien à corriger côté serveur pour ça.
+- app.css : bloc mobile global ≤768px — header (brand 21px, .icon-btn 46px,
+  avatar 46px, items menu 45px+), `input/select/textarea` 16px (anti-zoom iOS),
+  header `flex-wrap` (repli 2 lignes ≤360px), `#lang` icône seule ≤480px.
+  `@media(hover:none)` : `.gear` des cartes toujours visible.
+- **Fusion Outil+Importer dans le menu avatar, mobile uniquement** :
+  `social.js` initHeader injecte 2 `.um-item.um-mobile` avant le séparateur
+  (cachés desktop par app.css, le header cache ses boutons en ≤768px).
+  Textes via data-hk → refreshHeaderTexts (rafraîchi au changement de langue).
+  `applyViewToHeader` (vitrine) applique les droits simulés aux .um-mobile.
+- vitrine : grille **2 colonnes** ≤700px, recherche 48px plein écran au-dessus
+  du tri, chips filtres 42px, panneau filtres empilé, bouton téléchargement
+  des cartes en 2 lignes autorisées. Sous-menu « Voir en tant que » en
+  accordéon (position:static) — il débordait à gauche de l'écran.
+- album_detail : pochette centrée max 330px, soc-btn 40px, dl 40px,
+  flèches carrousel toujours visibles en `hover:none` (invisibles au tactile
+  sinon !), idem overlay « Proposer une pochette ».
+- Vérifié E2E via webshot (nouvelles options `--mobile` et `--click`) en
+  412×915 et 360×800 : vitrine visiteur/gestionnaire, menu, viewas, filtres,
+  album, profil, thème clair. Piège corrigé dans measure.mjs : les en-têtes
+  --as étaient envoyés aux domaines Google Fonts → CORS bloquait les polices.
+- **Git remis d'équerre** : le clone CT102 poussait encore `preprod` sur le
+  repo public (ancien schéma) — branche supprimée du public, remote
+  `preprod-origin` (naerod/preprod-live2mp3, privé) ajouté, tracking corrigé
+  (voir DEPLOY.md). WIP orphelin des sessions du matin sur CT110 (pochette
+  vinyle générique + suppression cover différée) commité en d286048.
+- Reste : validation visuelle par l'utilisateur sur son téléphone (après
+  désactivation du mode desktop Chrome), puis promotion prod.
+
 2026-07-02: PLAN.md rédigé, en attente de validation utilisateur avant Lot 1.
 
 2026-07-10: Système social (profils / favoris / commentaires) développé et
