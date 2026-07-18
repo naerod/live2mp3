@@ -13,6 +13,8 @@
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   .page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px}
+  @keyframes l2m-fadein{from{opacity:0}to{opacity:1}}
+  main{animation:l2m-fadein .25s ease}
   .al-layout{display:grid;grid-template-columns:280px 1fr;gap:24px;margin-top:16px;align-items:start}
   @media(max-width:700px){.al-layout{grid-template-columns:1fr}}
   .al-cover{aspect-ratio:1;border-radius:14px;overflow:hidden;background:#0a0a0a;
@@ -21,7 +23,7 @@
     transition:transform .25s ease}
   .al-cover:hover img{transform:scale(1.03)}
   .al-cover .cover-generic{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0a0a0a}
-  .al-cover .cover-generic svg{width:48%;height:48%;opacity:.55}
+  .al-cover .cover-generic svg{width:65%;height:65%;opacity:.6}
   .al-info{display:flex;flex-direction:column;gap:4px}
   .al-artist{color:var(--accent);font-size:20px;font-weight:700;line-height:1.15}
   .al-title{font-size:24px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 2px}
@@ -229,6 +231,31 @@
     background:var(--bg);color:var(--fg)}
   .up-err{color:#e85d75;font-size:12.5px;margin-bottom:10px;display:none}
   .up-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+  /* ── Mobile ─────────────────────────────────────────────────────────── */
+  /* Tactile : flèches et overlay d'upload du carrousel n'ont pas de survol */
+  @media(hover:none){
+    .cr-arrow,.cr-upload-overlay{opacity:1}
+  }
+  @media(max-width:700px){
+    .al-cover-col{max-width:330px;width:100%;margin:0 auto}
+    .al-title{font-size:22px}
+    .al-meta{font-size:14px}
+    .soc-btn{height:40px;padding:0 18px;font-size:14px}
+    .soc-btn .material-symbols-outlined{font-size:18px}
+    .al-dl{gap:8px}
+    .al-dl a,.al-dl button{height:40px;font-size:13.5px}
+    .dl-split>.dl-toggle{height:40px}
+    .setlist li{padding:9px 0;font-size:14.5px}
+    .sec{padding:14px}
+    .cm{padding:16px 8px}
+    .cm-box{padding:16px}
+    .soc-action{height:40px;font-size:14px}
+    .cr-arrow{width:38px;height:38px}
+    .cr-arrow.prev{left:6px}
+    .cr-arrow.next{right:6px}
+    .cr-dot{width:9px;height:9px}
+  }
 </style>
 </head>
 <body>
@@ -280,13 +307,9 @@
 
 <script src="/static/social.js"></script>
 <script>
-const slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
+let slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
 
 function goBack(){
-  try{
-    if(history.length>1&&document.referrer&&new URL(document.referrer).hostname===location.hostname)
-      {history.back();return;}
-  }catch(e){}
   location.href='/';
 }
 
@@ -364,16 +387,14 @@ function setLang(l){
 // ── Cover générique ──────────────────────────────────────────────────────
 const GENERIC_COVER=`<div class="cover-generic">
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="42" fill="#2a2d38"/>
-    <circle cx="50" cy="50" r="14" fill="#1a1c22"/>
-    <circle cx="50" cy="50" r="4" fill="#3a3d4a"/>
-    <g fill="#6b7080" transform="translate(50,50)">
-      <rect x="-1" y="-18" width="2.5" height="14" rx="1"/>
-      <rect x="5" y="-22" width="2.5" height="10" rx="1"/>
-      <rect x="-1" y="-6" width="8.5" height="2" rx="1"/>
-      <ellipse cx="-3" cy="-4" rx="4" ry="3" transform="rotate(-15,-3,-4)"/>
-      <ellipse cx="9" cy="-12" rx="4" ry="3" transform="rotate(-15,9,-12)"/>
-    </g>
+    <circle cx="50" cy="50" r="44" fill="#2a2d38"/>
+    <circle cx="50" cy="50" r="43" fill="none" stroke="#4a4d5a" stroke-width="1.5" opacity=".5"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".4"/>
+    <circle cx="50" cy="50" r="33" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".3"/>
+    <circle cx="50" cy="50" r="26" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".25"/>
+    <circle cx="50" cy="50" r="20" fill="#1a1c22"/>
+    <circle cx="50" cy="50" r="19" fill="none" stroke="#4a4d5a" stroke-width="1" opacity=".4"/>
+    <circle cx="50" cy="50" r="5" fill="#0a0a0a"/>
   </svg>
 </div>`;
 
@@ -381,16 +402,10 @@ const GENERIC_COVER=`<div class="cover-generic">
 let ME={authenticated:false,is_gestionnaire:false};
 let POSTERS={};
 
-async function loadPage(){
-  setLang(L());
-  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
-  ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
-
-  if(ME.is_gestionnaire){
-    const gb=document.getElementById('gear-btn');
-    gb.href=`/app/album/${slug}`;
-    gb.style.display='';
-  }
+async function loadContent(){
+  const gb=document.getElementById('gear-btn');
+  if(ME.is_gestionnaire){gb.href=`/app/album/${slug}`;gb.style.display='';}
+  else{gb.style.display='none';}
 
   let d;
   try{const r=await fetch(`/api/catalogue/${slug}`);if(!r.ok)throw 0;d=await r.json();}
@@ -399,7 +414,6 @@ async function loadPage(){
 
   document.title=`live2mp3 — ${d.album.title||slug}`;
 
-  // Résoudre le posteur
   if(d.imported_by){
     const ps=await fetch(`/api/social/profiles?u=${encodeURIComponent(d.imported_by)}`).then(r=>r.json()).catch(()=>({}));
     POSTERS=ps;
@@ -411,6 +425,13 @@ async function loadPage(){
   if(location.hash==='#comments'){
     setTimeout(()=>document.getElementById('sec-comments')?.scrollIntoView({behavior:'smooth',block:'start'}),350);
   }
+}
+
+async function loadPage(){
+  setLang(L());
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
+  ME=await L2M.initHeader({onLangChange:l=>setLang(l)});
+  await loadContent();
 }
 
 function posterFor(username){
@@ -916,9 +937,22 @@ async function initAlbumNav(){
   if(!_navData.next)next.classList.add('disabled');
 }
 
-function navAlbum(dir){
+async function navAlbum(dir){
   const target=dir===-1?_navData.prev:_navData.next;
-  if(target)location.href='/album/'+target;
+  if(!target)return;
+  const _m=document.querySelector('main');
+  _m.style.transition='opacity .2s ease';
+  _m.style.opacity='0';
+  await new Promise(r=>setTimeout(r,200));
+  history.pushState(null,'','/album/'+target);
+  slug=target;
+  window.scrollTo(0,0);
+  _m.style.transition='none';
+  _m.style.opacity='0';
+  await loadContent();
+  await initAlbumNav();
+  _m.style.transition='opacity .25s ease';
+  _m.style.opacity='1';
 }
 
 async function loadVersion(){
@@ -932,7 +966,15 @@ async function loadVersion(){
 }
 loadPage();
 loadVersion();
-initAlbumNav();
+setTimeout(initAlbumNav, 0);
+window.addEventListener('popstate',async()=>{
+  slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
+  const _m=document.querySelector('main');
+  _m.style.transition='none';_m.style.opacity='0';
+  await loadContent();
+  await initAlbumNav();
+  _m.style.transition='opacity .25s ease';_m.style.opacity='1';
+});
 </script>
   <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent"><span class="material-symbols-outlined">chevron_left</span></button>
   <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant"><span class="material-symbols-outlined">chevron_right</span></button>

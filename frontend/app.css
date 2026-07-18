@@ -263,3 +263,35 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .soc-poster:hover .soc-poster-name{color:var(--accent)}
 .soc-poster-pre{color:var(--muted);font-size:12.5px;margin-right:6px}
 .page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
+
+/* ============ Mobile ============ */
+/* Entrées du menu avatar réservées au mobile (Outil / Importer fusionnés) */
+.um-mobile{display:none}
+/* Écrans tactiles : les contrôles cachés derrière un survol doivent rester visibles */
+@media (hover:none){
+  .gear{opacity:1;transform:none}
+}
+@media (max-width:768px){
+  header{padding:12px 14px;flex-wrap:wrap;row-gap:10px}
+  .brand{font-size:21px;gap:9px}
+  .brand-icon{width:28px;height:28px}
+  .tools{gap:6px;margin-left:auto}
+  .icon-btn{height:46px;padding:0 14px;font-size:14px;border-radius:12px;gap:6px}
+  .icon-btn.icon-only{width:46px}
+  .icon-btn .material-symbols-outlined{font-size:21px}
+  .um-trigger .soc-avatar{width:46px;height:46px;font-size:19px}
+  .um-pop{min-width:250px}
+  .um-item{padding:12px;font-size:15px;gap:12px}
+  .um-item .material-symbols-outlined{font-size:21px}
+  .back-btn{height:44px;font-size:14.5px}
+  .prof-tabs button{padding:12px 14px;font-size:15px}
+  main{margin:20px auto;padding:0 14px}
+  input,select,textarea{font-size:16px}
+  /* Outil + Importer quittent le header, le menu avatar les reprend */
+  header .tools #tool-link,header .tools #import-btn{display:none!important}
+  .um-mobile{display:flex}
+}
+@media (max-width:480px){
+  #lang #lang-label{display:none}
+  #lang{width:46px;padding:0}
+}

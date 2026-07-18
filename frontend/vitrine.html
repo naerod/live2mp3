@@ -74,7 +74,9 @@
   .cover-generic{width:100%;height:100%;display:flex;align-items:center;
     justify-content:center;background:#0a0a0a}
   .cover-generic svg{width:65%;height:65%;opacity:.6}
-  .album .body{padding:10px 12px 4px;display:flex;flex-direction:column;gap:3px}
+  /* flex:1 : le corps absorbe la hauteur variable du texte, les rangées
+     sociales + téléchargement restent épinglées en bas → cartes alignées. */
+  .album .body{padding:10px 12px 4px;display:flex;flex-direction:column;gap:3px;flex:1}
   .album .al-artist{color:var(--accent);font-size:14px;font-weight:700;line-height:1.15}
   .album .al-title{font-weight:600;font-size:13px;line-height:1.2;color:var(--fg)}
   .album .al-line{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11.5px}
@@ -270,6 +272,35 @@
     border-radius:50%;animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   @media(prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+
+  /* ── Mobile ─────────────────────────────────────────────────────────── */
+  @media(max-width:700px){
+    .hero{padding:22px 0 4px}
+    .hero h1{font-size:26px}
+    .toolbar-main{flex-direction:column-reverse;align-items:stretch;gap:8px}
+    .search input{height:48px;font-size:16px;padding-left:46px;border-radius:12px}
+    .search .material-symbols-outlined{font-size:22px;left:14px}
+    .sort-block{gap:8px}
+    #sort-select{flex:1;height:44px;font-size:15px;min-width:0}
+    .sort-label{font-size:13px}
+    .chip{height:42px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
+    .chip .material-symbols-outlined{font-size:19px}
+    .count{font-size:13px}
+    .filter-group{flex:1 1 100%;min-width:0}
+    .filter-group select{height:44px;font-size:15px}
+    .filter-clear{margin-left:0;width:100%;justify-content:center}
+    .albums{grid-template-columns:1fr 1fr;gap:12px}
+    .album .body{padding:9px 10px 3px}
+    .album .btns{padding:2px 10px 8px}
+    .album .btns a{height:auto;min-height:34px;padding:6px 8px;font-size:11.5px;
+      white-space:normal;text-align:center;line-height:1.25}
+    .album .al-social{padding:6px 10px}
+    .soc-btn{height:32px}
+    .overlay{padding:20px 10px}
+    /* Sous-menu "Voir en tant que…" : accordéon sous l'entrée (pas de place à gauche) */
+    .um-viewas-pop{position:static;min-width:0;box-shadow:none;border:none;
+      border-left:2px solid var(--border);border-radius:0;margin-left:16px;padding:0}
+  }
 </style>
 </head>
 <body>
@@ -459,6 +490,8 @@ function applyViewToHeader(){
   const gest=!!(md.is_gestionnaire||md.is_admin);
   show("tool-link",gest);
   show("import-btn",gest);
+  // Entrées mobiles du menu avatar (Outil/Importer) : mêmes droits simulés.
+  document.querySelectorAll("#usermenu .um-mobile").forEach(el=>{el.style.display=gest?"":"none";});
   show("usermenu",md.authenticated);
   show("login",!md.authenticated);
   show("lang",!md.authenticated);

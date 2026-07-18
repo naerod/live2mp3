@@ -19,6 +19,12 @@
   donc le patch est ignoré par les conteneurs tout en restant visible sur le
   disque. Toute config d'infra doit être commitée dans le repo.
 - GitHub = source de vérité. On ne modifie jamais directement dans le conteneur.
+- **Deux repos GitHub** (schéma commun aux sites) : `naerod/live2mp3` (public,
+  branche `main` = prod) et `naerod/preprod-live2mp3` (**privé**, branche
+  `preprod`). Ne jamais pousser `preprod` sur le repo public.
+  Sur CT102, remotes du clone `workspace/live2mp3` : `origin` = repo public,
+  `preprod-origin` = repo privé (la branche locale `preprod` tracke
+  `preprod-origin/preprod`).
 
 ## Workflow
 1. Développement → commits sur `preprod`, `git push origin preprod`.
