@@ -273,7 +273,14 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
+  // Les lignes de pistes d'abord : l'éditeur reste utilisable (écoute +
+  // timecodes manuels) même si la waveform ne se charge pas.
   $("edit-rows").innerHTML="";
+  m.tracks.forEach(t=>{
+    if(t.start!=null&&t.end!=null)addEditRow(t);
+  });
+  const PeaksLib=window.Peaks||window.peaks;  // global UMD : `peaks` en v3
+  if(!PeaksLib){console.warn("peaks.js non chargé");return;}
   const options={
     zoomview:{container:$("zoom")},
     overview:{container:$("overview")},
@@ -281,28 +288,25 @@ async function openEditor(){
     dataUri:{arraybuffer:`/api/jobs/${slug}/waveform.dat`},
     zoomLevels:[256,512,1024,2048,4096],
   };
-  Peaks.init(options,(err,peaks)=>{
-    if(err){console.warn("Peaks indisponible:",err);}
-    peaksInstance=peaks||null;
+  PeaksLib.init(options,(err,peaks)=>{
+    if(err||!peaks){console.warn("Peaks indisponible:",err);return;}
+    peaksInstance=peaks;
     m.tracks.forEach((t,i)=>{
       if(t.start==null||t.end==null)return;
-      if(peaksInstance)peaksInstance.segments.add({
+      peaks.segments.add({
         id:"t"+t.n,startTime:t.start,endTime:t.end,
         labelText:`${t.n}. ${t.title}`,editable:true,
         color:SEG_COLORS[i%2]});
-      addEditRow(t);
     });
-    if(peaksInstance){
-      peaksInstance.on("segments.dragend",({segment})=>{
-        const row=$("edit-rows").querySelector(`[data-seg="${segment.id}"]`);
-        if(row){
-          row.querySelector(".t-start").value=fmtTime(segment.startTime);
-          row.querySelector(".t-end").value=fmtTime(segment.endTime);
-        }
-      });
-      $("btn-zoom-in").onclick=()=>peaksInstance.zoom.zoomIn();
-      $("btn-zoom-out").onclick=()=>peaksInstance.zoom.zoomOut();
-    }
+    peaks.on("segments.dragend",({segment})=>{
+      const row=$("edit-rows").querySelector(`[data-seg="${segment.id}"]`);
+      if(row){
+        row.querySelector(".t-start").value=fmtTime(segment.startTime);
+        row.querySelector(".t-end").value=fmtTime(segment.endTime);
+      }
+    });
+    $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
+    $("btn-zoom-out").onclick=()=>peaks.zoom.zoomOut();
   });
 }
 

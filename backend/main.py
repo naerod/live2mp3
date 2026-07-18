@@ -860,6 +860,9 @@ def _run_prepare_bg(slug: str, username: str) -> None:
                 _publish(slug, {"stage": "download", "status": "running",
                                 "info": {"pct": pct}, "ts": time.time()})
             download.run(project_dir, progress=dl_pct)
+            # download.run a sauvé son état sur sa propre instance : recharger
+            # avant toute écriture, sinon on ré-écrirait download=pending.
+            m = Manifest.load(project_dir / "manifest.yaml")
         cb("download", "done", {})
 
         cb("preview", "running", {})
@@ -1080,7 +1083,9 @@ def events(slug: str,
             yield f"data: {json.dumps(ev)}\n\n"
             if ev.get("status") in ("complete", "error"):
                 break
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/jobs/{slug}/bundle")

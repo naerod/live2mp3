@@ -216,6 +216,8 @@ def new_manifest(album: dict[str, Any], tracks: list[dict[str, Any]], target: st
             "end": t.get("end"),
             "locked": t.get("locked", False),
         }
+        if t.get("artist"):
+            track["artist"] = t["artist"]
         if t.get("parts"):
             track["parts"] = t["parts"]
         data["tracks"].append(track)

@@ -326,8 +326,9 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .track-row .t-time{width:70px;text-align:center;font-variant-numeric:tabular-nums}
 .track-row .t-sep{color:var(--muted)}
 .track-row .icon-btn{margin:0;height:38px;flex-shrink:0}
-.opt-check{display:flex;align-items:center;gap:10px;margin-top:16px;
-  font-size:14px;color:var(--muted);cursor:pointer}
+.opt-check{display:flex;flex-direction:row;align-items:center;gap:10px;
+  margin-top:16px;font-size:14px;color:var(--muted);cursor:pointer}
+.opt-check input{flex-shrink:0}
 .opt-check input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
 .stage-pct{margin-left:auto;color:var(--muted);font-size:13px;
   font-variant-numeric:tabular-nums}
