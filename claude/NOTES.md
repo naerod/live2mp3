@@ -1,5 +1,22 @@
 # Notes
 
+2026-07-18 (fin de journée) : **Publication par défaut = brouillon** (preprod
+v1.6.5). Tout album créé par l'outil lien naît `published: false` (volume
+partagé prod/preprod : rien ne devient public avant validation). Visibilité
+par rôle complète : un album dépublié répond **404 au public et aux users**
+sur la fiche (`/api/catalogue/{slug}`), `/cover`, tous les `/download/*` et
+les lectures sociales (fiche, commentaires, pochettes) — même réponse qu'un
+slug inconnu (`_ensure_album_visible` dans main.py, `_album_visible` dans
+social.py). Les gestionnaires voient tout : carte grisée + badge BROUILLON
+(vitrine, existant), chip « Dépublié » sur la fiche (nouveau), statut
+explicite + bouton Publier/Dépublier dans Gérer (existant, libellé précisé).
+Écran final de l'outil : note « créé dépublié » + bouton « Gérer / publier ».
+`catalogue_detail` expose `published` et résout labels/has_* aussi pour les
+brouillons (gestionnaires). Tests : 144 verts (parcours brouillon→publication ;
+helpers _album/_make_album publient désormais explicitement). E2E preprod :
+brouillon synthétique invisible anonyme/user (404 partout), visible
+gestionnaire, publication → visible, purgé ensuite.
+
 2026-07-18 (après-midi) : **Outil « album depuis un lien » rendu 100 % fonctionnel**
 (preprod v1.6.0 → v1.6.4). C'était la raison d'être du site ; le code existant
 était inachevé : le formulaire créait un manifest mais aucune route ne lançait
