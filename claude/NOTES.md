@@ -1,5 +1,20 @@
 # Notes
 
+2026-07-19 : **Prod v1.7.0** — promotion complète de l'outil « album depuis un
+lien » (voir entrées 2026-07-18). Merge preprod->main via deploy-prod-live2mp3.sh
+(minor : première mise en service réelle de l'outil). Après déploiement Docker,
+bloqué en test réel : `/api/tool/analyze` n'était pas dans le bloc nginx
+protégé par Authentik (`location ~ ^/(app|api/jobs|api/albums|download)`) —
+tombait dans `location /` qui vide les en-têtes d'identité côté public, donc
+401 systématique pour un gestionnaire. Ajout de `api/tool` à la regex.
+**Piège inode reproduit** ([[feedback_nginx_bind_mount_inode]]) : `sed -i`
+sur `/opt/apps/nginx/nginx.conf` recrée le fichier (comportement mv), le
+bind-mount du conteneur nginx reste accroché à l'ancien inode -> `nginx -s
+reload` ne suffit pas, il faut `docker restart nginx`. Vérifié après coup :
+route analyze protégée (302 vers Authentik), vitrine/app/hub/dorianjulien/
+naerod tous 200 (aucune régression sur les autres sites servis par ce nginx
+partagé). Sauvegarde avant édition : nginx.conf.bak.<timestamp>.
+
 2026-07-18 (fin de journée) : **Publication par défaut = brouillon** (preprod
 v1.6.5). Tout album créé par l'outil lien naît `published: false` (volume
 partagé prod/preprod : rien ne devient public avant validation). Visibilité
