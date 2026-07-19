@@ -296,9 +296,12 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
+  // startRaw = début « libre » d'une piste (détecté par l'IA au départ, puis
+  // ajusté par l'utilisateur quand la piste est déliée). Lier masque ce début
+  // (start = fin de la précédente) sans l'oublier : délier le restaure.
   EDIT=m.tracks.filter(t=>t.start!=null&&t.end!=null)
     .map(t=>({title:t.title||"",artist:t.artist||"",
-              start:+t.start,end:+t.end,linked:false}));
+              start:+t.start,end:+t.end,startRaw:+t.start,linked:false}));
   EDIT.sort((a,b)=>a.start-b.start);
   EDIT.forEach((t,i)=>{t.linked=i>0;});   // début lié par défaut sauf la 1re
   relinkStarts();
@@ -335,7 +338,7 @@ async function openEditor(){
       EDIT[i].end=segment.endTime;
       // Un début lié est dérivé : on ignore le déplacement de son bord gauche
       // (syncPeaks le remettra à sa place liée).
-      if(!EDIT[i].linked)EDIT[i].start=segment.startTime;
+      if(!EDIT[i].linked)EDIT[i].startRaw=segment.startTime;
       commitEdit();
     });
     $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
@@ -343,10 +346,11 @@ async function openEditor(){
   });
 }
 
-// Le début d'une piste liée = fin de la précédente (cascade unidirectionnelle).
+// Début d'une piste liée = fin de la précédente ; sinon = son startRaw libre.
 function relinkStarts(){
-  for(let i=1;i<EDIT.length;i++){
-    if(EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
+  for(let i=0;i<EDIT.length;i++){
+    if(i>0&&EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
+    else EDIT[i].start=EDIT[i].startRaw;
   }
 }
 
@@ -416,14 +420,15 @@ function buildEditRow(t,i){
   const si=row.querySelector(".t-start");
   if(si&&!locked)si.addEventListener("change",e=>{
     const v=parseTime(e.target.value);if(v==null)return;
-    EDIT[i].start=v;commitEdit();});
+    EDIT[i].startRaw=v;commitEdit();});
   row.querySelector(".t-end").addEventListener("change",e=>{
     const v=parseTime(e.target.value);if(v==null)return;
     EDIT[i].end=v;commitEdit();});
   const lock=row.querySelector(".t-lock");
   if(lock)lock.onclick=()=>{
+    // Délier restaure le début libre (startRaw) ; lier le masque. relink
+    // applique la bonne valeur selon le nouvel état.
     EDIT[i].linked=!EDIT[i].linked;
-    if(EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
     commitEdit();};
   const ss=row.querySelector(".t-setstart");
   if(ss)ss.onclick=()=>setFromPlayhead(i,"start");
@@ -439,7 +444,7 @@ function setFromPlayhead(i,which){
   const t=Math.max(0,$("ed-audio").currentTime||0);
   if(which==="start"){
     if(t>=EDIT[i].end){toast(T("err_times"),true);return;}
-    EDIT[i].start=t;
+    EDIT[i].startRaw=t;   // le début libre ; set-start est désactivé si lié
   }else{
     if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
     EDIT[i].end=t;   // via relinkStarts, le début lié suivant suivra
@@ -486,7 +491,7 @@ $("btn-add-track2").onclick=()=>{
   const a=$("ed-audio");
   const start=a.currentTime||0;
   const end=Math.min(start+60,a.duration||start+60);
-  EDIT.push({title:"",artist:"",start,end,linked:false});
+  EDIT.push({title:"",artist:"",start,end,startRaw:start,linked:false});
   commitEdit();
 };
 
