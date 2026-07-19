@@ -18,12 +18,19 @@ import requests
 SYSTEM_PROMPT = (
     "Tu es un assistant qui découpe l'enregistrement d'un concert en pistes. "
     "On te donne la setlist (titres dans l'ordre), une transcription horodatée "
-    "(segments avec start/end en secondes) et une liste de silences détectés. "
+    "(segments avec start/end en secondes) et une liste de CANDIDATS de coupe. "
     "Renvoie UNIQUEMENT un objet JSON, sans markdown ni texte, de la forme : "
     '{\"tracks\": [{\"n\": 1, \"start\": 0.0, \"end\": 182.4}, ...]}. '
     "Un start/end par piste de la setlist, dans l'ordre, en secondes (float). "
-    "Les medleys comptent comme une seule piste. Aligne les frontières sur les "
-    "silences quand c'est cohérent."
+    "Les medleys comptent comme une seule piste. RÈGLE PRINCIPALE : les "
+    "frontières entre pistes doivent être choisies PARMI les candidats fournis "
+    "— ce sont les instants où l'énergie sonore plonge, donc les vraies "
+    "transitions. Privilégie les candidats de forte profondeur (depth, en dB) ; "
+    "un candidat peu profond est souvent un simple pont à l'intérieur d'un "
+    "morceau. Utilise la transcription pour savoir QUEL candidat correspond à "
+    "QUELLE transition (changement de paroles). Une chanson live dure "
+    "typiquement 3 à 8 minutes : méfie-toi d'un découpage qui donnerait des "
+    "pistes très inégales. La fin d'une piste est le début de la suivante."
 )
 
 
@@ -52,16 +59,16 @@ def parse_markers(response_text: str) -> dict[int, dict[str, float]]:
 
 
 def build_user_prompt(setlist: list[dict], transcript: list[dict],
-                      silences: list[dict]) -> str:
+                      candidates: list[dict]) -> str:
     lines = ["SETLIST:"]
     for t in setlist:
         lines.append(f"  {t['n']}. {t['title']}")
     lines.append("\nTRANSCRIPTION (start,end,text):")
     for seg in transcript:
         lines.append(f"  [{seg['start']:.1f}-{seg['end']:.1f}] {seg['text']}")
-    lines.append("\nSILENCES (start,end):")
-    for s in silences:
-        lines.append(f"  [{s['start']:.1f}-{s['end']:.1f}]")
+    lines.append("\nCANDIDATS DE COUPE (instant en s, profondeur du creux en dB) :")
+    for c in candidates:
+        lines.append(f"  t={c['time']:.1f} depth={c.get('depth', 0):.1f}")
     return "\n".join(lines)
 
 
@@ -93,10 +100,14 @@ def _chat(system: str, user: str, *, timeout: int = 120) -> str:
 
 
 def request_markers(setlist: list[dict], transcript: list[dict],
-                    silences: list[dict], *, timeout: int = 120) -> dict[int, dict[str, float]]:
-    """Appelle DeepSeek et renvoie les timecodes proposés."""
+                    candidates: list[dict], *, timeout: int = 120) -> dict[int, dict[str, float]]:
+    """Appelle DeepSeek et renvoie les timecodes proposés.
+
+    `candidates` : creux d'énergie mesurés (backend.pipeline.boundaries) parmi
+    lesquels l'IA choisit les frontières.
+    """
     content = _chat(SYSTEM_PROMPT,
-                    build_user_prompt(setlist, transcript, silences),
+                    build_user_prompt(setlist, transcript, candidates),
                     timeout=timeout)
     return parse_markers(content)
 
@@ -188,29 +199,32 @@ def extract_album_info(video: dict, *, timeout: int = 120) -> dict:
 # --- Setlist automatique depuis la transcription ---------------------------
 AUTO_SETLIST_PROMPT = (
     "Tu identifies les chansons d'un enregistrement de concert à partir d'une "
-    "transcription horodatée des paroles et des silences détectés. L'artiste "
-    "principal et la durée totale sont fournis. Réponds UNIQUEMENT en JSON : "
-    "{\"tracks\": [{\"n\": 1, \"title\": str, \"artist\": str ou null, "
+    "transcription horodatée des paroles et d'une liste de CANDIDATS de coupe. "
+    "L'artiste principal et la durée totale sont fournis. Réponds UNIQUEMENT en "
+    "JSON : {\"tracks\": [{\"n\": 1, \"title\": str, \"artist\": str ou null, "
     "\"start\": float, \"end\": float}]}. Identifie chaque chanson d'après ses "
     "paroles (titre réel quand tu le reconnais, sinon un titre descriptif "
     "court). tracks[].artist uniquement si un autre interprète est identifiable. "
-    "Frontières en secondes, alignées sur les silences quand c'est cohérent, "
-    "couvrant tout l'enregistrement sans chevauchement, dans l'ordre."
+    "Les frontières doivent être choisies PARMI les candidats fournis (instants "
+    "où l'énergie sonore plonge = vraies transitions) ; privilégie les candidats "
+    "de forte profondeur, un candidat peu profond étant souvent un pont interne. "
+    "Une chanson live dure typiquement 3 à 8 minutes. Couvre tout "
+    "l'enregistrement sans chevauchement, dans l'ordre."
 )
 
 
-def request_auto_setlist(transcript: list[dict], silences: list[dict],
+def request_auto_setlist(transcript: list[dict], candidates: list[dict],
                          artist: str, duration: float,
                          *, timeout: int = 180) -> list[dict]:
-    """Transcription -> pistes complètes (titres + timecodes)."""
+    """Transcription + creux d'énergie -> pistes complètes (titres + timecodes)."""
     lines = [f"ARTISTE PRINCIPAL: {artist}",
              f"DUREE TOTALE (s): {duration:.1f}",
              "\nTRANSCRIPTION (start,end,text):"]
     for seg in transcript:
         lines.append(f"  [{seg['start']:.1f}-{seg['end']:.1f}] {seg['text']}")
-    lines.append("\nSILENCES (start,end):")
-    for s in silences:
-        lines.append(f"  [{s['start']:.1f}-{s['end']:.1f}]")
+    lines.append("\nCANDIDATS DE COUPE (instant en s, profondeur du creux en dB) :")
+    for c in candidates:
+        lines.append(f"  t={c['time']:.1f} depth={c.get('depth', 0):.1f}")
     content = _chat(AUTO_SETLIST_PROMPT, "\n".join(lines), timeout=timeout)
     data = _extract_json(content)
     tracks: list[dict] = []

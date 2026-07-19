@@ -11,5 +11,6 @@ python-multipart
 jinja2
 pytest
 faster-whisper
+numpy
 httpx
 pypdfium2

@@ -51,7 +51,7 @@ from .auth import (
 from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
-from .pipeline import download, preanalyze
+from .pipeline import boundaries, download, preanalyze
 from .covers import (
     MEDIA_TYPES,
     cover_file,
@@ -865,20 +865,63 @@ def get_manifest(slug: str,
     return Manifest.load(path).data
 
 
-def _fallback_markers(n: int, duration: float, silences: list[dict]) -> dict[int, dict[str, float]]:
-    """Découpe de secours sans LLM : frontières aux n-1 plus longs silences,
-    sinon répartition uniforme. L'humain ajuste ensuite dans l'éditeur."""
+def _fallback_markers(n: int, duration: float,
+                      candidates: list[dict]) -> dict[int, dict[str, float]]:
+    """Découpe sans LLM : les n-1 creux d'énergie les plus marqués.
+
+    Sur un concert réel cette seule mesure place déjà les coupes correctement ;
+    la répartition uniforme n'est qu'un dernier recours (audio trop uniforme).
+    """
     if n <= 0 or duration <= 0:
         return {}
-    inner = [s for s in silences if 1.0 < s["start"] and s["end"] < duration - 1.0]
-    if len(inner) >= n - 1:
-        longest = sorted(inner, key=lambda s: s["end"] - s["start"],
-                         reverse=True)[:n - 1]
-        cuts = sorted((s["start"] + s["end"]) / 2 for s in longest)
-    else:
+    cuts = [t for t in boundaries.pick(candidates, n - 1) if 0 < t < duration]
+    if len(cuts) < n - 1:
         cuts = [duration * i / n for i in range(1, n)]
-    bounds = [0.0] + cuts + [duration]
+    bounds = [0.0] + list(cuts) + [duration]
     return {i + 1: {"start": bounds[i], "end": bounds[i + 1]} for i in range(n)}
+
+
+def _snap_markers(markers: dict[int, dict[str, float]],
+                  candidates: list[dict]) -> dict[int, dict[str, float]]:
+    """Recale les frontières proposées par l'IA sur le creux d'énergie voisin.
+
+    L'IA situe correctement une transition à quelques secondes près (elle lit
+    les paroles) mais pas à la seconde : le creux mesuré, lui, est exact. Une
+    frontière sans creux à portée est laissée telle quelle (enchaînement sans
+    coupure, medley).
+    """
+    if not candidates or not markers:
+        return markers
+    for n in sorted(markers):
+        mk = markers[n]
+        # Le début de la 1re piste et la fin de la dernière ne sont pas des
+        # transitions : on ne les déplace pas.
+        if n > min(markers):
+            mk["start"] = boundaries.snap([mk["start"]], candidates)[0]
+        if n < max(markers):
+            mk["end"] = boundaries.snap([mk["end"]], candidates)[0]
+    # Recolle les pistes entre elles : une frontière est commune.
+    ordered = sorted(markers)
+    for a, b in zip(ordered, ordered[1:]):
+        markers[b]["start"] = markers[a]["end"]
+    return markers
+
+
+def _snap_tracks(tracks: list[dict], candidates: list[dict],
+                 duration: float) -> list[dict]:
+    """Idem pour une setlist produite de bout en bout par l'IA."""
+    if not candidates or not tracks:
+        return tracks
+    for i, t in enumerate(tracks):
+        if i > 0:
+            t["start"] = boundaries.snap([t["start"]], candidates)[0]
+        if i < len(tracks) - 1:
+            t["end"] = boundaries.snap([t["end"]], candidates)[0]
+    for a, b in zip(tracks, tracks[1:]):
+        b["start"] = a["end"]
+    if duration:
+        tracks[-1]["end"] = min(tracks[-1]["end"], duration)
+    return tracks
 
 
 def _run_prepare_bg(slug: str, username: str) -> None:
@@ -927,7 +970,9 @@ def _run_prepare_bg(slug: str, username: str) -> None:
         else:
             # `skippable` signale au front qu'il peut proposer « passer ».
             cb("ai_markers", "running", {"phase": "silences", "skippable": True})
-            silences = preanalyze.detect_silences(wav)
+            # Creux d'énergie = vraies transitions d'un live (les silences
+            # absolus n'existent pas : applaudissements, foule, annonces).
+            cands = boundaries.detect(wav)
             source = "ia"
             try:
                 if slug in _skip_detection:
@@ -956,7 +1001,7 @@ def _run_prepare_bg(slug: str, username: str) -> None:
                                 "info": {"phase": "llm"}, "ts": time.time()})
                 if m.data.get("auto_setlist"):
                     tracks = llm.request_auto_setlist(
-                        transcript, silences,
+                        transcript, cands,
                         m.data["album"].get("artist", ""), duration)
                     if not tracks:
                         raise RuntimeError("setlist auto vide")
@@ -964,23 +1009,23 @@ def _run_prepare_bg(slug: str, username: str) -> None:
                         t["locked"] = False
                         if not t.get("artist"):
                             t.pop("artist", None)
-                    m.data["tracks"] = tracks
+                    m.data["tracks"] = _snap_tracks(tracks, cands, duration)
                     m.save()
                 else:
                     setlist = [{"n": t["n"], "title": t["title"]}
                                for t in m.tracks]
-                    markers = llm.request_markers(setlist, transcript, silences)
-                    m.merge_ai_markers(markers)
+                    markers = llm.request_markers(setlist, transcript, cands)
+                    m.merge_ai_markers(_snap_markers(markers, cands))
             except _SkipDetection:
                 # Passage volontaire : mêmes frontières de secours (sur les
-                # silences), l'humain les place ensuite dans l'éditeur.
-                markers = _fallback_markers(len(m.tracks), duration, silences)
+                # creux d'énergie), l'humain les place ensuite dans l'éditeur.
+                markers = _fallback_markers(len(m.tracks), duration, cands)
                 m.merge_ai_markers(markers)
                 source = "skipped"
             except Exception:
                 # IA indisponible : découpe de secours pour que l'éditeur
                 # s'ouvre quand même — l'humain replace les frontières.
-                markers = _fallback_markers(len(m.tracks), duration, silences)
+                markers = _fallback_markers(len(m.tracks), duration, cands)
                 m.merge_ai_markers(markers)
                 source = "fallback"
             finally:

@@ -45,11 +45,14 @@ def test_build_user_prompt_contains_data():
     prompt = llm.build_user_prompt(
         [{"n": 1, "title": "Song A"}],
         [{"start": 0.0, "end": 3.0, "text": "hello"}],
-        [{"start": 3.0, "end": 3.5}],
+        [{"time": 3.2, "depth": 11.5}],
     )
     assert "Song A" in prompt
     assert "hello" in prompt
     assert "SETLIST" in prompt
+    # Les candidats de coupe (creux d'énergie) et leur profondeur sont transmis.
+    assert "CANDIDATS" in prompt
+    assert "t=3.2" in prompt and "depth=11.5" in prompt
 
 
 def test_markers_respect_locked():
