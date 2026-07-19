@@ -1,5 +1,31 @@
 # Notes
 
+2026-07-19 (suite) : **Éditeur de coupes enrichi** (preprod v1.6.9). Trois
+demandes utilisateur, 100 % frontend (backend/API inchangés, 145 tests verts) :
+- **Liaison + cadenas par piste** : le début de chaque piste (sauf la 1re) est
+  lié par défaut à la fin de la précédente (grisé pointillé, pas de gap — on ne
+  coupe pas les transitions parlées). Un cadenas par piste délie pour éditer.
+  Début de la 1re piste et fin de la dernière toujours libres. `startRaw` :
+  mémorise le début « libre » (détecté par l'IA, puis ajustable) — lier le
+  masque, délier le restaure (ne réécrase pas l'ajustement utilisateur).
+- **Boutons « définir début / fin »** (icônes |◄ / ►|) : reprennent la position
+  exacte du lecteur. Définir la fin d'une piste propage au début lié suivant
+  (cascade) — c'est le geste principal : j'écoute, pause au bon endroit, clic.
+  set-début désactivé quand le début est lié (cohérent avec le champ grisé).
+- **Marqueur « 2e disque » à 88 min cumulées** (durées réelles, pas temps
+  source) : point Peaks au début de la piste qui bascule + bandeau, recalculés
+  en direct à chaque modif. Ne coupe jamais une piste (frontière = début de
+  piste). Multi-disques gérés (176, 264 min…).
+- Refonte autour d'un modèle `EDIT` explicite : `commitEdit()` unique normalise
+  ordre (tri par start), liaisons, lignes DOM, segments Peaks et marqueur.
+  Toast, ligne `.invalid` si fin≤début, i18n FR/EN.
+- **Validé E2E preprod** (webshot + puppeteer) : cadenas ferme/ouvre et grise,
+  délier restaure le début IA (7:46 vs valeur liée 4:12), définir-la-fin met
+  4:20 et le début lié suivant suit à 4:20, bandeau disque « 102 min / 2 disques »
+  sur un set fictif long. Projets test purgés.
+- **preprod uniquement — en attente signal utilisateur pour promotion prod**
+  (avec la barre de progression v1.6.6).
+
 2026-07-19 : **Barre de progression pendant la préparation** (preprod v1.6.6).
 Retour utilisateur : à l'étape « Détection des chansons » (whisper CPU, plusieurs
 minutes), aucun indicateur — impossible de savoir si ça tourne / où ça en est /
