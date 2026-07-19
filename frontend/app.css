@@ -347,6 +347,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 /* Boutons compacts en ligne (cadenas, définir début/fin, écouter, supprimer) */
 .track-row .icon-btn.mini{height:32px;width:32px;padding:0;border-radius:9px}
 .track-row .icon-btn.mini .material-symbols-outlined{font-size:18px}
+.track-row .icon-btn.mini:disabled{opacity:.35;cursor:not-allowed}
+.track-row .icon-btn.mini:disabled .material-symbols-outlined{color:var(--muted)}
 .t-lock-spacer{width:32px;flex-shrink:0}
 .t-lock.on .material-symbols-outlined{color:var(--muted)}
 .t-lock:not(.on){border-color:var(--accent)}
