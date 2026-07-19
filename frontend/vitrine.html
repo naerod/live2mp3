@@ -487,11 +487,9 @@ function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
 function applyViewToHeader(){
   const md=meDisplay();
   const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
-  const gest=!!(md.is_gestionnaire||md.is_admin);
-  show("tool-link",gest);
-  show("import-btn",gest);
-  // Entrées mobiles du menu avatar (Outil/Importer) : mêmes droits simulés.
-  document.querySelectorAll("#usermenu .um-mobile").forEach(el=>{el.style.display=gest?"":"none";});
+  // Le bouton Importer reste visible pour tous : c'est la fenêtre de choix qui
+  // explique le rôle requis (elle lit les droits simulés via `rights`).
+  show("import-btn",true);
   show("usermenu",md.authenticated);
   show("login",!md.authenticated);
   show("lang",!md.authenticated);
@@ -828,6 +826,8 @@ async function load(){
   ME=await L2M.initHeader({
     onImport:()=>openImport(),
     onLangChange:l=>setLang(l),
+    // La fenêtre de choix d'import doit refléter le mode « Voir en tant que ».
+    rights:()=>meDisplay(),
   });
   // Outil de dev : menu "Voir en tant que…" dans le menu avatar (gestionnaires/admins).
   if(ME.is_gestionnaire||ME.is_admin){

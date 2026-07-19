@@ -283,8 +283,6 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
 
 /* ============ Mobile ============ */
-/* Entrées du menu avatar réservées au mobile (Outil / Importer fusionnés) */
-.um-mobile{display:none}
 /* Écrans tactiles : les contrôles cachés derrière un survol doivent rester visibles */
 @media (hover:none){
   .gear{opacity:1;transform:none}
@@ -305,11 +303,11 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   .prof-tabs button{padding:12px 14px;font-size:15px}
   main{margin:20px auto;padding:0 14px}
   input,select,textarea{font-size:16px}
-  /* Outil + Importer quittent le header, le menu avatar les reprend */
-  header .tools #tool-link,header .tools #import-btn{display:none!important}
-  .um-mobile{display:flex}
 }
 @media (max-width:480px){
+  /* Header serré : le bouton Importer garde son icône seule */
+  #import-btn [data-hk]{display:none}
+  #import-btn{width:46px;padding:0}
   #lang #lang-label{display:none}
   #lang{width:46px;padding:0}
 }
@@ -388,4 +386,45 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   .track-row .t-title{min-width:calc(100% - 34px)}
   .track-row .t-artist{min-width:120px}
   .src-card{align-items:flex-start}
+}
+
+/* ---- Fenêtre de choix d'import (bouton Importer unifié, social.js) ---- */
+.imp-choice-ovl{position:fixed;inset:0;z-index:200;display:flex;align-items:center;
+  justify-content:center;padding:20px;background:rgba(6,7,10,.66);
+  backdrop-filter:blur(3px);opacity:0;transition:opacity .18s}
+.imp-choice-ovl.show{opacity:1}
+.imp-choice{position:relative;width:min(760px,100%);max-height:90vh;overflow:auto;
+  background:var(--card);border:1px solid var(--border);border-radius:18px;
+  padding:26px;transform:translateY(10px);transition:transform .18s}
+.imp-choice-ovl.show .imp-choice{transform:none}
+.imp-choice-x{position:absolute;top:14px;right:14px;margin:0}
+.imp-choice-h{margin:0 0 18px;font-size:20px;font-weight:700;padding-right:40px}
+.imp-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.imp-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+  text-align:left;margin:0;padding:20px;border-radius:14px;
+  border:1px solid var(--border);background:var(--bg);color:var(--fg);
+  transition:border-color .15s,background .15s}
+.imp-card:not(.locked){cursor:pointer}
+.imp-card:not(.locked):hover{border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 8%,var(--bg))}
+.imp-card-ic{font-size:30px;color:var(--accent);margin-bottom:2px}
+.imp-card-t{font-size:15.5px;font-weight:600;line-height:1.25}
+.imp-card-d{font-size:13px;color:var(--muted);line-height:1.45;font-weight:400}
+.imp-card.locked{opacity:.55;cursor:not-allowed}
+.imp-card.locked .imp-card-ic{color:var(--muted)}
+.imp-card-lock{display:inline-flex;align-items:center;gap:5px;margin-top:8px;
+  font-size:12px;font-weight:600;color:var(--run);
+  border:1px solid var(--run);border-radius:999px;padding:3px 10px}
+.imp-card-lock .material-symbols-outlined{font-size:14px}
+.imp-choice-note{display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+  margin-top:18px;padding:13px 15px;border-radius:12px;font-size:13.5px;
+  line-height:1.45;border:1px solid var(--border);background:var(--bg);
+  color:var(--muted)}
+.imp-choice-note .material-symbols-outlined{color:var(--accent);font-size:20px;flex-shrink:0}
+.imp-choice-note span:not(.material-symbols-outlined){flex:1;min-width:200px}
+.imp-choice-login{margin:0;text-decoration:none;font-size:13.5px;padding:9px 15px}
+@media (max-width:700px){
+  .imp-choice{padding:20px}
+  .imp-choice-grid{grid-template-columns:1fr}
+  .imp-card{padding:16px}
 }
