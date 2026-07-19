@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import linktool, llm
+from backend.pipeline import boundaries
 from backend.pipeline.tags import tag_mp3
 
 GEST = {"X-authentik-username": "g", "X-authentik-groups": "live2mp3-gestionnaire"}
@@ -137,32 +138,92 @@ def test_request_auto_setlist_parsing(monkeypatch):
             {"n": 4, "title": "Bad", "start": 500, "end": 400},    # end<start
         ]})
     monkeypatch.setattr(llm, "_chat", fake_chat)
-    tracks = llm.request_auto_setlist([], [], "U2", 900.0)
+    tracks = llm.request_auto_setlist([], [{"time": 200.0, "depth": 9.0}], "U2", 900.0)
     assert len(tracks) == 2
     assert tracks[1]["artist"] == "Guest"
     assert tracks[1]["end"] == 900.0
 
 
 # --- Découpe de secours ----------------------------------------------------
-def test_fallback_markers_uses_longest_silences():
+def test_fallback_markers_uses_deepest_energy_dips():
+    """Les coupes tombent sur les creux les plus marqués, pas les plus proches."""
     from backend.main import _fallback_markers
-    silences = [{"start": 2.9, "end": 3.1}, {"start": 5.5, "end": 6.5},
-                {"start": 8.9, "end": 9.1}, {"start": 4.0, "end": 4.05}]
-    mk = _fallback_markers(4, 12.0, silences)
+    cands = [{"time": 3.0, "depth": 12.0}, {"time": 6.0, "depth": 15.0},
+             {"time": 9.0, "depth": 9.0}, {"time": 4.0, "depth": 1.2}]
+    mk = _fallback_markers(4, 12.0, cands)
     assert list(mk) == [1, 2, 3, 4]
-    assert mk[1]["start"] == 0.0
-    assert mk[4]["end"] == 12.0
-    # frontières = milieux des 3 plus longs silences, triés
-    assert mk[1]["end"] == pytest.approx(3.0, abs=0.01)
-    assert mk[2]["end"] == pytest.approx(6.0, abs=0.01)
-    assert mk[3]["end"] == pytest.approx(9.0, abs=0.01)
+    assert mk[1]["start"] == 0.0 and mk[4]["end"] == 12.0
+    # le creux à 4.0 (profondeur 1.2) est écarté au profit des trois marqués
+    assert mk[1]["end"] == pytest.approx(3.0)
+    assert mk[2]["end"] == pytest.approx(6.0)
+    assert mk[3]["end"] == pytest.approx(9.0)
 
 
-def test_fallback_markers_even_split_without_silences():
+def test_fallback_markers_even_split_without_candidates():
     from backend.main import _fallback_markers
     mk = _fallback_markers(3, 9.0, [])
     assert mk[1] == {"start": 0.0, "end": 3.0}
     assert mk[3] == {"start": 6.0, "end": 9.0}
+
+
+# --- Détection des frontières par l'énergie --------------------------------
+def test_energy_candidates_find_dips():
+    """Un creux d'énergie franc doit être détecté ; le bruit de fond non."""
+    import numpy as np
+    from backend.pipeline import boundaries as B
+    step = B.STEP
+    n = int(600 / step)                       # 10 min
+    env = np.full(n, 8000.0, dtype=np.float32)
+    rng = np.random.default_rng(0)
+    env += rng.normal(0, 200, n).astype(np.float32)   # grain
+    for t in (200.0, 400.0):                  # deux vraies transitions
+        i = int(t / step)
+        env[i - 6:i + 6] = 200.0
+    cands = B.candidates_from_envelope(env, edge=30.0)
+    times = [c["time"] for c in cands]
+    assert any(abs(t - 200.0) < 3 for t in times), times
+    assert any(abs(t - 400.0) < 3 for t in times), times
+    # Les deux creux francs sont de loin les plus profonds
+    assert B.pick(cands, 2) == pytest.approx([200.0, 400.0], abs=3.0)
+
+
+def test_energy_candidates_ignore_close_dips():
+    """Deux creux rapprochés ne peuvent pas être deux coupes (durée plancher)."""
+    import numpy as np
+    from backend.pipeline import boundaries as B
+    step = B.STEP
+    n = int(600 / step)
+    env = np.full(n, 8000.0, dtype=np.float32)
+    for t in (300.0, 320.0):                  # 20 s d'écart
+        i = int(t / step)
+        env[i - 6:i + 6] = 300.0
+    cands = B.candidates_from_envelope(env, edge=30.0)
+    kept = [c["time"] for c in cands if 280 < c["time"] < 340]
+    assert len(kept) == 1, kept
+
+
+def test_snap_markers_realigns_on_dip():
+    """L'IA situe la transition à quelques secondes près : on recale."""
+    from backend.main import _snap_markers
+    cands = [{"time": 281.7, "depth": 13.7}, {"time": 602.2, "depth": 16.7}]
+    markers = {1: {"start": 0.0, "end": 290.0},
+               2: {"start": 290.0, "end": 610.0},
+               3: {"start": 610.0, "end": 900.0}}
+    out = _snap_markers(markers, cands)
+    assert out[1]["end"] == pytest.approx(281.7)
+    assert out[2]["start"] == pytest.approx(281.7)   # frontière commune
+    assert out[2]["end"] == pytest.approx(602.2)
+    assert out[1]["start"] == 0.0                    # bords intouchés
+    assert out[3]["end"] == 900.0
+
+
+def test_snap_markers_keeps_far_boundary():
+    """Sans creux à portée (medley), la frontière n'est pas déplacée."""
+    from backend.main import _snap_markers
+    cands = [{"time": 100.0, "depth": 10.0}]
+    markers = {1: {"start": 0.0, "end": 400.0}, 2: {"start": 400.0, "end": 800.0}}
+    out = _snap_markers(markers, cands)
+    assert out[1]["end"] == 400.0
 
 
 # --- Routes API ------------------------------------------------------------
@@ -319,7 +380,7 @@ def test_prepare_publishes_transcription_progress(client, monkeypatch, tmp_path)
     from backend.manifest import Manifest
     Manifest.load(project_dir / "manifest.yaml").set_state("download", "done")
 
-    monkeypatch.setattr(preanalyze, "detect_silences", lambda *a, **k: [])
+    monkeypatch.setattr(boundaries, "detect", lambda *a, **k: [])
 
     def fake_transcribe(wav, progress=None):
         # Simule la progression segment par segment.
@@ -346,6 +407,90 @@ def test_prepare_publishes_transcription_progress(client, monkeypatch, tmp_path)
     assert max(pcts) == 100.0            # atteint la fin
     assert any(e["stage"] == "prepare" and e["status"] == "complete"
                for e in events)
+
+
+def _seed_prepared(c, projects, tracks):
+    """Projet avec master.wav et download=done, prêt pour _run_prepare_bg."""
+    slug = c.post("/api/jobs", json=_job_payload(tracks=tracks),
+                  headers=GEST).json()["slug"]
+    project_dir = projects / slug
+    (project_dir / "source").mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=12",
+        "-ar", "44100", "-ac", "2",
+        str(project_dir / "source" / "master.wav")],
+        check=True, capture_output=True)
+    from backend.manifest import Manifest
+    Manifest.load(project_dir / "manifest.yaml").set_state("download", "done")
+    return slug, project_dir
+
+
+def test_skip_detection_before_start(client, monkeypatch):
+    """Skip demandé avant la transcription : whisper n'est jamais appelé."""
+    from backend import main
+    from backend.pipeline import preanalyze
+    from backend.manifest import Manifest
+    c, projects = client
+    slug, project_dir = _seed_prepared(
+        c, projects, [{"n": 1, "title": "A"}, {"n": 2, "title": "B"}])
+    monkeypatch.setattr(boundaries, "detect", lambda *a, **k: [])
+
+    def boom(*a, **k):
+        raise AssertionError("whisper ne doit pas être appelé après un skip")
+    monkeypatch.setattr(preanalyze, "transcribe", boom)
+
+    assert c.post(f"/api/jobs/{slug}/skip-detection",
+                  headers=GEST).status_code == 200
+    main._progress_last[slug] = []
+    main._run_prepare_bg(slug, "g")
+
+    events = main._progress_last[slug]
+    done = [e for e in events
+            if e["stage"] == "ai_markers" and e["status"] == "done"]
+    assert done and done[0]["info"]["source"] == "skipped", events
+    # Des coupes de secours sont posées : l'éditeur peut s'ouvrir.
+    m = Manifest.load(project_dir / "manifest.yaml")
+    assert all(t["start"] is not None and t["end"] is not None for t in m.tracks)
+    assert slug not in main._skip_detection      # drapeau consommé
+    assert any(e["stage"] == "prepare" and e["status"] == "complete"
+               for e in events)
+
+
+def test_skip_detection_during_transcription(client, monkeypatch):
+    """Skip pendant la transcription : interrompue au segment suivant."""
+    from backend import main
+    from backend.pipeline import preanalyze
+    c, projects = client
+    slug, _ = _seed_prepared(c, projects, [{"n": 1, "title": "A"}])
+    monkeypatch.setattr(boundaries, "detect", lambda *a, **k: [])
+    seen = []
+
+    def fake_transcribe(wav, progress=None):
+        progress(0.1)                       # 1er segment : poursuit
+        seen.append("running")
+        main._skip_detection.add(slug)      # l'utilisateur clique « passer »
+        progress(0.2)                       # doit lever _SkipDetection
+        raise AssertionError("la transcription aurait dû être interrompue")
+    monkeypatch.setattr(preanalyze, "transcribe", fake_transcribe)
+
+    main._progress_last[slug] = []
+    main._run_prepare_bg(slug, "g")
+
+    assert seen == ["running"]
+    done = [e for e in main._progress_last[slug]
+            if e["stage"] == "ai_markers" and e["status"] == "done"]
+    assert done and done[0]["info"]["source"] == "skipped"
+    assert slug not in main._skip_detection
+
+
+def test_skip_detection_auth_and_404(client):
+    c, projects = client
+    slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]
+    assert c.post(f"/api/jobs/{slug}/skip-detection").status_code == 401
+    assert c.post(f"/api/jobs/{slug}/skip-detection",
+                  headers=USER).status_code == 403
+    assert c.post("/api/jobs/inconnu-2020-01-01/skip-detection",
+                  headers=GEST).status_code == 404
 
 
 # --- Tags : artiste par piste ----------------------------------------------

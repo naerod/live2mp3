@@ -214,6 +214,7 @@ function runProgress(titleKey,stages,onComplete){
   $("progress-title").textContent=T(titleKey);
   $("progress-err").classList.add("hidden");
   $("progress-actions").classList.add("hidden");
+  hideSkip();
   const ul=$("stages");ul.innerHTML="";
   const items={};
   stages.forEach(s=>{
@@ -254,6 +255,10 @@ function runProgress(titleKey,stages,onComplete){
         if(ev.stage==="ai_markers"&&ev.info&&ev.info.source)
           pct.textContent=T("src_"+ev.info.source)||"";
       }
+      // Détection des chansons : proposer de passer tant qu'elle tourne.
+      if(ev.stage==="ai_markers"){
+        if(running&&(ev.info||{}).skippable)showSkip();else hideSkip();
+      }
     }
     if(ev.status==="complete"){es.close();onComplete();}
     if(ev.status==="error"){
@@ -265,6 +270,32 @@ function runProgress(titleKey,stages,onComplete){
   };
   es.onerror=()=>{/* keepalive/reconnexion gérés par EventSource */};
 }
+
+// --- Passer la détection des chansons (étape la plus longue) ---
+function showSkip(){
+  const w=$("skip-detect-wrap");if(!w)return;
+  w.classList.remove("hidden");
+}
+function hideSkip(){
+  const w=$("skip-detect-wrap");if(!w)return;
+  w.classList.add("hidden");
+  const b=$("btn-skip-detect");
+  if(b){b.disabled=false;b.querySelector("[data-i18n]").textContent=T("skip_detect");}
+}
+$("btn-skip-detect").onclick=async()=>{
+  const b=$("btn-skip-detect");
+  b.disabled=true;
+  b.querySelector("[data-i18n]").textContent=T("skipping");
+  try{
+    const r=await fetch(`/api/jobs/${slug}/skip-detection`,{method:"POST"});
+    if(!r.ok)throw new Error();
+    // La suite arrive par SSE : l'étape se termine en « passée » puis l'éditeur.
+  }catch(e){
+    b.disabled=false;
+    b.querySelector("[data-i18n]").textContent=T("skip_detect");
+    toast(T("err_generic"),true);
+  }
+};
 
 async function startPrepare(){
   currentPhase="prepare";
