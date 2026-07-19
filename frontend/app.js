@@ -296,15 +296,17 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
-  // startRaw = début « libre » d'une piste (détecté par l'IA au départ, puis
-  // ajusté par l'utilisateur quand la piste est déliée). Lier masque ce début
-  // (start = fin de la précédente) sans l'oublier : délier le restaure.
+  // Le DÉBUT de chaque chanson est la référence (l'IA l'indique, l'humain
+  // l'ajuste) : chaque piste commence pile sur sa musique. La FIN suit le
+  // début de la piste suivante, donc la transition parlée reste à la fin de la
+  // piste (skippable). endRaw = fin libre mémorisée (fin musicale détectée),
+  // restaurée si on délie pour couper la transition.
   EDIT=m.tracks.filter(t=>t.start!=null&&t.end!=null)
     .map(t=>({title:t.title||"",artist:t.artist||"",
-              start:+t.start,end:+t.end,startRaw:+t.start,linked:false}));
+              start:+t.start,end:+t.end,endRaw:+t.end,linked:false}));
   EDIT.sort((a,b)=>a.start-b.start);
-  EDIT.forEach((t,i)=>{t.linked=i>0;});   // début lié par défaut sauf la 1re
-  relinkStarts();
+  EDIT.forEach((t,i)=>{t.linked=i<EDIT.length-1;});  // fin liée sauf la dernière
+  relinkEnds();
   renderRows();
   updateDiscMarker();
 
@@ -335,10 +337,12 @@ async function openEditor(){
     peaks.on("segments.dragend",({segment})=>{
       const i=+segment.id.slice(1);
       if(!EDIT[i])return;
-      EDIT[i].end=segment.endTime;
-      // Un début lié est dérivé : on ignore le déplacement de son bord gauche
-      // (syncPeaks le remettra à sa place liée).
-      if(!EDIT[i].linked)EDIT[i].startRaw=segment.startTime;
+      EDIT[i].start=segment.startTime;   // bord gauche = début (référence)
+      const last=i===EDIT.length-1;
+      // Bord droit d'une fin liée = frontière avec la suivante (déplace son
+      // début) ; sinon = fin libre de la piste.
+      if(!last&&EDIT[i].linked)EDIT[i+1].start=segment.endTime;
+      else EDIT[i].endRaw=segment.endTime;
       commitEdit();
     });
     $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
@@ -346,11 +350,14 @@ async function openEditor(){
   });
 }
 
-// Début d'une piste liée = fin de la précédente ; sinon = son startRaw libre.
-function relinkStarts(){
+// Fin d'une piste liée = début de la suivante (la transition parlée reste donc
+// à la fin de la piste) ; sinon = sa endRaw libre. La dernière piste garde
+// toujours sa fin libre.
+function relinkEnds(){
   for(let i=0;i<EDIT.length;i++){
-    if(i>0&&EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
-    else EDIT[i].start=EDIT[i].startRaw;
+    const last=i===EDIT.length-1;
+    if(!last&&EDIT[i].linked)EDIT[i].end=EDIT[i+1].start;
+    else EDIT[i].end=EDIT[i].endRaw;
   }
 }
 
@@ -358,7 +365,7 @@ function relinkStarts(){
 // marqueur disque. Une seule porte d'entrée => cohérence garantie.
 function commitEdit(){
   EDIT.sort((a,b)=>a.start-b.start);
-  relinkStarts();
+  relinkEnds();
   renderRows();
   syncPeaks();
   updateDiscMarker();
@@ -389,20 +396,21 @@ function buildEditRow(t,i){
   const row=document.createElement("div");
   const invalid=t.end<=t.start;
   row.className="track-row"+(invalid?" invalid":"");
-  const canLock=i>0;              // la 1re piste garde son début libre
-  const locked=canLock&&t.linked; // début grisé ?
+  const last=i===EDIT.length-1;
+  const canLock=!last;               // la dernière piste garde sa fin libre
+  const endLocked=canLock&&t.linked; // fin grisée (= début de la suivante) ?
   row.innerHTML=`
     <span class="tn">${i+1}.</span>
     <input class="t-title" placeholder="${T('tr_title_ph')}">
     <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
-      ${canLock
-        ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_start'):T('link_start')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
-        : `<span class="t-lock-spacer"></span>`}
-      <input class="t-time t-start" value="${fmtTime(t.start)}"${locked?' disabled':''}>
-      <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"${locked?' disabled':''}><span class="material-symbols-outlined">first_page</span></button>
+      <input class="t-time t-start" value="${fmtTime(t.start)}">
+      <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"><span class="material-symbols-outlined">first_page</span></button>
       <span class="t-sep">→</span>
-      <input class="t-time t-end" value="${fmtTime(t.end)}">
+      <input class="t-time t-end" value="${fmtTime(t.end)}"${endLocked?' disabled':''}>
+      ${canLock
+        ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_end'):T('link_end')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
+        : `<span class="t-lock-spacer"></span>`}
       <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
     </span>
     <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
@@ -417,21 +425,18 @@ function buildEditRow(t,i){
   });
   row.querySelector(".t-artist").addEventListener("input",e=>{
     EDIT[i].artist=e.target.value;});
-  const si=row.querySelector(".t-start");
-  if(si&&!locked)si.addEventListener("change",e=>{
+  // Début : toujours éditable (référence de la piste).
+  row.querySelector(".t-start").addEventListener("change",e=>{
     const v=parseTime(e.target.value);if(v==null)return;
-    EDIT[i].startRaw=v;commitEdit();});
-  row.querySelector(".t-end").addEventListener("change",e=>{
+    EDIT[i].start=v;commitEdit();});
+  // Fin : éditable seulement si déliée ou dernière piste.
+  const ei=row.querySelector(".t-end");
+  if(!endLocked)ei.addEventListener("change",e=>{
     const v=parseTime(e.target.value);if(v==null)return;
-    EDIT[i].end=v;commitEdit();});
+    EDIT[i].endRaw=v;commitEdit();});
   const lock=row.querySelector(".t-lock");
-  if(lock)lock.onclick=()=>{
-    // Délier restaure le début libre (startRaw) ; lier le masque. relink
-    // applique la bonne valeur selon le nouvel état.
-    EDIT[i].linked=!EDIT[i].linked;
-    commitEdit();};
-  const ss=row.querySelector(".t-setstart");
-  if(ss)ss.onclick=()=>setFromPlayhead(i,"start");
+  if(lock)lock.onclick=()=>{EDIT[i].linked=!EDIT[i].linked;commitEdit();};
+  row.querySelector(".t-setstart").onclick=()=>setFromPlayhead(i,"start");
   row.querySelector(".t-setend").onclick=()=>setFromPlayhead(i,"end");
   row.querySelector(".row-play").onclick=()=>{
     const a=$("ed-audio");a.currentTime=EDIT[i].start;a.play();};
@@ -444,10 +449,17 @@ function setFromPlayhead(i,which){
   const t=Math.max(0,$("ed-audio").currentTime||0);
   if(which==="start"){
     if(t>=EDIT[i].end){toast(T("err_times"),true);return;}
-    EDIT[i].startRaw=t;   // le début libre ; set-start est désactivé si lié
+    EDIT[i].start=t;   // référence ; la fin liée de la piste précédente suivra
   }else{
-    if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
-    EDIT[i].end=t;   // via relinkStarts, le début lié suivant suivra
+    const last=i===EDIT.length-1;
+    if(!last&&EDIT[i].linked){
+      // Fin liée = frontière avec la suivante : on déplace son début.
+      if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
+      EDIT[i+1].start=t;
+    }else{
+      if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
+      EDIT[i].endRaw=t;
+    }
   }
   commitEdit();
 }
@@ -491,7 +503,7 @@ $("btn-add-track2").onclick=()=>{
   const a=$("ed-audio");
   const start=a.currentTime||0;
   const end=Math.min(start+60,a.duration||start+60);
-  EDIT.push({title:"",artist:"",start,end,startRaw:start,linked:false});
+  EDIT.push({title:"",artist:"",start,end,endRaw:end,linked:false});
   commitEdit();
 };
 
@@ -509,7 +521,7 @@ function toast(msg,err){
 // ============================================================
 $("btn-render").onclick=async()=>{
   if(!EDIT.length){alert(T("err_no_tracks"));return;}
-  relinkStarts();
+  relinkEnds();
   const tracks=[];
   for(let i=0;i<EDIT.length;i++){
     const t=EDIT[i];
