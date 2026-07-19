@@ -1,5 +1,26 @@
 # Notes
 
+2026-07-19 (correction sémantique éditeur) : **La liaison va fin→début suivant**
+(preprod v1.6.10). L'entrée précédente décrivait l'inverse (début lié à la fin
+précédente) — corrigé après retour utilisateur. Intention réelle : chaque
+chanson doit COMMENCER pile sur sa musique (début net « si je lance la piste,
+elle démarre direct ») ; les transitions parlées restent à la FIN de la piste
+précédente (« ça se skip »). Donc :
+- Le **début** de chaque piste est la référence éditable (l'IA l'indique).
+- La **fin** suit le début de la piste suivante (liée, grisée) — la transition
+  parlée est donc incluse à la fin de la piste. `endRaw` = fin musicale
+  détectée, mémorisée ; délier la fin la restaure (couper la transition).
+- Cadenas sur la **fin** (sauf la dernière piste). Début de la 1re piste et fin
+  de la dernière toujours libres (silence d'intro / crédits de fin).
+- Geste principal : « définir le début » d'une piste (l'IA se trompe souvent de
+  quelques secondes) → la fin liée de la piste précédente suit. « définir la
+  fin » d'une piste liée déplace la même frontière (= début de la suivante).
+- Modèle EDIT {title,artist,start,end,endRaw,linked}, `relinkEnds()`.
+- **Validé E2E preprod** (webshot+puppeteer) : débuts éditables / fins grisées
+  liées au début suivant ; délier la fin piste 1 restaure 4:12.8 (coupe la
+  transition, gap jusqu'à 7:46.7) ; définir-début piste 2 à 4:30 → fin piste 1
+  suit à 4:30. Marqueur disque + barre progression inchangés. 145 tests verts.
+
 2026-07-19 (suite) : **Éditeur de coupes enrichi** (preprod v1.6.9). Trois
 demandes utilisateur, 100 % frontend (backend/API inchangés, 145 tests verts) :
 - **Liaison + cadenas par piste** : le début de chaque piste (sauf la 1re) est
