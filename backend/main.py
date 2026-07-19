@@ -919,10 +919,20 @@ def _run_prepare_bg(slug: str, username: str) -> None:
             silences = preanalyze.detect_silences(wav)
             source = "ia"
             try:
+                # Phase transcription : d'abord sans pct (chargement du modèle
+                # -> barre indéterminée), puis pct au fil des segments whisper.
                 _publish(slug, {"stage": "ai_markers", "status": "running",
                                 "info": {"phase": "transcription"},
                                 "ts": time.time()})
-                transcript = preanalyze.transcribe(wav)
+                _tr_last = [0.0]
+                def tr_pct(frac: float) -> None:
+                    pct = round(frac * 100, 1)
+                    if pct - _tr_last[0] >= 1 or pct >= 100:
+                        _tr_last[0] = pct
+                        _publish(slug, {"stage": "ai_markers", "status": "running",
+                                        "info": {"phase": "transcription", "pct": pct},
+                                        "ts": time.time()})
+                transcript = preanalyze.transcribe(wav, progress=tr_pct)
                 _publish(slug, {"stage": "ai_markers", "status": "running",
                                 "info": {"phase": "llm"}, "ts": time.time()})
                 if m.data.get("auto_setlist"):

@@ -300,6 +300,54 @@ def test_prepare_skips_ai_when_timecodes_present(client, monkeypatch, tmp_path):
     assert m.state("ai_markers") == "done"
 
 
+def test_prepare_publishes_transcription_progress(client, monkeypatch, tmp_path):
+    """La transcription doit émettre des events pct pour la barre de progression."""
+    from backend import llm, main
+    from backend.pipeline import preanalyze
+    c, projects = client
+    # Setlist connue mais sans timecodes -> passe par whisper + request_markers.
+    payload = _job_payload(tracks=[
+        {"n": 1, "title": "A"}, {"n": 2, "title": "B"}])
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    project_dir = projects / slug
+    (project_dir / "source").mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=12",
+        "-ar", "44100", "-ac", "2",
+        str(project_dir / "source" / "master.wav")],
+        check=True, capture_output=True)
+    from backend.manifest import Manifest
+    Manifest.load(project_dir / "manifest.yaml").set_state("download", "done")
+
+    monkeypatch.setattr(preanalyze, "detect_silences", lambda *a, **k: [])
+
+    def fake_transcribe(wav, progress=None):
+        # Simule la progression segment par segment.
+        for frac in (0.25, 0.5, 0.75, 1.0):
+            if progress:
+                progress(frac)
+        return [{"start": 0.0, "end": 6.0, "text": "a"},
+                {"start": 6.0, "end": 12.0, "text": "b"}]
+    monkeypatch.setattr(preanalyze, "transcribe", fake_transcribe)
+    monkeypatch.setattr(llm, "request_markers", lambda *a, **k: {
+        1: {"start": 0.0, "end": 6.0}, 2: {"start": 6.0, "end": 12.0}})
+
+    main._progress_last[slug] = []
+    main._run_prepare_bg(slug, "g")
+
+    events = main._progress_last[slug]
+    pct_events = [e for e in events
+                  if e["stage"] == "ai_markers"
+                  and e["info"].get("phase") == "transcription"
+                  and e["info"].get("pct") is not None]
+    assert pct_events, events
+    pcts = [e["info"]["pct"] for e in pct_events]
+    assert pcts == sorted(pcts)          # progression monotone
+    assert max(pcts) == 100.0            # atteint la fin
+    assert any(e["stage"] == "prepare" and e["status"] == "complete"
+               for e in events)
+
+
 # --- Tags : artiste par piste ----------------------------------------------
 def test_tag_mp3_track_artist(tmp_path):
     mp3 = tmp_path / "01. Beautiful Day.mp3"

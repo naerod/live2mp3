@@ -218,7 +218,10 @@ function runProgress(titleKey,stages,onComplete){
   const items={};
   stages.forEach(s=>{
     const li=document.createElement("li");
-    li.innerHTML=`<span class="dot"></span><span>${T("stage_"+s)}</span><span class="stage-pct"></span>`;
+    li.innerHTML=`<div class="stage-head"><span class="dot"></span>`+
+      `<span class="stage-label">${T("stage_"+s)}</span>`+
+      `<span class="stage-pct"></span></div>`+
+      `<div class="stage-bar"><div class="stage-fill"></div></div>`;
     ul.appendChild(li);items[s]=li;
   });
   const es=new EventSource(`/api/jobs/${slug}/events`);
@@ -226,13 +229,27 @@ function runProgress(titleKey,stages,onComplete){
     const ev=JSON.parse(e.data);
     const li=items[ev.stage];
     if(li){
-      li.classList.toggle("running",ev.status==="running");
-      li.classList.toggle("done",ev.status==="done");
+      const running=ev.status==="running",done=ev.status==="done";
+      li.classList.toggle("running",running);
+      li.classList.toggle("done",done);
       const pct=li.querySelector(".stage-pct");
-      if(ev.status==="running"&&ev.info){
-        if(ev.info.pct!=null)pct.textContent=Math.round(ev.info.pct)+" %";
-        else if(ev.info.phase)pct.textContent=T("phase_"+ev.info.phase);
-      }else if(ev.status==="done"){
+      const fill=li.querySelector(".stage-fill");
+      if(running){
+        const info=ev.info||{};
+        if(info.pct!=null){
+          // Progression connue -> barre remplie au pourcentage
+          li.classList.remove("indet");
+          fill.style.width=Math.round(info.pct)+"%";
+          pct.textContent=(info.phase?T("phase_"+info.phase)+" ":"")+Math.round(info.pct)+" %";
+        }else{
+          // Progression inconnue -> barre animée « ça tourne »
+          li.classList.add("indet");
+          fill.style.width="";
+          pct.textContent=info.phase?T("phase_"+info.phase):T("running_word");
+        }
+      }else if(done){
+        li.classList.remove("indet");
+        fill.style.width="100%";
         pct.textContent="";
         if(ev.stage==="ai_markers"&&ev.info&&ev.info.source)
           pct.textContent=T("src_"+ev.info.source)||"";
@@ -266,6 +283,12 @@ $("btn-err-retry").onclick=()=>{
 // Étape 4 — Éditeur de coupes (vérification humaine)
 // ============================================================
 const SEG_COLORS=["rgba(136,147,242,.55)","rgba(122,204,174,.55)"];
+const DISC_SECONDS=88*60;   // capacité d'un disque physique (88 min)
+
+// Modèle de l'éditeur. `linked` : le début de la piste suit la fin de la
+// précédente (grisé, pas de gap). Toujours false pour la 1re piste (début
+// libre) ; la fin de la dernière piste reste toujours éditable.
+let EDIT=[];   // [{title, artist, start, end, linked}]
 
 async function openEditor(){
   show("step-editor");
@@ -273,12 +296,20 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
-  // Les lignes de pistes d'abord : l'éditeur reste utilisable (écoute +
-  // timecodes manuels) même si la waveform ne se charge pas.
-  $("edit-rows").innerHTML="";
-  m.tracks.forEach(t=>{
-    if(t.start!=null&&t.end!=null)addEditRow(t);
-  });
+  // Le DÉBUT de chaque chanson est la référence (l'IA l'indique, l'humain
+  // l'ajuste) : chaque piste commence pile sur sa musique. La FIN suit le
+  // début de la piste suivante, donc la transition parlée reste à la fin de la
+  // piste (skippable). endRaw = fin libre mémorisée (fin musicale détectée),
+  // restaurée si on délie pour couper la transition.
+  EDIT=m.tracks.filter(t=>t.start!=null&&t.end!=null)
+    .map(t=>({title:t.title||"",artist:t.artist||"",
+              start:+t.start,end:+t.end,endRaw:+t.end,linked:false}));
+  EDIT.sort((a,b)=>a.start-b.start);
+  EDIT.forEach((t,i)=>{t.linked=i<EDIT.length-1;});  // fin liée sauf la dernière
+  relinkEnds();
+  renderRows();
+  updateDiscMarker();
+
   const PeaksLib=window.Peaks||window.peaks;  // global UMD : `peaks` en v3
   if(!PeaksLib){console.warn("peaks.js non chargé");return;}
   // Couleurs explicites : les défauts de peaks.js sont noirs (fond blanc).
@@ -301,103 +332,204 @@ async function openEditor(){
     if(err||!peaks){console.warn("Peaks indisponible:",err);return;}
     peaksInstance=peaks;
     peaks.zoom.setZoom(2);   // ~1 min visible : transitions repérables d'un coup d'œil
-    m.tracks.forEach((t,i)=>{
-      if(t.start==null||t.end==null)return;
-      peaks.segments.add({
-        id:"t"+t.n,startTime:t.start,endTime:t.end,
-        labelText:`${t.n}. ${t.title}`,editable:true,
-        color:SEG_COLORS[i%2]});
-    });
+    syncPeaks();
+    updateDiscMarker();
     peaks.on("segments.dragend",({segment})=>{
-      const row=$("edit-rows").querySelector(`[data-seg="${segment.id}"]`);
-      if(row){
-        row.querySelector(".t-start").value=fmtTime(segment.startTime);
-        row.querySelector(".t-end").value=fmtTime(segment.endTime);
-      }
+      const i=+segment.id.slice(1);
+      if(!EDIT[i])return;
+      EDIT[i].start=segment.startTime;   // bord gauche = début (référence)
+      const last=i===EDIT.length-1;
+      // Bord droit d'une fin liée = frontière avec la suivante (déplace son
+      // début) ; sinon = fin libre de la piste.
+      if(!last&&EDIT[i].linked)EDIT[i+1].start=segment.endTime;
+      else EDIT[i].endRaw=segment.endTime;
+      commitEdit();
     });
     $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
     $("btn-zoom-out").onclick=()=>peaks.zoom.zoomOut();
   });
 }
 
-let segSeq=1000;
-function addEditRow(t){
+// Fin d'une piste liée = début de la suivante (la transition parlée reste donc
+// à la fin de la piste) ; sinon = sa endRaw libre. La dernière piste garde
+// toujours sa fin libre.
+function relinkEnds(){
+  for(let i=0;i<EDIT.length;i++){
+    const last=i===EDIT.length-1;
+    if(!last&&EDIT[i].linked)EDIT[i].end=EDIT[i+1].start;
+    else EDIT[i].end=EDIT[i].endRaw;
+  }
+}
+
+// Recalcule tout après une mutation : ordre, liaisons, lignes, segments,
+// marqueur disque. Une seule porte d'entrée => cohérence garantie.
+function commitEdit(){
+  EDIT.sort((a,b)=>a.start-b.start);
+  relinkEnds();
+  renderRows();
+  syncPeaks();
+  updateDiscMarker();
+}
+
+function syncPeaks(){
+  if(!peaksInstance)return;
+  peaksInstance.segments.getSegments().forEach(s=>{
+    if(+s.id.slice(1)>=EDIT.length)peaksInstance.segments.removeById(s.id);
+  });
+  EDIT.forEach((t,i)=>{
+    const id="t"+i;
+    const opts={startTime:t.start,endTime:Math.max(t.start+0.05,t.end),
+      labelText:`${i+1}. ${t.title}`,color:SEG_COLORS[i%2]};
+    const seg=peaksInstance.segments.getSegment(id);
+    if(seg)seg.update(opts);
+    else peaksInstance.segments.add({id,editable:true,...opts});
+  });
+}
+
+function renderRows(){
   const rows=$("edit-rows");
+  rows.innerHTML="";
+  EDIT.forEach((t,i)=>rows.appendChild(buildEditRow(t,i)));
+}
+
+function buildEditRow(t,i){
   const row=document.createElement("div");
-  row.className="track-row";
-  const segId="t"+t.n;
-  row.dataset.seg=segId;
+  const invalid=t.end<=t.start;
+  row.className="track-row"+(invalid?" invalid":"");
+  const last=i===EDIT.length-1;
+  const canLock=!last;               // la dernière piste garde sa fin libre
+  const endLocked=canLock&&t.linked; // fin grisée (= début de la suivante) ?
   row.innerHTML=`
-    <span class="tn"></span>
-    <input class="t-title" placeholder="${T("tr_title_ph")}">
-    <input class="t-artist" placeholder="${T("tr_artist_ph")}">
+    <span class="tn">${i+1}.</span>
+    <input class="t-title" placeholder="${T('tr_title_ph')}">
+    <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
       <input class="t-time t-start" value="${fmtTime(t.start)}">
+      <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"><span class="material-symbols-outlined">first_page</span></button>
       <span class="t-sep">→</span>
-      <input class="t-time t-end" value="${fmtTime(t.end)}">
+      <input class="t-time t-end" value="${fmtTime(t.end)}"${endLocked?' disabled':''}>
+      ${canLock
+        ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_end'):T('link_end')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
+        : `<span class="t-lock-spacer"></span>`}
+      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
     </span>
-    <button class="icon-btn icon-only row-play" title="${T("play")}"><span class="material-symbols-outlined">play_arrow</span></button>
-    <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
-  row.querySelector(".t-title").value=t.title||"";
-  row.querySelector(".t-artist").value=t.artist||"";
+    <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
+    <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
+  row.querySelector(".t-title").value=t.title;
+  row.querySelector(".t-artist").value=t.artist;
+  // Texte : maj sans rebuild (préserve le focus), juste le label du segment.
+  row.querySelector(".t-title").addEventListener("input",e=>{
+    EDIT[i].title=e.target.value;
+    if(peaksInstance){const s=peaksInstance.segments.getSegment("t"+i);
+      if(s)s.update({labelText:(i+1)+". "+e.target.value});}
+  });
+  row.querySelector(".t-artist").addEventListener("input",e=>{
+    EDIT[i].artist=e.target.value;});
+  // Début : toujours éditable (référence de la piste).
+  row.querySelector(".t-start").addEventListener("change",e=>{
+    const v=parseTime(e.target.value);if(v==null)return;
+    EDIT[i].start=v;commitEdit();});
+  // Fin : éditable seulement si déliée ou dernière piste.
+  const ei=row.querySelector(".t-end");
+  if(!endLocked)ei.addEventListener("change",e=>{
+    const v=parseTime(e.target.value);if(v==null)return;
+    EDIT[i].endRaw=v;commitEdit();});
+  const lock=row.querySelector(".t-lock");
+  if(lock)lock.onclick=()=>{EDIT[i].linked=!EDIT[i].linked;commitEdit();};
+  row.querySelector(".t-setstart").onclick=()=>setFromPlayhead(i,"start");
+  row.querySelector(".t-setend").onclick=()=>setFromPlayhead(i,"end");
   row.querySelector(".row-play").onclick=()=>{
-    const s=parseTime(row.querySelector(".t-start").value);
-    if(s==null)return;
-    const a=$("ed-audio");a.currentTime=s;a.play();
-  };
-  row.querySelector(".row-del").onclick=()=>{
-    if(peaksInstance)peaksInstance.segments.removeById(segId);
-    row.remove();renumber(rows);
-  };
-  const sync=()=>{
-    const s=parseTime(row.querySelector(".t-start").value);
-    const e=parseTime(row.querySelector(".t-end").value);
-    if(peaksInstance&&s!=null&&e!=null&&e>s){
-      const seg=peaksInstance.segments.getSegment(segId);
-      if(seg)seg.update({startTime:s,endTime:e});
+    const a=$("ed-audio");a.currentTime=EDIT[i].start;a.play();};
+  row.querySelector(".row-del").onclick=()=>{EDIT.splice(i,1);commitEdit();};
+  return row;
+}
+
+// Reprend la position exacte du lecteur comme début ou fin de la piste.
+function setFromPlayhead(i,which){
+  const t=Math.max(0,$("ed-audio").currentTime||0);
+  if(which==="start"){
+    if(t>=EDIT[i].end){toast(T("err_times"),true);return;}
+    EDIT[i].start=t;   // référence ; la fin liée de la piste précédente suivra
+  }else{
+    const last=i===EDIT.length-1;
+    if(!last&&EDIT[i].linked){
+      // Fin liée = frontière avec la suivante : on déplace son début.
+      if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
+      EDIT[i+1].start=t;
+    }else{
+      if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
+      EDIT[i].endRaw=t;
     }
-  };
-  row.querySelector(".t-start").addEventListener("change",sync);
-  row.querySelector(".t-end").addEventListener("change",sync);
-  const updateLabel=()=>{
-    if(!peaksInstance)return;
-    const seg=peaksInstance.segments.getSegment(segId);
-    if(seg)seg.update({labelText:row.querySelector(".t-title").value});
-  };
-  row.querySelector(".t-title").addEventListener("change",updateLabel);
-  rows.appendChild(row);
-  renumber(rows);
+  }
+  commitEdit();
+}
+
+// Frontières de disque : on remplit chaque disque jusqu'à 88 min de musique
+// (durées cumulées), sans jamais couper une piste — la piste qui déborde
+// démarre le disque suivant. Le marqueur est posé à son début (temps source).
+function discBoundaries(){
+  const out=[];let cumul=0;
+  for(let i=0;i<EDIT.length;i++){
+    const dur=Math.max(0,EDIT[i].end-EDIT[i].start);
+    if(cumul>0&&cumul+dur>DISC_SECONDS){
+      out.push({time:EDIT[i].start,disc:out.length+2});
+      cumul=dur;
+    }else{cumul+=dur;}
+  }
+  return out;
+}
+
+function updateDiscMarker(){
+  const bounds=discBoundaries();
+  const warn=$("disc-warn");
+  if(warn){
+    if(bounds.length){
+      const totalMin=Math.round(
+        EDIT.reduce((a,t)=>a+Math.max(0,t.end-t.start),0)/60);
+      warn.classList.remove("hidden");
+      warn.querySelector(".disc-warn-txt").textContent=
+        T("disc_warn")(totalMin,bounds.length+1);
+    }else{warn.classList.add("hidden");}
+  }
+  if(peaksInstance&&peaksInstance.points){
+    peaksInstance.points.removeAll();
+    bounds.forEach(b=>peaksInstance.points.add({
+      time:b.time,labelText:T("disc_point")(b.disc),
+      color:"#e0736f",editable:false}));
+  }
 }
 
 $("btn-add-track2").onclick=()=>{
   const a=$("ed-audio");
   const start=a.currentTime||0;
   const end=Math.min(start+60,a.duration||start+60);
-  const n=++segSeq;
-  if(peaksInstance)peaksInstance.segments.add({
-    id:"t"+n,startTime:start,endTime:end,
-    labelText:T("tr_title_ph"),editable:true,
-    color:SEG_COLORS[$("edit-rows").children.length%2]});
-  addEditRow({n,title:"",start,end});
+  EDIT.push({title:"",artist:"",start,end,endRaw:end,linked:false});
+  commitEdit();
 };
+
+let _toastTimer=null;
+function toast(msg,err){
+  const el=$("toast");if(!el)return;
+  el.textContent=msg;
+  el.className="toast show"+(err?" err":"");
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>el.classList.remove("show"),2400);
+}
 
 // ============================================================
 // Validation → rendu
 // ============================================================
 $("btn-render").onclick=async()=>{
-  const rows=[...$("edit-rows").querySelectorAll(".track-row")];
-  if(!rows.length){alert(T("err_no_tracks"));return;}
+  if(!EDIT.length){alert(T("err_no_tracks"));return;}
+  relinkEnds();
   const tracks=[];
-  for(const r of rows){
-    const title=r.querySelector(".t-title").value.trim();
-    const s=parseTime(r.querySelector(".t-start").value);
-    const e=parseTime(r.querySelector(".t-end").value);
-    if(!title){alert(T("err_titles"));return;}
-    if(s==null||e==null||e<=s){alert(`${T("err_times")} — ${title}`);return;}
-    const t={n:tracks.length+1,title,start:s,end:e};
-    const a=r.querySelector(".t-artist").value.trim();
-    if(a)t.artist=a;
-    tracks.push(t);
+  for(let i=0;i<EDIT.length;i++){
+    const t=EDIT[i];
+    if(!t.title.trim()){alert(T("err_titles"));return;}
+    if(t.end<=t.start){alert(`${T("err_times")} — ${t.title||("#"+(i+1))}`);return;}
+    const o={n:i+1,title:t.title.trim(),start:t.start,end:t.end};
+    if(t.artist.trim())o.artist=t.artist.trim();
+    tracks.push(o);
   }
   $("btn-render").disabled=true;
   try{
