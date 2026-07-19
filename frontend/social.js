@@ -22,6 +22,10 @@ const L2M = (function () {
       notify_on: "Notifications activées", notify_off: "Notifications coupées",
       role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
       followers: "abonnés", posts: "posts",
+      notifications: "Notifications", settings: "Paramètres",
+      notif_empty: "Aucune notification pour l'instant.",
+      notif_new: "Nouveau post de", notif_mark_all: "Tout marquer comme lu",
+      notif_see_all: "Voir toutes les notifications",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -42,6 +46,10 @@ const L2M = (function () {
       notify_on: "Notifications on", notify_off: "Notifications off",
       role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
       followers: "followers", posts: "posts",
+      notifications: "Notifications", settings: "Settings",
+      notif_empty: "No notifications yet.",
+      notif_new: "New post from", notif_mark_all: "Mark all as read",
+      notif_see_all: "See all notifications",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -153,6 +161,7 @@ const L2M = (function () {
         <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label"></span></button>
         <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined"></span></button>
         <a id="login" class="icon-btn" style="display:none"><span class="material-symbols-outlined">login</span><span data-hk="login"></span></a>
+        <div id="notif-bell" class="notif-bell" style="display:none"></div>
         <div id="usermenu" class="usermenu" style="display:none"></div>
       </div>`;
 
@@ -220,6 +229,8 @@ const L2M = (function () {
     const um = document.getElementById("usermenu");
     if (meData.authenticated) {
       ["login", "lang", "theme"].forEach(id => document.getElementById(id).style.display = "none");
+      const bell = document.getElementById("notif-bell");
+      if (bell) { bell.style.display = ""; notifBell(bell); }
       um.style.display = "";
       const sm = await me();
       const extraItems = opts.extraItems ? (typeof opts.extraItems === "function" ? opts.extraItems(meData) : opts.extraItems) : [];
@@ -250,6 +261,8 @@ const L2M = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
+        <a class="um-item" href="/notifications"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
+        <a class="um-item" href="/settings"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
         ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
@@ -261,6 +274,7 @@ const L2M = (function () {
     function refresh() {
       const dark = getTheme() === "dark";
       set("profile", t("view_profile")); set("lang", t("language")); set("langval", getLang().toUpperCase());
+      set("notifications", t("notifications")); set("settings", t("settings"));
       set("logout", t("logout")); set("themeic", dark ? "light_mode" : "dark_mode");
       set("theme", dark ? t("theme_light") : t("theme_dark"));
     }
@@ -401,6 +415,81 @@ const L2M = (function () {
   }
 
   const entityHref = (type, id) => `/${type}/${encodeURIComponent(id)}`;
+
+  /* ---------------- Notifications (cloche header + centre) ---------------- */
+  const NOTIF_ICON = { artist: "artist", festival: "festival", venue: "location_on", user: "person" };
+  // Rendu d'une notification (réutilisé par la cloche et la page centre).
+  function notifItem(n) {
+    const icon = NOTIF_ICON[n.reason_type] || "notifications";
+    return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
+      <span class="notif-ic material-symbols-outlined">${icon}</span>
+      <span class="notif-body">
+        <span class="notif-reason">${t("notif_new")} <b>${esc(n.reason_label)}</b></span>
+        <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
+  // Cloche dans le header : compteur de non-lus + menu déroulant des récentes.
+  async function notifBell(mountEl) {
+    let unread = 0, open = false;
+    mountEl.innerHTML = `
+      <button class="nb-trigger icon-btn icon-only" aria-haspopup="true" aria-label="${esc(t("notifications"))}" title="${esc(t("notifications"))}">
+        <span class="material-symbols-outlined">notifications</span>
+      </button>
+      <div class="nb-pop" role="menu" hidden></div>`;
+    const trigger = mountEl.querySelector(".nb-trigger");
+    const pop = mountEl.querySelector(".nb-pop");
+
+    function paintBadge() {
+      mountEl.querySelector(".nb-badge")?.remove();
+      if (unread > 0) trigger.insertAdjacentHTML("beforeend",
+        `<span class="nb-badge">${unread > 99 ? "99+" : unread}</span>`);
+    }
+    async function refreshCount() {
+      try { unread = (await api("GET", "/api/social/notifications/count")).unread; }
+      catch (e) { unread = 0; }
+      paintBadge();
+    }
+    async function loadPop() {
+      pop.innerHTML = `
+        <div class="nb-head"><b>${t("notifications")}</b>
+          <button class="nb-markall">${t("notif_mark_all")}</button></div>
+        <div class="nb-list"><div class="soc-empty">…</div></div>
+        <a class="nb-all" href="/notifications">${t("notif_see_all")}</a>`;
+      let d = { items: [] };
+      try { d = await api("GET", "/api/social/notifications?limit=8"); } catch (e) {}
+      const list = pop.querySelector(".nb-list");
+      list.innerHTML = d.items.length ? d.items.map(notifItem).join("")
+        : `<div class="soc-empty">${t("notif_empty")}</div>`;
+      pop.querySelector(".nb-markall").onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        try { unread = (await api("POST", "/api/social/notifications/read", { all: true })).unread; }
+        catch (e) {}
+        paintBadge();
+        list.querySelectorAll(".notif-item").forEach(el => {
+          el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
+        });
+      };
+      list.querySelectorAll(".notif-item").forEach(el => {
+        el.addEventListener("click", () => {
+          api("POST", "/api/social/notifications/read", { ids: [parseInt(el.dataset.id, 10)] }).catch(() => {});
+        });
+      });
+    }
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      open = !open; mountEl.classList.toggle("open", open); pop.hidden = !open;
+      if (open) loadPop();
+    };
+    document.addEventListener("click", (e) => {
+      if (!mountEl.contains(e.target)) { open = false; mountEl.classList.remove("open"); pop.hidden = true; }
+    });
+    await refreshCount();
+    return { refresh: refreshCount };
+  }
 
   /* ---------------- Widget commentaires ---------------- */
   /* `opts.coverId` bascule le widget sur le fil d'une pochette au lieu de celui
@@ -757,7 +846,7 @@ const L2M = (function () {
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
     likeButton, followButton, roleBadge, entityHref, comments, userMenu,
-    autocomplete, LANG,
+    notifBell, notifItem, autocomplete, LANG,
     getTheme, applyTheme, getLang, applyLang, initHeader,
   };
 })();

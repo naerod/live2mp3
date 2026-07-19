@@ -64,6 +64,8 @@ from .covers import (
 from .printable import cover_pdf, traycard_pdf
 from .social import router as social_router
 from .follows import router as follows_router
+from . import notifications
+from .notifications import router as notifications_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -77,6 +79,8 @@ app = FastAPI(title="live2mp3", docs_url="/api/docs")
 app.include_router(social_router)
 # Suivi + pages auto d'entités — routes /api/social/follow*, /artist, /festival, /venue.
 app.include_router(follows_router)
+# Notifications in-app + préférences — routes /api/social/notif*, /notifications, /settings.
+app.include_router(notifications_router)
 app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
@@ -89,6 +93,11 @@ app.include_router(linktool.router)
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
+    try:
+        notifications.ensure_seeded()
+    except Exception:
+        pass
 
 # --- État de progression en mémoire (par slug) ----------------------------
 _progress_bus: dict[str, "queue.Queue[dict]"] = {}
@@ -772,7 +781,14 @@ def set_published(slug: str, payload: PublishIn,
     m = Manifest.load(path)
     m.data["published"] = payload.published
     m.save(path)
-    return {"ok": True, "published": payload.published}
+    # Publication → annonce aux abonnés (fan-out idempotent : une fois par env).
+    notified = 0
+    if payload.published:
+        try:
+            notified = notifications.announce_post(slug)
+        except Exception:
+            notified = 0
+    return {"ok": True, "published": payload.published, "notified": notified}
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------

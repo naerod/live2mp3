@@ -519,3 +519,94 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   color:var(--muted);font-size:14px;margin-top:8px}
 .al-guests .material-symbols-outlined{font-size:17px;color:var(--accent)}
 .al-guests a{color:var(--accent)}
+
+/* ============================================================
+   Notifications — cloche header, dropdown, items, centre
+   ============================================================ */
+.notif-bell{position:relative;display:inline-flex}
+.notif-bell .nb-trigger{position:relative}
+.nb-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;
+  border-radius:999px;background:var(--like);color:#fff;font-size:11px;font-weight:700;
+  line-height:17px;text-align:center;border:2px solid var(--bg);box-sizing:content-box}
+.nb-pop{position:absolute;top:calc(100% + 10px);right:0;width:min(360px,92vw);z-index:60;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  box-shadow:0 16px 40px -12px rgba(0,0,0,.5);padding:6px;overflow:hidden}
+.notif-bell.open .nb-pop{animation:nb-in .15s ease}
+@keyframes nb-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.nb-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 6px}
+.nb-head b{font-size:14px}
+.nb-markall{margin:0;padding:0;border:none;background:transparent;color:var(--accent);
+  font-size:12px;font-weight:600;cursor:pointer}
+.nb-markall:hover{text-decoration:underline}
+.nb-list{max-height:min(60vh,420px);overflow:auto}
+.nb-all{display:block;text-align:center;padding:10px;margin-top:4px;font-size:13px;
+  font-weight:600;color:var(--accent);text-decoration:none;border-top:1px solid var(--border)}
+.nb-all:hover{background:var(--bg)}
+
+/* Un item de notification (partagé cloche + page centre) */
+.notif-item{display:flex;align-items:flex-start;gap:11px;padding:11px 10px;border-radius:10px;
+  text-decoration:none;color:var(--fg);position:relative;transition:background .12s}
+.notif-item:hover{background:var(--bg)}
+.notif-item.unread{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.notif-ic{font-size:20px;color:var(--accent);flex-shrink:0;margin-top:1px;
+  width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;background:color-mix(in srgb,var(--accent) 12%,var(--card))}
+.notif-body{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.notif-reason{font-size:12.5px;color:var(--muted)}
+.notif-reason b{color:var(--fg);font-weight:600}
+.notif-post{font-size:14px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notif-time{font-size:11.5px;color:var(--muted);margin-top:1px}
+.notif-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px}
+
+/* Page centre de notifications */
+.notif-page-head{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.notif-page-head h1{margin:0;font-size:22px}
+.notif-page-head .icon-btn{margin:0}
+.notif-list{display:flex;flex-direction:column}
+.notif-list .notif-item{border-bottom:1px solid var(--border);border-radius:0}
+.notif-list .notif-item:last-child{border-bottom:none}
+.notif-list .notif-post{white-space:normal}
+
+/* ============================================================
+   Page Paramètres — préférences de notification
+   ============================================================ */
+.set-card{max-width:720px;margin:0 auto}
+.set-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.set-head h1{margin:0;font-size:24px}
+.set-head .icon-btn{margin:0}
+.set-sec{display:flex;align-items:center;gap:8px;font-size:17px;margin:22px 0 4px}
+.set-sec .material-symbols-outlined{color:var(--accent);font-size:20px}
+.set-sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+.set-grid{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.set-row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-label{flex:1;font-size:14px;line-height:1.35}
+.set-toggles{display:flex;gap:4px;flex-shrink:0}
+.set-cell{width:74px;text-align:center;font-size:12px;color:var(--muted);
+  display:flex;align-items:center;justify-content:center}
+.set-colhead{background:var(--bg);padding:9px 14px}
+.set-colhead .set-cell{font-weight:600;text-transform:uppercase;letter-spacing:.03em;font-size:11px}
+.set-note{margin-top:14px}
+.set-rgpd{margin-top:10px}
+.set-note .material-symbols-outlined,.set-rgpd .material-symbols-outlined{color:var(--accent);flex-shrink:0}
+.set-saved{height:20px;margin-top:12px;display:flex;align-items:center;gap:6px;
+  font-size:13px;color:var(--ok);opacity:0;transition:opacity .2s}
+.set-saved.show{opacity:1}
+.set-saved .material-symbols-outlined{font-size:18px}
+
+/* Interrupteur (toggle switch) réutilisable */
+.sw{display:inline-flex;cursor:pointer;margin:0}
+.sw input{position:absolute;opacity:0;width:0;height:0}
+.sw-track{width:40px;height:23px;border-radius:999px;background:var(--border);
+  position:relative;transition:background .16s}
+.sw-thumb{position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;
+  background:#fff;transition:transform .16s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.sw input:checked+.sw-track{background:var(--accent)}
+.sw input:checked+.sw-track .sw-thumb{transform:translateX(17px)}
+.sw input:focus-visible+.sw-track{outline:2px solid var(--accent);outline-offset:2px}
+
+@media (max-width:700px){
+  .nb-pop{width:min(360px,94vw)}
+  .set-cell{width:60px}
+}

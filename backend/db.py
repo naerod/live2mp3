@@ -73,6 +73,48 @@ CREATE TABLE IF NOT EXISTS follows (
 CREATE INDEX IF NOT EXISTS idx_follows_user   ON follows(username);
 CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_type, target_id);
 
+-- Notifications in-app. `type` = catégorie ('new_post' pour l'instant).
+-- `reason_*` = l'entité suivie qui a déclenché la notif (pour le libellé
+-- « Nouveau post de <X> que vous suivez »). `slug`/`title`/`subtitle` = la
+-- cible (le post), libellés figés à l'émission. `read` = lu/non-lu.
+CREATE TABLE IF NOT EXISTS notifications (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    username     TEXT NOT NULL,
+    type         TEXT NOT NULL,
+    actor        TEXT NOT NULL DEFAULT '',
+    reason_type  TEXT NOT NULL DEFAULT '',
+    reason_id    TEXT NOT NULL DEFAULT '',
+    reason_label TEXT NOT NULL DEFAULT '',
+    slug         TEXT NOT NULL DEFAULT '',
+    title        TEXT NOT NULL DEFAULT '',
+    subtitle     TEXT NOT NULL DEFAULT '',
+    read         INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(username, read);
+CREATE INDEX IF NOT EXISTS idx_notif_recent ON notifications(username, created_at);
+
+-- Préférences de notification par utilisateur et par catégorie. Une ligne
+-- absente = tout activé (opt-out, conforme RGPD : l'utilisateur peut couper).
+-- `inapp` pilote la cloche/centre ; `email` prépare la Phase 3 (envoi encore
+-- désactivé par un master-switch, voir notifications.py).
+CREATE TABLE IF NOT EXISTS notif_prefs (
+    username  TEXT NOT NULL,
+    pref_key  TEXT NOT NULL,
+    inapp     INTEGER NOT NULL DEFAULT 1,
+    email     INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (username, pref_key)
+);
+
+-- Idempotence du fan-out : un post n'est annoncé qu'une fois par environnement
+-- (les manifests sont partagés prod/preprod mais les notifs sont scindées).
+-- Ligne sentinelle '__seeded__' = les posts déjà publiés avant la Phase 2 ont
+-- été marqués « déjà annoncés » (pas de spam rétroactif).
+CREATE TABLE IF NOT EXISTS post_announcements (
+    slug         TEXT PRIMARY KEY,
+    announced_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     slug       TEXT NOT NULL,
