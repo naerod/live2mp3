@@ -283,6 +283,12 @@ $("btn-err-retry").onclick=()=>{
 // Étape 4 — Éditeur de coupes (vérification humaine)
 // ============================================================
 const SEG_COLORS=["rgba(136,147,242,.55)","rgba(122,204,174,.55)"];
+const DISC_SECONDS=88*60;   // capacité d'un disque physique (88 min)
+
+// Modèle de l'éditeur. `linked` : le début de la piste suit la fin de la
+// précédente (grisé, pas de gap). Toujours false pour la 1re piste (début
+// libre) ; la fin de la dernière piste reste toujours éditable.
+let EDIT=[];   // [{title, artist, start, end, linked}]
 
 async function openEditor(){
   show("step-editor");
@@ -290,12 +296,15 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
-  // Les lignes de pistes d'abord : l'éditeur reste utilisable (écoute +
-  // timecodes manuels) même si la waveform ne se charge pas.
-  $("edit-rows").innerHTML="";
-  m.tracks.forEach(t=>{
-    if(t.start!=null&&t.end!=null)addEditRow(t);
-  });
+  EDIT=m.tracks.filter(t=>t.start!=null&&t.end!=null)
+    .map(t=>({title:t.title||"",artist:t.artist||"",
+              start:+t.start,end:+t.end,linked:false}));
+  EDIT.sort((a,b)=>a.start-b.start);
+  EDIT.forEach((t,i)=>{t.linked=i>0;});   // début lié par défaut sauf la 1re
+  relinkStarts();
+  renderRows();
+  updateDiscMarker();
+
   const PeaksLib=window.Peaks||window.peaks;  // global UMD : `peaks` en v3
   if(!PeaksLib){console.warn("peaks.js non chargé");return;}
   // Couleurs explicites : les défauts de peaks.js sont noirs (fond blanc).
@@ -318,103 +327,192 @@ async function openEditor(){
     if(err||!peaks){console.warn("Peaks indisponible:",err);return;}
     peaksInstance=peaks;
     peaks.zoom.setZoom(2);   // ~1 min visible : transitions repérables d'un coup d'œil
-    m.tracks.forEach((t,i)=>{
-      if(t.start==null||t.end==null)return;
-      peaks.segments.add({
-        id:"t"+t.n,startTime:t.start,endTime:t.end,
-        labelText:`${t.n}. ${t.title}`,editable:true,
-        color:SEG_COLORS[i%2]});
-    });
+    syncPeaks();
+    updateDiscMarker();
     peaks.on("segments.dragend",({segment})=>{
-      const row=$("edit-rows").querySelector(`[data-seg="${segment.id}"]`);
-      if(row){
-        row.querySelector(".t-start").value=fmtTime(segment.startTime);
-        row.querySelector(".t-end").value=fmtTime(segment.endTime);
-      }
+      const i=+segment.id.slice(1);
+      if(!EDIT[i])return;
+      EDIT[i].end=segment.endTime;
+      // Un début lié est dérivé : on ignore le déplacement de son bord gauche
+      // (syncPeaks le remettra à sa place liée).
+      if(!EDIT[i].linked)EDIT[i].start=segment.startTime;
+      commitEdit();
     });
     $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
     $("btn-zoom-out").onclick=()=>peaks.zoom.zoomOut();
   });
 }
 
-let segSeq=1000;
-function addEditRow(t){
+// Le début d'une piste liée = fin de la précédente (cascade unidirectionnelle).
+function relinkStarts(){
+  for(let i=1;i<EDIT.length;i++){
+    if(EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
+  }
+}
+
+// Recalcule tout après une mutation : ordre, liaisons, lignes, segments,
+// marqueur disque. Une seule porte d'entrée => cohérence garantie.
+function commitEdit(){
+  EDIT.sort((a,b)=>a.start-b.start);
+  relinkStarts();
+  renderRows();
+  syncPeaks();
+  updateDiscMarker();
+}
+
+function syncPeaks(){
+  if(!peaksInstance)return;
+  peaksInstance.segments.getSegments().forEach(s=>{
+    if(+s.id.slice(1)>=EDIT.length)peaksInstance.segments.removeById(s.id);
+  });
+  EDIT.forEach((t,i)=>{
+    const id="t"+i;
+    const opts={startTime:t.start,endTime:Math.max(t.start+0.05,t.end),
+      labelText:`${i+1}. ${t.title}`,color:SEG_COLORS[i%2]};
+    const seg=peaksInstance.segments.getSegment(id);
+    if(seg)seg.update(opts);
+    else peaksInstance.segments.add({id,editable:true,...opts});
+  });
+}
+
+function renderRows(){
   const rows=$("edit-rows");
+  rows.innerHTML="";
+  EDIT.forEach((t,i)=>rows.appendChild(buildEditRow(t,i)));
+}
+
+function buildEditRow(t,i){
   const row=document.createElement("div");
-  row.className="track-row";
-  const segId="t"+t.n;
-  row.dataset.seg=segId;
+  const invalid=t.end<=t.start;
+  row.className="track-row"+(invalid?" invalid":"");
+  const canLock=i>0;              // la 1re piste garde son début libre
+  const locked=canLock&&t.linked; // début grisé ?
   row.innerHTML=`
-    <span class="tn"></span>
-    <input class="t-title" placeholder="${T("tr_title_ph")}">
-    <input class="t-artist" placeholder="${T("tr_artist_ph")}">
+    <span class="tn">${i+1}.</span>
+    <input class="t-title" placeholder="${T('tr_title_ph')}">
+    <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
-      <input class="t-time t-start" value="${fmtTime(t.start)}">
+      ${canLock
+        ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_start'):T('link_start')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
+        : `<span class="t-lock-spacer"></span>`}
+      <input class="t-time t-start" value="${fmtTime(t.start)}"${locked?' disabled':''}>
+      <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"${locked?' disabled':''}><span class="material-symbols-outlined">first_page</span></button>
       <span class="t-sep">→</span>
       <input class="t-time t-end" value="${fmtTime(t.end)}">
+      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
     </span>
-    <button class="icon-btn icon-only row-play" title="${T("play")}"><span class="material-symbols-outlined">play_arrow</span></button>
-    <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
-  row.querySelector(".t-title").value=t.title||"";
-  row.querySelector(".t-artist").value=t.artist||"";
+    <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
+    <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
+  row.querySelector(".t-title").value=t.title;
+  row.querySelector(".t-artist").value=t.artist;
+  // Texte : maj sans rebuild (préserve le focus), juste le label du segment.
+  row.querySelector(".t-title").addEventListener("input",e=>{
+    EDIT[i].title=e.target.value;
+    if(peaksInstance){const s=peaksInstance.segments.getSegment("t"+i);
+      if(s)s.update({labelText:(i+1)+". "+e.target.value});}
+  });
+  row.querySelector(".t-artist").addEventListener("input",e=>{
+    EDIT[i].artist=e.target.value;});
+  const si=row.querySelector(".t-start");
+  if(si&&!locked)si.addEventListener("change",e=>{
+    const v=parseTime(e.target.value);if(v==null)return;
+    EDIT[i].start=v;commitEdit();});
+  row.querySelector(".t-end").addEventListener("change",e=>{
+    const v=parseTime(e.target.value);if(v==null)return;
+    EDIT[i].end=v;commitEdit();});
+  const lock=row.querySelector(".t-lock");
+  if(lock)lock.onclick=()=>{
+    EDIT[i].linked=!EDIT[i].linked;
+    if(EDIT[i].linked)EDIT[i].start=EDIT[i-1].end;
+    commitEdit();};
+  const ss=row.querySelector(".t-setstart");
+  if(ss)ss.onclick=()=>setFromPlayhead(i,"start");
+  row.querySelector(".t-setend").onclick=()=>setFromPlayhead(i,"end");
   row.querySelector(".row-play").onclick=()=>{
-    const s=parseTime(row.querySelector(".t-start").value);
-    if(s==null)return;
-    const a=$("ed-audio");a.currentTime=s;a.play();
-  };
-  row.querySelector(".row-del").onclick=()=>{
-    if(peaksInstance)peaksInstance.segments.removeById(segId);
-    row.remove();renumber(rows);
-  };
-  const sync=()=>{
-    const s=parseTime(row.querySelector(".t-start").value);
-    const e=parseTime(row.querySelector(".t-end").value);
-    if(peaksInstance&&s!=null&&e!=null&&e>s){
-      const seg=peaksInstance.segments.getSegment(segId);
-      if(seg)seg.update({startTime:s,endTime:e});
-    }
-  };
-  row.querySelector(".t-start").addEventListener("change",sync);
-  row.querySelector(".t-end").addEventListener("change",sync);
-  const updateLabel=()=>{
-    if(!peaksInstance)return;
-    const seg=peaksInstance.segments.getSegment(segId);
-    if(seg)seg.update({labelText:row.querySelector(".t-title").value});
-  };
-  row.querySelector(".t-title").addEventListener("change",updateLabel);
-  rows.appendChild(row);
-  renumber(rows);
+    const a=$("ed-audio");a.currentTime=EDIT[i].start;a.play();};
+  row.querySelector(".row-del").onclick=()=>{EDIT.splice(i,1);commitEdit();};
+  return row;
+}
+
+// Reprend la position exacte du lecteur comme début ou fin de la piste.
+function setFromPlayhead(i,which){
+  const t=Math.max(0,$("ed-audio").currentTime||0);
+  if(which==="start"){
+    if(t>=EDIT[i].end){toast(T("err_times"),true);return;}
+    EDIT[i].start=t;
+  }else{
+    if(t<=EDIT[i].start){toast(T("err_times"),true);return;}
+    EDIT[i].end=t;   // via relinkStarts, le début lié suivant suivra
+  }
+  commitEdit();
+}
+
+// Frontières de disque : on remplit chaque disque jusqu'à 88 min de musique
+// (durées cumulées), sans jamais couper une piste — la piste qui déborde
+// démarre le disque suivant. Le marqueur est posé à son début (temps source).
+function discBoundaries(){
+  const out=[];let cumul=0;
+  for(let i=0;i<EDIT.length;i++){
+    const dur=Math.max(0,EDIT[i].end-EDIT[i].start);
+    if(cumul>0&&cumul+dur>DISC_SECONDS){
+      out.push({time:EDIT[i].start,disc:out.length+2});
+      cumul=dur;
+    }else{cumul+=dur;}
+  }
+  return out;
+}
+
+function updateDiscMarker(){
+  const bounds=discBoundaries();
+  const warn=$("disc-warn");
+  if(warn){
+    if(bounds.length){
+      const totalMin=Math.round(
+        EDIT.reduce((a,t)=>a+Math.max(0,t.end-t.start),0)/60);
+      warn.classList.remove("hidden");
+      warn.querySelector(".disc-warn-txt").textContent=
+        T("disc_warn")(totalMin,bounds.length+1);
+    }else{warn.classList.add("hidden");}
+  }
+  if(peaksInstance&&peaksInstance.points){
+    peaksInstance.points.removeAll();
+    bounds.forEach(b=>peaksInstance.points.add({
+      time:b.time,labelText:T("disc_point")(b.disc),
+      color:"#e0736f",editable:false}));
+  }
 }
 
 $("btn-add-track2").onclick=()=>{
   const a=$("ed-audio");
   const start=a.currentTime||0;
   const end=Math.min(start+60,a.duration||start+60);
-  const n=++segSeq;
-  if(peaksInstance)peaksInstance.segments.add({
-    id:"t"+n,startTime:start,endTime:end,
-    labelText:T("tr_title_ph"),editable:true,
-    color:SEG_COLORS[$("edit-rows").children.length%2]});
-  addEditRow({n,title:"",start,end});
+  EDIT.push({title:"",artist:"",start,end,linked:false});
+  commitEdit();
 };
+
+let _toastTimer=null;
+function toast(msg,err){
+  const el=$("toast");if(!el)return;
+  el.textContent=msg;
+  el.className="toast show"+(err?" err":"");
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>el.classList.remove("show"),2400);
+}
 
 // ============================================================
 // Validation → rendu
 // ============================================================
 $("btn-render").onclick=async()=>{
-  const rows=[...$("edit-rows").querySelectorAll(".track-row")];
-  if(!rows.length){alert(T("err_no_tracks"));return;}
+  if(!EDIT.length){alert(T("err_no_tracks"));return;}
+  relinkStarts();
   const tracks=[];
-  for(const r of rows){
-    const title=r.querySelector(".t-title").value.trim();
-    const s=parseTime(r.querySelector(".t-start").value);
-    const e=parseTime(r.querySelector(".t-end").value);
-    if(!title){alert(T("err_titles"));return;}
-    if(s==null||e==null||e<=s){alert(`${T("err_times")} — ${title}`);return;}
-    const t={n:tracks.length+1,title,start:s,end:e};
-    const a=r.querySelector(".t-artist").value.trim();
-    if(a)t.artist=a;
-    tracks.push(t);
+  for(let i=0;i<EDIT.length;i++){
+    const t=EDIT[i];
+    if(!t.title.trim()){alert(T("err_titles"));return;}
+    if(t.end<=t.start){alert(`${T("err_times")} — ${t.title||("#"+(i+1))}`);return;}
+    const o={n:i+1,title:t.title.trim(),start:t.start,end:t.end};
+    if(t.artist.trim())o.artist=t.artist.trim();
+    tracks.push(o);
   }
   $("btn-render").disabled=true;
   try{

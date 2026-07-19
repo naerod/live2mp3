@@ -338,10 +338,35 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .track-row .t-badge{display:inline-flex;align-items:center;gap:4px;
   color:var(--muted);font-size:12px;min-width:52px}
 .track-row .t-badge .material-symbols-outlined{font-size:15px}
-.track-row .t-times{display:flex;gap:6px;align-items:center}
-.track-row .t-time{width:70px;text-align:center;font-variant-numeric:tabular-nums}
+.track-row .t-times{display:flex;gap:5px;align-items:center}
+.track-row .t-time{width:66px;text-align:center;font-variant-numeric:tabular-nums}
+.track-row .t-time:disabled{opacity:.5;cursor:not-allowed;
+  background:var(--bg);border-style:dashed}
 .track-row .t-sep{color:var(--muted)}
 .track-row .icon-btn{margin:0;height:38px;flex-shrink:0}
+/* Boutons compacts en ligne (cadenas, définir début/fin, écouter, supprimer) */
+.track-row .icon-btn.mini{height:32px;width:32px;padding:0;border-radius:9px}
+.track-row .icon-btn.mini .material-symbols-outlined{font-size:18px}
+.t-lock-spacer{width:32px;flex-shrink:0}
+.t-lock.on .material-symbols-outlined{color:var(--muted)}
+.t-lock:not(.on){border-color:var(--accent)}
+.t-lock:not(.on) .material-symbols-outlined{color:var(--accent)}
+.t-setstart .material-symbols-outlined,
+.t-setend .material-symbols-outlined{color:var(--accent)}
+.track-row.invalid .t-time{border-color:var(--like)}
+/* Bandeau « second disque » */
+.disc-warn{display:flex;align-items:center;gap:10px;margin:0 0 14px;
+  padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.4;
+  color:var(--fg);border:1px solid var(--run);
+  background:color-mix(in srgb,var(--run) 14%,transparent)}
+.disc-warn .material-symbols-outlined{color:var(--run);font-size:22px;flex-shrink:0}
+/* Toast bas d'écran */
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);
+  background:var(--card);border:1px solid var(--border);color:var(--fg);
+  padding:11px 18px;border-radius:12px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.35);
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:120}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{border-color:var(--like);color:var(--like)}
 .opt-check{display:flex;flex-direction:row;align-items:center;gap:10px;
   margin-top:16px;font-size:14px;color:var(--muted);cursor:pointer}
 .opt-check input{flex-shrink:0}

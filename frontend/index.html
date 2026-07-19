@@ -106,6 +106,10 @@
       <button class="icon-btn icon-only" id="btn-zoom-out" title="Zoom −"><span class="material-symbols-outlined">zoom_out</span></button>
     </div>
     <audio id="ed-audio" controls preload="metadata"></audio>
+    <div id="disc-warn" class="disc-warn hidden">
+      <span class="material-symbols-outlined">album</span>
+      <span class="disc-warn-txt"></span>
+    </div>
     <div id="edit-rows" class="track-rows"></div>
     <button id="btn-add-track2" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
     <div class="actions" style="margin-top:18px">
@@ -127,6 +131,8 @@
 
   </div><!-- /app-content -->
 </main>
+
+<div id="toast" class="toast"></div>
 
 <script src="/static/social.js"></script>
 <script src="/static/i18n.js"></script>
