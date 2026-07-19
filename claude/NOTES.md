@@ -1,5 +1,48 @@
 # Notes
 
+2026-07-19 (suivi — Phase 1) : **Socle du système de suivi & pages d'entités**
+(preprod v1.8.5). Grosse mission « suivi + notifications » découpée en 3 phases ;
+Phase 1 livrée et vérifiée E2E sur preprod.
+- **4 types de suivi** : artiste (id Deezer, réutilise `suggest.py`), festival
+  (slug, liste auto-construite + texte libre), lieu/salle (slug), utilisateur.
+  Table `follows(username,target_type,target_id,target_label,notify,created_at)`.
+  `notify` = la cloche (façon X/YouTube) : active par défaut au suivi, se coupe
+  sans dé-suivre. Alimentera le futur feed + les notifications (Phase 2).
+- **Métadonnées canoniques** : `album.artist_id` (Deezer) + `album.guests`
+  (invités, [{id,name}]) + `album.festival_id` (slug). L'éditeur
+  (`album.html`) utilise `L2M.autocomplete` : artiste + festival en liste
+  déroulante (allowFree pour ne jamais bloquer un artiste hors Deezer / créer un
+  festival inédit), invités canoniques seulement (un id est requis pour lier).
+  `backend/entities.py` dérive les liens `{type,id,label}` d'un album ; le
+  catalogue les expose sur chaque carte.
+- **Pages auto** `/artist/{id}`, `/festival/{slug}`, `/venue/{slug}`
+  (`entity.html`/`entity.js`) : en-tête (photo Deezer pour l'artiste), compteurs
+  abonnés/posts, bouton Suivre/Suivi + cloche, grille de tous les posts liés.
+  Namespacées côté API sous `/api/social/` → héritent du soft-auth nginx en
+  prod, **aucune modif nginx à la promotion** (les pages HTML tombent dans
+  `location /`, coquille publique, état perso via /api/social/*).
+- **Badge de rôle** (utilisateur/gestionnaire/admin) : colonne `profiles.role`
+  en cache, renseignée à chaque `GET /api/social/me` (appelé par le header) à
+  partir des groupes Authentik → affichable sur n'importe quel profil sans API
+  Authentik. Bouton Suivre ajouté sur les profils.
+- **Liens cliquables** artiste/festival/lieu/invités depuis la fiche album
+  (`/api/catalogue/{slug}` expose `entities` pour des ids exacts).
+- **Backfill** (`backend/backfill_entities.py`, lancé une fois sur CT110) :
+  19 `artist_id` résolus (Coldplay→892, U2→163, Indochine→47, TØP→647650…),
+  6 `festival_id`, 4 ignorés (chaînes multi-artistes/typos → à corriger à la
+  main via l'éditeur). ⚠️ Écrit dans les manifests **partagés** prod/preprod :
+  additif, inoffensif pour le code prod actuel.
+- E2E webshot (tunnel + `--as/--groups`) : page Coldplay (11 posts + photo),
+  Glastonbury (2 posts), clic Suivre→Suivi+cloche+compteur, éditeur (3
+  autocompletes), fiche album (liens), profil (badge Gestionnaire), thème clair.
+  178 tests verts (+16 : follows + entities).
+- **Reste à faire** : Phase 2 = notifications in-app (table + cloche header +
+  centre + fan-out à la publication + réglages profil) ; Phase 3 = email RGPD
+  (expéditeur dédié `noreply@…`, master-switch off en preprod, test vers l'email
+  perso, footer désabonnement). ⚠️ Phase 3 **bloquée** sur le choix du relais
+  d'envoi (domaine dédié : provider transactionnel à créer). Voir BACKLOG.
+
+
 2026-07-19 (setlist.fm) : **Setlist officielle du concert** (preprod v1.8.4).
 Complète la détection audio : celle-ci place les frontières, setlist.fm donne
 les *titres* exacts, leur ordre et les invités.
