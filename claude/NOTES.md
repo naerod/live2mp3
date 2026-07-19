@@ -1,5 +1,40 @@
 # Notes
 
+2026-07-19 (détection des coupes) : **Frontières par l'énergie du signal**
+(preprod v1.6.14). Retour utilisateur : les coupes IA tombaient au milieu des
+chansons alors que les transitions se voient à l'œil sur la forme d'onde.
+- **Diagnostic mesuré** : dans un live il n'y a jamais de silence réel entre
+  deux morceaux (applaudissements, foule, annonces). Sur le concert U2 de
+  20 min, `silencedetect` ne trouve **qu'un seul** silence à -30 dB (le réglage
+  du pipeline) et **aucun** à -35 dB. L'IA n'avait donc aucun repère temporel
+  et plaçait les frontières uniquement d'après les paroles.
+- **Nouveau `backend/pipeline/boundaries.py`** : enveloppe RMS (numpy, lecture
+  par blocs — le WAV pèse ~200 Mo), passage en dB, puis creux jugés face au
+  **niveau ambiant local** (médiane glissante 45 s) et non à un seuil absolu
+  (une captation live est très compressée : énergie mesurée entre -16 et
+  -11 dB). Écart minimal de 120 s entre deux coupes → écarte les ponts et
+  passages calmes internes. Bords ignorés (60 s).
+  Résultat sur U2 : **4:41 (13,7 dB) / 10:02 (16,7 dB) / 15:53 (4,1 dB)** —
+  exactement les trois transitions visibles, très au-dessus du bruit (1-2 dB).
+- **Mélange des deux** (demande utilisateur) : les candidats (instant +
+  profondeur) sont donnés à l'IA, qui doit choisir ses frontières **parmi
+  eux** ; la transcription sert à savoir quel candidat correspond à quelle
+  transition. Consigne ajoutée sur la durée typique d'un titre live (3-8 min).
+- **Snap** (`_snap_markers` / `_snap_tracks`) : la réponse de l'IA est recalée
+  sur le creux voisin (tolérance 25 s) et les frontières communes recollées.
+  Une frontière sans creux à portée est laissée telle quelle (medley,
+  enchaînement sans coupure).
+- **Fallback sans IA** = les n-1 creux les plus marqués : donne déjà le bon
+  découpage sur U2 ; la répartition uniforme n'est plus qu'un dernier recours.
+  C'est aussi ce que produit le bouton « passer ».
+- `numpy` déclaré dans requirements (dépendance directe désormais, elle
+  n'arrivait qu'indirectement via faster-whisper).
+- 151 tests verts. Fichier de travail pour l'analyse :
+  `projects/.analysis/` sur le volume (audio + enveloppe + PNG annotée) —
+  à supprimer quand il ne servira plus.
+- **Pas encore fait** : setlist.fm (nécessite une clé API gratuite côté
+  utilisateur) pour récupérer la setlist officielle d'un concert.
+
 2026-07-19 (skip détection) : **Bouton « passer » sur la détection des
 chansons** (preprod v1.6.13). Constat utilisateur : c'est l'étape la plus longue
 (transcription whisper) et elle ne fait qu'*estimer* les coupes, que l'humain
