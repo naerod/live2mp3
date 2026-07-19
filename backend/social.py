@@ -68,6 +68,31 @@ def _album_exists(slug: str) -> bool:
     return (PROJECTS_DIR / slug / "manifest.yaml").exists()
 
 
+def _album_visible(slug: str, identity: dict | None) -> bool:
+    """Un album dépublié n'est visible que des gestionnaires.
+
+    Utilisé par les lectures sociales (fiche, commentaires, pochettes) pour ne
+    pas révéler l'existence d'un brouillon au public — même réponse 404 qu'un
+    slug inconnu.
+    """
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        return False
+    from .manifest import Manifest
+    try:
+        published = Manifest.load(path).data.get("published", True)
+    except Exception:
+        published = True
+    if published:
+        return True
+    from .auth import GROUP_GESTIONNAIRE, SUPERUSER_GROUPS
+    identity = identity or {}
+    if identity.get("is_gestionnaire"):
+        return True
+    groups = set(identity.get("groups") or [])
+    return bool(groups & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+
+
 def _catalogue_map(include_drafts: bool = False) -> dict[str, dict]:
     return {a["slug"]: a for a in catalogue.list_albums(include_drafts=include_drafts)}
 
@@ -490,6 +515,8 @@ def all_album_counts() -> dict:
 
 @router.get("/api/social/albums/{slug}")
 def album_social(slug: str, identity: dict = Depends(current_identity)) -> dict:
+    if not _album_visible(slug, identity):
+        raise HTTPException(404, "album introuvable")
     with get_conn() as conn:
         return _album_social(conn, slug, identity.get("username"))
 
@@ -523,6 +550,8 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
 def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TOP_PAGE,
                   cover_id: int | None = None,
                   identity: dict = Depends(current_identity)) -> dict:
+    if not _album_visible(slug, identity):
+        raise HTTPException(404, "album introuvable")
     """Fil de l'album (`cover_id` absent) ou fil d'une pochette (`cover_id` posé).
 
     Les deux partagent la même table : `cover_id IS ?` sélectionne l'un ou

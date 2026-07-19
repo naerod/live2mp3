@@ -10,9 +10,11 @@ import hashlib
 import io
 import json
 import queue
+import shutil
 import threading
 import time
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +32,7 @@ import re
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC, ID3NoHeaderError
-from . import catalogue, jobs
+from . import catalogue, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
     _file_track_n,
@@ -39,10 +41,17 @@ from .albumfiles import (
     _write_album_cover,
     _write_album_tags,
 )
-from .auth import require_gestionnaire, require_user, roles
+from .auth import (
+    GROUP_GESTIONNAIRE,
+    SUPERUSER_GROUPS,
+    require_gestionnaire,
+    require_user,
+    roles,
+)
 from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest
+from .pipeline import download, preanalyze
 from .covers import (
     MEDIA_TYPES,
     cover_file,
@@ -69,6 +78,9 @@ app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
 app.include_router(import_router)
+
+# Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
+app.include_router(linktool.router)
 
 
 @app.on_event("startup")
@@ -98,6 +110,7 @@ def _make_cb(slug: str):
 class TrackIn(BaseModel):
     title: str
     n: int | None = None
+    artist: str | None = None
     parts: list[str] | None = None
     start: float | None = None
     end: float | None = None
@@ -118,6 +131,22 @@ class JobIn(BaseModel):
     tracks: list[TrackIn]
     target: str = "data_disc"
     source_url: str = ""
+    # Options de l'outil « depuis un lien »
+    video: bool = False           # True = télécharger la vidéo + clips MP4
+    thumbnail_url: str = ""       # miniature -> proposition de pochette
+    duration: float | None = None  # durée de la source (bornage des coupes)
+
+
+class SetlistTrackIn(BaseModel):
+    n: int
+    title: str
+    artist: str | None = None
+    start: float
+    end: float
+
+
+class SetlistIn(BaseModel):
+    tracks: list[SetlistTrackIn]
 
 
 class AlbumMetaIn(BaseModel):
@@ -247,15 +276,37 @@ def _track_file(project_dir: Path, n: int) -> Path | None:
     return None
 
 
-@app.get("/api/catalogue/{slug}")
-def catalogue_detail(slug: str) -> dict:
-    """Fiche publique d'un album : métadonnées, labels, setlist (titres)."""
+def _is_gestionnaire_identity(identity: dict) -> bool:
+    """Vrai pour un gestionnaire/admin, quel que soit le Depends d'origine."""
+    if identity.get("is_gestionnaire"):
+        return True
+    groups = identity.get("groups") or set()
+    return bool(set(groups) & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+
+
+def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
+    """404 si l'album est dépublié et que le lecteur n'est pas gestionnaire.
+
+    Un album dépublié n'existe pas pour le public : même code de réponse
+    qu'un slug inconnu, pour ne pas révéler sa présence.
+    """
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    if not m.data.get("published", True) and not _is_gestionnaire_identity(identity):
+        raise HTTPException(404, "album introuvable")
+    return m
+
+
+@app.get("/api/catalogue/{slug}")
+def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
+    """Fiche d'un album : métadonnées, labels, setlist (titres)."""
+    m = _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    cat = {a["slug"]: a for a in
+           catalogue.list_albums(include_drafts=_is_gestionnaire_identity(identity))
+           }.get(slug, {})
     tracks = []
     for t in m.tracks:
         tracks.append({
@@ -280,6 +331,7 @@ def catalogue_detail(slug: str) -> dict:
         "source_label": src.get("label", "") or "",
         "per_track_covers": bool(m.data.get("album", {}).get("per_track_covers", False)),
         "track_covers": _list_track_covers_public(slug),
+        "published": m.data.get("published", True),
     }
 
 
@@ -300,11 +352,8 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 
 
 @app.get("/cover/{slug}")
-def get_cover(slug: str) -> FileResponse:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    m = Manifest.load(path)
+def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
+    m = _ensure_album_visible(slug, identity)
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
         raise HTTPException(404, "pas de pochette")
@@ -388,9 +437,8 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
 @app.get("/download/{slug}/track/{n}")
 def download_track(slug: str, n: int,
                    identity: dict = Depends(require_user)) -> FileResponse:
+    _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
-        raise HTTPException(404, "album introuvable")
     f = _track_file(project_dir, n)
     if not f:
         raise HTTPException(404, "piste introuvable")
@@ -399,10 +447,8 @@ def download_track(slug: str, n: int,
 
 @app.get("/download/{slug}/cover")
 def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    m = _ensure_album_visible(slug, identity)
+    cover_rel = m.data.get("album", {}).get("cover")
     cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
     if not cover or not cover.exists():
         raise HTTPException(404, "pas de pochette")
@@ -429,6 +475,7 @@ def _album_traycard(slug: str) -> tuple[Path, str]:
 
 @app.get("/download/{slug}/traycard")
 def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
     return FileResponse(tc, filename=f"{slug}-traycard{ext}",
                         media_type=MEDIA_TYPES.get(ext, "application/pdf"))
@@ -478,10 +525,8 @@ from fastapi.responses import Response as _Response
 @app.get("/download/{slug}/cover/pdf")
 def download_cover_printable(slug: str,
                              identity: dict = Depends(require_user)) -> _Response:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
-        raise HTTPException(404, "album introuvable")
-    cover_rel = Manifest.load(path).data.get("album", {}).get("cover")
+    m = _ensure_album_visible(slug, identity)
+    cover_rel = m.data.get("album", {}).get("cover")
     cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
     if not cover or not cover.exists():
         raise HTTPException(404, "pas de pochette")
@@ -493,6 +538,7 @@ def download_cover_printable(slug: str,
 @app.get("/download/{slug}/traycard/pdf")
 def download_traycard_printable(slug: str,
                                 identity: dict = Depends(require_user)) -> _Response:
+    _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
     data = traycard_pdf(tc)
     return _Response(data, media_type="application/pdf",
@@ -504,9 +550,8 @@ def download_media(slug: str, kind: str,
                    identity: dict = Depends(require_user)) -> FileResponse:
     if kind not in ("mp3", "mp4"):
         raise HTTPException(400, "type invalide (mp3|mp4)")
+    _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
-        raise HTTPException(404, "album introuvable")
     zip_path = _zip_media(project_dir, kind)
     return FileResponse(zip_path, filename=f"{slug}-{kind}.zip",
                         media_type="application/zip")
@@ -766,12 +811,36 @@ def album_admin_page(slug: str,
 @app.post("/api/jobs")
 def create_job(job: JobIn,
                identity: dict = Depends(require_gestionnaire)) -> dict[str, Any]:
+    tracks = [t.model_dump(exclude_none=True) for t in job.tracks]
+    # Setlist inconnue : piste unique provisoire, l'IA la remplacera à la
+    # préparation (transcription -> identification des chansons).
+    auto_setlist = not tracks
+    if auto_setlist:
+        tracks = [{"n": 1, "title": job.album.title or "Piste 1"}]
     m = new_manifest(
         job.album.model_dump(exclude_none=True),
-        [t.model_dump(exclude_none=True) for t in job.tracks],
+        tracks,
         target=job.target, source_url=job.source_url,
     )
     project_dir = PROJECTS_DIR / m.slug
+    if (project_dir / "manifest.yaml").exists():
+        raise HTTPException(
+            409, f"un album existe déjà sous ce slug ({m.slug}) — "
+                 "modifier l'artiste ou la date")
+    m.data["auto_setlist"] = auto_setlist
+    m.data["source"]["media"] = "video" if job.video else "audio"
+    if job.thumbnail_url:
+        m.data["source"]["thumbnail_url"] = job.thumbnail_url
+    if job.duration:
+        m.data["source"]["duration"] = float(job.duration)
+    m.data["meta"] = {
+        "imported_by": identity.get("username") or "",
+        "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "import_source": "url",
+    }
+    # Un album créé par l'outil naît dépublié : le volume est partagé
+    # prod/preprod, rien ne doit devenir public avant validation explicite.
+    m.data["published"] = False
     project_dir.mkdir(parents=True, exist_ok=True)
     m.save(project_dir / "manifest.yaml")
     return {"slug": m.slug, "manifest": str(project_dir / "manifest.yaml")}
@@ -784,6 +853,190 @@ def get_manifest(slug: str,
     if not path.exists():
         raise HTTPException(404, "projet introuvable")
     return Manifest.load(path).data
+
+
+def _fallback_markers(n: int, duration: float, silences: list[dict]) -> dict[int, dict[str, float]]:
+    """Découpe de secours sans LLM : frontières aux n-1 plus longs silences,
+    sinon répartition uniforme. L'humain ajuste ensuite dans l'éditeur."""
+    if n <= 0 or duration <= 0:
+        return {}
+    inner = [s for s in silences if 1.0 < s["start"] and s["end"] < duration - 1.0]
+    if len(inner) >= n - 1:
+        longest = sorted(inner, key=lambda s: s["end"] - s["start"],
+                         reverse=True)[:n - 1]
+        cuts = sorted((s["start"] + s["end"]) / 2 for s in longest)
+    else:
+        cuts = [duration * i / n for i in range(1, n)]
+    bounds = [0.0] + cuts + [duration]
+    return {i + 1: {"start": bounds[i], "end": bounds[i + 1]} for i in range(n)}
+
+
+def _run_prepare_bg(slug: str, username: str) -> None:
+    """Téléchargement -> preview -> waveform -> pochette -> marqueurs IA."""
+    project_dir = PROJECTS_DIR / slug
+    cb = _make_cb(slug)
+    try:
+        m = Manifest.load(project_dir / "manifest.yaml")
+        src = m.data.get("source", {})
+
+        if m.state("download") != "done":
+            cb("download", "running", {})
+            def dl_pct(pct: float) -> None:
+                _publish(slug, {"stage": "download", "status": "running",
+                                "info": {"pct": pct}, "ts": time.time()})
+            download.run(project_dir, progress=dl_pct)
+            # download.run a sauvé son état sur sa propre instance : recharger
+            # avant toute écriture, sinon on ré-écrirait download=pending.
+            m = Manifest.load(project_dir / "manifest.yaml")
+        cb("download", "done", {})
+
+        cb("preview", "running", {})
+        linktool.make_preview(project_dir, m)
+        cb("preview", "done", {})
+
+        wav = project_dir / src["master_wav"]
+        cb("waveform", "running", {})
+        preanalyze.generate_waveform(wav, project_dir / "source" / "waveform.dat")
+        m.set_state("waveform", "done")
+        cb("waveform", "done", {})
+
+        thumb = src.get("thumbnail_url")
+        if thumb:
+            try:
+                linktool.register_thumbnail_cover(slug, thumb, username)
+                m = Manifest.load(project_dir / "manifest.yaml")  # album.cover mis à jour
+            except Exception:
+                pass  # pochette proposable à la main plus tard, non bloquant
+
+        duration = float(src.get("duration") or 0) or _wav_duration(wav)
+        missing = [t for t in m.tracks
+                   if t.get("start") is None or t.get("end") is None]
+        if not missing and not m.data.get("auto_setlist"):
+            m.set_state("ai_markers", "done")
+            cb("ai_markers", "done", {"source": "timecodes"})
+        else:
+            cb("ai_markers", "running", {"phase": "silences"})
+            silences = preanalyze.detect_silences(wav)
+            source = "ia"
+            try:
+                _publish(slug, {"stage": "ai_markers", "status": "running",
+                                "info": {"phase": "transcription"},
+                                "ts": time.time()})
+                transcript = preanalyze.transcribe(wav)
+                _publish(slug, {"stage": "ai_markers", "status": "running",
+                                "info": {"phase": "llm"}, "ts": time.time()})
+                if m.data.get("auto_setlist"):
+                    tracks = llm.request_auto_setlist(
+                        transcript, silences,
+                        m.data["album"].get("artist", ""), duration)
+                    if not tracks:
+                        raise RuntimeError("setlist auto vide")
+                    for t in tracks:
+                        t["locked"] = False
+                        if not t.get("artist"):
+                            t.pop("artist", None)
+                    m.data["tracks"] = tracks
+                    m.save()
+                else:
+                    setlist = [{"n": t["n"], "title": t["title"]}
+                               for t in m.tracks]
+                    markers = llm.request_markers(setlist, transcript, silences)
+                    m.merge_ai_markers(markers)
+            except Exception:
+                # IA indisponible : découpe de secours pour que l'éditeur
+                # s'ouvre quand même — l'humain replace les frontières.
+                markers = _fallback_markers(len(m.tracks), duration, silences)
+                m.merge_ai_markers(markers)
+                source = "fallback"
+            m.set_state("ai_markers", "done")
+            cb("ai_markers", "done", {"source": source})
+
+        _publish(slug, {"stage": "prepare", "status": "complete", "info": {},
+                        "ts": time.time()})
+    except Exception as e:  # pragma: no cover
+        _publish(slug, {"stage": "error", "status": "error",
+                        "info": {"message": str(e)}, "ts": time.time()})
+
+
+def _wav_duration(wav: Path) -> float:
+    try:
+        import wave
+        with wave.open(str(wav), "rb") as w:
+            return w.getnframes() / float(w.getframerate() or 1)
+    except Exception:
+        return 0.0
+
+
+@app.post("/api/jobs/{slug}/prepare")
+def start_prepare(slug: str,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    project_dir = PROJECTS_DIR / slug
+    if not (project_dir / "manifest.yaml").exists():
+        raise HTTPException(404, "projet introuvable")
+    _progress_last[slug] = []
+    _progress_bus[slug] = queue.Queue()
+    threading.Thread(target=_run_prepare_bg,
+                     args=(slug, identity.get("username") or ""),
+                     daemon=True).start()
+    return {"ok": True, "slug": slug}
+
+
+@app.get("/api/jobs/{slug}/audio")
+def job_audio(slug: str,
+              identity: dict = Depends(require_gestionnaire)) -> FileResponse:
+    """Audio de travail pour l'éditeur de coupes (preview légère)."""
+    preview = PROJECTS_DIR / slug / "source" / "preview.mp3"
+    if preview.exists():
+        return FileResponse(preview, media_type="audio/mpeg")
+    wav = PROJECTS_DIR / slug / "source" / "master.wav"
+    if wav.exists():
+        return FileResponse(wav, media_type="audio/wav")
+    raise HTTPException(404, "audio absent (préparation non faite)")
+
+
+@app.put("/api/jobs/{slug}/setlist")
+def update_setlist(slug: str, payload: SetlistIn,
+                   identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Setlist validée dans l'éditeur : remplace les pistes et verrouille."""
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "projet introuvable")
+    if not payload.tracks:
+        raise HTTPException(400, "au moins une piste requise")
+    tracks = sorted(payload.tracks, key=lambda t: t.start)
+    for t in tracks:
+        if not t.title.strip():
+            raise HTTPException(400, "chaque piste doit avoir un titre")
+        if t.end <= t.start:
+            raise HTTPException(400, f"piste « {t.title} » : fin avant début")
+    m = Manifest.load(path)
+    m.data["tracks"] = [{
+        "n": i,
+        "title": t.title.strip(),
+        **({"artist": t.artist.strip()} if t.artist and t.artist.strip() else {}),
+        "start": float(t.start),
+        "end": float(t.end),
+        "locked": True,
+    } for i, t in enumerate(tracks, start=1)]
+    m.data["auto_setlist"] = False
+    m.save()
+    return {"ok": True, "tracks": len(m.tracks)}
+
+
+@app.delete("/api/jobs/{slug}")
+def delete_job(slug: str,
+               identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Supprime un brouillon (projet jamais rendu). Refus si l'album existe."""
+    project_dir = PROJECTS_DIR / slug
+    if not (project_dir / "manifest.yaml").exists():
+        raise HTTPException(404, "projet introuvable")
+    if any((project_dir / "build" / "audio").glob("*.mp3")):
+        raise HTTPException(409, "album déjà rendu — suppression refusée")
+    linktool.delete_project_social(slug)
+    shutil.rmtree(project_dir, ignore_errors=True)
+    _progress_last.pop(slug, None)
+    _progress_bus.pop(slug, None)
+    return {"ok": True}
 
 
 @app.put("/api/jobs/{slug}/markers")
@@ -806,11 +1059,11 @@ def update_markers(slug: str, payload: dict,
     return {"ok": True, "tracks": len(m.tracks)}
 
 
-def _run_render_bg(slug: str, media: str, gap: float) -> None:
+def _run_render_bg(slug: str, media: str, gap: float, video: bool) -> None:
     project_dir = PROJECTS_DIR / slug
     try:
         jobs.run_render_pipeline(project_dir, media=media, gap_seconds=gap,
-                                 progress=_make_cb(slug))
+                                 video=video, progress=_make_cb(slug))
         _publish(slug, {"stage": "all", "status": "complete", "info": {},
                         "ts": time.time()})
     except Exception as e:  # pragma: no cover
@@ -820,13 +1073,18 @@ def _run_render_bg(slug: str, media: str, gap: float) -> None:
 
 @app.post("/api/jobs/{slug}/render")
 def start_render(slug: str, media: str = "audio", gap: float = 2.0,
+                 video: bool | None = None,
                  identity: dict = Depends(require_gestionnaire)) -> dict:
     project_dir = PROJECTS_DIR / slug
     if not (project_dir / "manifest.yaml").exists():
         raise HTTPException(404, "projet introuvable")
+    if video is None:
+        # Clips MP4 seulement si la source vidéo a été téléchargée.
+        m = Manifest.load(project_dir / "manifest.yaml")
+        video = m.data.get("source", {}).get("media", "video") == "video"
     _progress_last[slug] = []
     _progress_bus[slug] = queue.Queue()
-    threading.Thread(target=_run_render_bg, args=(slug, media, gap),
+    threading.Thread(target=_run_render_bg, args=(slug, media, gap, video),
                      daemon=True).start()
     return {"ok": True, "slug": slug}
 
@@ -850,7 +1108,9 @@ def events(slug: str,
             yield f"data: {json.dumps(ev)}\n\n"
             if ev.get("status") in ("complete", "error"):
                 break
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/jobs/{slug}/bundle")

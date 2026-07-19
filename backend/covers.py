@@ -31,7 +31,13 @@ from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
 from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
-from .social import _album_exists, _ensure_profile, _is_moderator, _profiles_map
+from .social import (
+    _album_exists,
+    _album_visible,
+    _ensure_profile,
+    _is_moderator,
+    _profiles_map,
+)
 
 router = APIRouter()
 
@@ -241,7 +247,7 @@ async def _read_upload(file: UploadFile, allowed: dict[str, str],
 # =====================================================================
 @router.get("/api/social/albums/{slug}/covers")
 def list_covers(slug: str, identity: dict = Depends(current_identity)) -> dict:
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     with get_conn() as conn:
         return _list_payload(conn, slug, identity.get("username"))

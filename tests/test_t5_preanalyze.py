@@ -38,13 +38,18 @@ def test_silence_detection_between_tones(synth_audio_only):
     assert any(s["start"] >= 1.8 for s in silences)
 
 
-def test_gpu_model_choice():
+def test_gpu_model_choice(monkeypatch):
+    monkeypatch.delenv("WHISPER_MODEL", raising=False)
+    monkeypatch.delenv("WHISPER_MODEL_CPU", raising=False)
     device, model = preanalyze.whisper_model_choice()
     assert device in ("cuda", "cpu")
     if device == "cpu":
-        assert model == "medium"
+        assert model == "small"     # léger : la transcription sert au découpage
     else:
         assert model == "large-v3"
+    monkeypatch.setenv("WHISPER_MODEL_CPU", "base")
+    if device == "cpu":
+        assert preanalyze.whisper_model_choice() == ("cpu", "base")
 
 
 def test_waveform_state_updated(synth_audio_only):

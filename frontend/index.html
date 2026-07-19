@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-<script src="https://unpkg.com/peaks.js/dist/peaks.min.js"></script>
+<script src="https://unpkg.com/peaks.js@3.4.2/dist/peaks.min.js"></script>
 </head>
 <body>
 <header></header>
@@ -20,7 +20,7 @@
   <div class="page-nav">
     <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span data-i18n="back">Retour</span></button>
   </div>
-  <h1 class="page-title"><span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;margin-right:8px;color:var(--accent)">auto_fix_high</span><span data-i18n="app_title">Créateur de concerts — découpe automatique et mastering IA</span></h1>
+  <h1 class="page-title"><span class="material-symbols-outlined" style="font-size:32px;vertical-align:middle;margin-right:8px;color:var(--accent)">auto_fix_high</span><span data-i18n="app_title">Créateur d'albums — d'un lien au concert découpé</span></h1>
 
   <!-- Overlay d'accès conditionnel -->
   <div id="access-overlay" class="access-overlay hidden">
@@ -32,55 +32,99 @@
   </div>
 
   <div id="app-content">
-  <!-- Étape 1 : formulaire -->
-  <section id="step-form" class="card">
-    <h1 data-i18n="form_title">Nouveau concert</h1>
+
+  <!-- Étape 1 : lien source -->
+  <section id="step-link" class="card">
+    <h1><span class="material-symbols-outlined step-ico">link</span><span data-i18n="link_title">Créer un album depuis un lien</span></h1>
+    <p class="note"><span class="material-symbols-outlined">info</span><span data-i18n="link_hint">Collez le lien d'une captation de concert (YouTube…). L'IA récupère l'artiste, la date, le lieu et la setlist — vous vérifiez chaque étape avant le résultat final.</span></p>
+    <div class="link-row">
+      <input id="l-url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off">
+      <button id="btn-analyze" class="primary"><span class="material-symbols-outlined">auto_awesome</span> <span data-i18n="analyze">Analyser</span></button>
+    </div>
+    <p id="analyze-status" class="note hidden"></p>
+    <div class="actions" style="margin-top:18px">
+      <button id="btn-manual" class="icon-btn"><span class="material-symbols-outlined">edit_note</span> <span data-i18n="manual">Remplir manuellement</span></button>
+    </div>
+  </section>
+
+  <!-- Étape 2 : vérification des informations -->
+  <section id="step-form" class="card hidden">
+    <h1><span class="material-symbols-outlined step-ico">fact_check</span><span data-i18n="form_title">Vérifier les informations</span></h1>
+    <div id="src-card" class="src-card hidden">
+      <img id="src-thumb" alt="" referrerpolicy="no-referrer">
+      <div class="src-meta">
+        <div class="t" id="src-title"></div>
+        <div class="d" id="src-sub"></div>
+        <span class="ai-chip hidden" id="src-chip"><span class="material-symbols-outlined" style="font-size:14px">auto_awesome</span><span id="src-chip-txt"></span></span>
+      </div>
+    </div>
     <div class="grid">
-      <label data-i18n="artist">Artiste<input id="f-artist" placeholder="Twenty One Pilots"></label>
-      <label data-i18n="album">Album<input id="f-title" placeholder="The Clancy Tour — Live"></label>
-      <label data-i18n="date">Date<input id="f-date" type="date"></label>
-      <label data-i18n="venue">Lieu<input id="f-venue" placeholder="Indianapolis, IN"></label>
-      <label data-i18n="festival">Festival<input id="f-festival"></label>
+      <label data-i18n="artist">Artiste<input id="f-artist" placeholder="U2"></label>
+      <label data-i18n="album">Titre de l'album<input id="f-title" placeholder="Live in Times Square 2014"></label>
+      <label data-i18n="date">Date du concert<input id="f-date" type="date"></label>
+      <label data-i18n="venue">Lieu<input id="f-venue" placeholder="Times Square, New York"></label>
+      <label data-i18n="festival">Tournée / événement<input id="f-festival"></label>
       <label data-i18n="target">Type de disque
         <select id="f-target">
           <option value="data_disc" data-i18n="data_disc">Disque de données (ISO)</option>
           <option value="audio_cd" data-i18n="audio_cd">CD audio (CUE+WAV)</option>
         </select>
       </label>
-      <label class="full" data-i18n="source">Lien source<input id="f-url" placeholder="https://..."></label>
-      <label class="full" data-i18n="setlist">Setlist (un titre par ligne)
-        <textarea id="f-setlist" rows="8" placeholder="Overcompensate&#10;Shy Away / Heathens / Next Semester"></textarea>
-      </label>
     </div>
-    <p class="note" data-i18n="dvd_note"><span class="material-symbols-outlined">info</span> DVD-Video est hors périmètre V1.</p>
-    <button id="btn-create" class="primary"><span class="material-symbols-outlined">rocket_launch</span> <span data-i18n="create">Créer le projet</span></button>
+    <h2 class="sub-h"><span class="material-symbols-outlined">queue_music</span> <span data-i18n="setlist_title">Setlist</span></h2>
+    <p class="note"><span class="material-symbols-outlined">info</span><span data-i18n="setlist_hint">Vérifiez les titres. Laissez vide : l'IA identifiera les chansons à l'écoute (plus long). Artiste par piste uniquement s'il diffère de l'album (invité, duo).</span></p>
+    <div id="track-rows" class="track-rows"></div>
+    <button id="btn-add-track" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
+    <label class="opt-check"><input type="checkbox" id="f-video"> <span data-i18n="video_opt">Télécharger aussi la vidéo (clips MP4 — beaucoup plus long)</span></label>
+    <div class="actions" style="margin-top:18px">
+      <button id="btn-back-link" class="icon-btn"><span class="material-symbols-outlined">arrow_back</span> <span data-i18n="back">Retour</span></button>
+      <button id="btn-create" class="primary"><span class="material-symbols-outlined">rocket_launch</span> <span data-i18n="start_prep">Lancer la préparation</span></button>
+    </div>
   </section>
 
-  <!-- Étape 2 : progression -->
+  <!-- Étapes 3 et 5 : progression (préparation puis rendu) -->
   <section id="step-progress" class="card hidden">
-    <h1 data-i18n="progress_title">Traitement</h1>
+    <h1><span class="material-symbols-outlined step-ico">hourglass_top</span><span id="progress-title"></span></h1>
     <ul id="stages" class="stages"></ul>
+    <p id="progress-err" class="note err hidden"></p>
+    <div class="actions hidden" id="progress-actions">
+      <button id="btn-err-back" class="icon-btn"><span class="material-symbols-outlined">arrow_back</span> <span data-i18n="back">Retour</span></button>
+      <button id="btn-err-retry" class="primary"><span class="material-symbols-outlined">refresh</span> <span data-i18n="retry">Réessayer</span></button>
+    </div>
   </section>
 
-  <!-- Étape 3 : éditeur waveform -->
+  <!-- Étape 4 : vérification humaine des coupes -->
   <section id="step-editor" class="card hidden">
-    <h1 data-i18n="editor_title">Ajustement des coupes</h1>
+    <h1><span class="material-symbols-outlined step-ico">content_cut</span><span data-i18n="editor_title">Vérifier les coupes</span></h1>
+    <p class="note"><span class="material-symbols-outlined">headphones</span><span data-i18n="editor_hint">Écoutez les transitions et faites glisser les frontières des pistes sur la forme d'onde. Rien n'est définitif avant la validation.</span></p>
     <div id="peaks-container">
-      <div id="overview"></div>
       <div id="zoom"></div>
+      <div id="overview"></div>
     </div>
-    <div class="actions">
-      <button id="btn-express" class="primary"><span class="material-symbols-outlined">bolt</span> <span data-i18n="express">Valider et rendre</span></button>
-      <button id="btn-precision"><span class="material-symbols-outlined">tune</span> <span data-i18n="precision">Mode précision</span></button>
+    <div class="zoom-controls">
+      <button class="icon-btn icon-only" id="btn-zoom-in" title="Zoom +"><span class="material-symbols-outlined">zoom_in</span></button>
+      <button class="icon-btn icon-only" id="btn-zoom-out" title="Zoom −"><span class="material-symbols-outlined">zoom_out</span></button>
+    </div>
+    <audio id="ed-audio" controls preload="metadata"></audio>
+    <div id="edit-rows" class="track-rows"></div>
+    <button id="btn-add-track2" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
+    <div class="actions" style="margin-top:18px">
+      <button id="btn-render" class="primary"><span class="material-symbols-outlined">check_circle</span> <span data-i18n="validate_render">Valider et créer l'album</span></button>
     </div>
   </section>
 
-  <!-- Étape 4 : récap -->
+  <!-- Étape 6 : terminé -->
   <section id="step-done" class="card hidden">
-    <h1 data-i18n="done_title">Terminé</h1>
+    <h1><span class="material-symbols-outlined step-ico" style="color:var(--ok)">celebration</span><span data-i18n="done_title">Album créé</span></h1>
     <div id="summary"></div>
-    <a id="btn-download" class="primary" href="#"><span class="material-symbols-outlined">download</span> <span data-i18n="download">Télécharger le bundle</span></a>
+    <div class="actions" style="margin-top:16px;flex-wrap:wrap">
+      <a id="btn-album" class="primary" href="#"><span class="material-symbols-outlined">library_music</span> <span data-i18n="view_album">Voir l'album</span></a>
+      <a id="btn-manage" class="icon-btn" href="#"><span class="material-symbols-outlined">settings</span> <span data-i18n="manage_album">Gérer / publier</span></a>
+      <a id="btn-download" class="icon-btn" href="#"><span class="material-symbols-outlined">download</span> <span data-i18n="download">Bundle ZIP</span></a>
+      <button id="btn-again" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="new_album">Nouvel album</span></button>
+    </div>
   </section>
+
   </div><!-- /app-content -->
 </main>
 

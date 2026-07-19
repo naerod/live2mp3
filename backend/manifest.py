@@ -47,6 +47,15 @@ def slugify(value: str) -> str:
     return value.strip("-") or "untitled"
 
 
+def sanitize_filename(title: str) -> str:
+    """Supprime les caractères interdits dans un nom de fichier.
+
+    Convention bibliothèque (« 01. Titre.mp3 ») : on garde espaces et accents,
+    on ne retire que ce que les systèmes de fichiers refusent.
+    """
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', title).strip(' .')
+
+
 def clean_filename(title: str) -> str:
     """Nettoie un titre de piste pour en faire un nom de fichier.
 
@@ -145,8 +154,10 @@ class Manifest:
         return self.data.get("tracks", [])
 
     def track_filename(self, track: dict[str, Any], ext: str) -> str:
-        n = track.get("n", 0)
-        return f"{int(n):02d} - {clean_filename(track['title'])}.{ext}"
+        """Nom de fichier au format bibliothèque : « 01. Titre.ext »."""
+        n = int(track.get("n", 0))
+        safe = sanitize_filename(track["title"]) or f"Track {n}"
+        return f"{n:02d}. {safe}.{ext}"
 
     def set_state(self, stage: str, value: str) -> None:
         if stage not in STAGES:
@@ -205,6 +216,8 @@ def new_manifest(album: dict[str, Any], tracks: list[dict[str, Any]], target: st
             "end": t.get("end"),
             "locked": t.get("locked", False),
         }
+        if t.get("artist"):
+            track["artist"] = t["artist"]
         if t.get("parts"):
             track["parts"] = t["parts"]
         data["tracks"].append(track)

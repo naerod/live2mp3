@@ -50,7 +50,9 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
     tags["TIT2"] = TIT2(encoding=3, text=track["title"])
     tags["TRCK"] = TRCK(encoding=3, text=f"{track['n']}/{total}")
     tags["TALB"] = TALB(encoding=3, text=album.get("title", ""))
-    tags["TPE1"] = TPE1(encoding=3, text=album.get("artist", ""))
+    # Artiste de la piste (invité/duo) s'il diffère ; TPE2 reste l'artiste album.
+    tags["TPE1"] = TPE1(encoding=3,
+                        text=track.get("artist") or album.get("artist", ""))
     tags["TPE2"] = TPE2(encoding=3, text=album.get("artist", ""))
     tags["TCON"] = TCON(encoding=3, text="Live")
     if album.get("date"):
@@ -69,7 +71,7 @@ def tag_mp4(path: Path, track: dict, album: dict, total: int) -> None:
         "-metadata", f"title={track['title']}",
         "-metadata", f"track={track['n']}/{total}",
         "-metadata", f"album={album.get('title', '')}",
-        "-metadata", f"artist={album.get('artist', '')}",
+        "-metadata", f"artist={track.get('artist') or album.get('artist', '')}",
         "-metadata", f"album_artist={album.get('artist', '')}",
         "-metadata", "genre=Live",
     ]

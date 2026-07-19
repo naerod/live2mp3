@@ -27,6 +27,10 @@
   .al-info{display:flex;flex-direction:column;gap:4px}
   .al-artist{color:var(--accent);font-size:20px;font-weight:700;line-height:1.15}
   .al-title{font-size:24px;font-weight:700;line-height:1.2;color:var(--fg);margin:0 0 2px}
+  .unpub-chip{display:inline-flex;align-items:center;gap:4px;vertical-align:3px;
+    font-size:12px;font-weight:600;color:#e0736f;border:1.5px dashed #e0736f;
+    border-radius:999px;padding:2px 10px;margin-left:8px}
+  .unpub-chip .material-symbols-outlined{font-size:14px}
   .al-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--fg);font-size:13px;margin-top:2px}
   .al-meta-item{display:inline-flex;align-items:center;gap:5px}
   .al-meta-item .material-symbols-outlined{font-size:16px;color:var(--muted)}
@@ -320,6 +324,7 @@ const T={
       full:"Album complet (MP3)",cover:"Pochette",traycard:"Tray card",
       dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",
       not_found:"Album introuvable.",
+      unpublished:"Dépublié",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
@@ -347,6 +352,7 @@ const T={
       full:"Full album (MP3)",cover:"Cover",traycard:"Tray card",
       dltrack:"Download this track",lockdl:"Log in to download",
       not_found:"Album not found.",
+      unpublished:"Unpublished",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
@@ -505,7 +511,7 @@ function renderAlbum(d){
       <div class="al-cover-col" id="cover-col"></div>
       <div class="al-info">
         ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
-        <h1 class="al-title">${L2M.esc(a.title||slug)}</h1>
+        <h1 class="al-title">${L2M.esc(a.title||slug)}${d.published===false?` <span class="unpub-chip"><span class="material-symbols-outlined">visibility_off</span>${t('unpublished')}</span>`:''}</h1>
         <div class="al-meta">
           <span class="al-meta-item${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</span>
           <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</span>
