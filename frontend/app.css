@@ -49,6 +49,8 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   border:1px solid var(--border);background:var(--card);color:var(--fg);
   text-decoration:none;margin-top:16px}
 .primary{background:var(--accent);color:#0d0f13;border:none;font-weight:600}
+/* Bouton secondaire de même gabarit que .primary (hérite de `button`) */
+.btn-secondary:hover{border-color:var(--accent)}
 .note{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;
   margin-top:16px}
 .stages{list-style:none;padding:0;margin:0}
