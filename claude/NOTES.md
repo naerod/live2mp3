@@ -1,5 +1,27 @@
 # Notes
 
+2026-07-19 (header) : **Boutons Outil + Importer fusionnés** (preprod v1.6.12).
+Un seul bouton « Importer » dans le header, **visible par tous** (y compris
+visiteurs anonymes) ; il ouvre une fenêtre de choix (`openImportChoice` dans
+social.js, styles dans app.css partagé) :
+- « Importer manuellement » → modale d'import existante (`opts.onImport`, ou
+  redirection `/?import=1` hors vitrine)
+- « Depuis un lien (assisté par IA) » → `/app`
+- **Non-gestionnaires** : les deux cartes sont grisées avec un badge « Réservé
+  aux gestionnaires » + bandeau explicatif (« demandez cet accès » pour un user
+  connecté, « connectez-vous » + bouton Se connecter pour un anonyme).
+  **Aucun changement de droits backend** — `/api/import/*` et `/api/tool/*`
+  restent `require_gestionnaire` (choix utilisateur : montrer la fonctionnalité
+  sans l'ouvrir).
+- Les entrées `.um-mobile` dupliquées dans le menu avatar sont **supprimées**
+  (un seul bouton tient dans le header mobile ; icône seule ≤480px). Classe
+  `.um-mobile` et règle de masquage retirées d'app.css.
+- vitrine : le mode « Voir en tant que » est reflété via `opts.rights()`
+  (callback évalué à l'ouverture, pas figé au chargement).
+- Validé webshot : gestionnaire (2 cartes actives), user simple (grisé +
+  message), anonyme (grisé + Se connecter), mobile 412px (1 colonne), thème
+  clair, et chaînage réel Importer → « manuellement » → modale d'import.
+
 2026-07-19 (correction sémantique éditeur) : **La liaison va fin→début suivant**
 (preprod v1.6.10). L'entrée précédente décrivait l'inverse (début lié à la fin
 précédente) — corrigé après retour utilisateur. Intention réelle : chaque
