@@ -149,9 +149,41 @@ const L2M = (function () {
     });
   }
 
+  /* ---------------- Navigation instantanée (pré-rendu spéculatif) ----------------
+     Chrome/Edge pré-rendent la page cible d'un lien interne au survol (eagerness
+     « moderate ») : le clic affiche une page déjà prête, le coût réseau (tunnel
+     Cloudflare) est donc payé AVANT le clic → ressenti instantané. Exclut les
+     API, téléchargements, déconnexion et le flux d'auth. Sans effet sur
+     Firefox/Safari (navigation normale, aucune régression). */
+  function installSpeculationRules() {
+    try {
+      if (document.getElementById("l2m-speculation")) return;
+      if (!HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
+      const s = document.createElement("script");
+      s.type = "speculationrules";
+      s.id = "l2m-speculation";
+      s.textContent = JSON.stringify({
+        prerender: [{
+          source: "document",
+          eagerness: "moderate",
+          where: { and: [
+            { href_matches: "/*" },
+            { not: { href_matches: "/api/*" } },
+            { not: { href_matches: "/download/*" } },
+            { not: { href_matches: "/outpost*" } },
+            { not: { selector_matches: "[download]" } },
+            { not: { selector_matches: "[data-noprerender]" } },
+          ] },
+        }],
+      });
+      document.head.appendChild(s);
+    } catch (e) { /* non supporté : navigation classique */ }
+  }
+
   /* ---------------- Header unifié ---------------- */
   async function initHeader(opts) {
     opts = opts || {};
+    installSpeculationRules();
     const header = document.querySelector("header");
     if (!header) return {};
     header.innerHTML = `
@@ -215,8 +247,16 @@ const L2M = (function () {
 
     refreshHeaderTexts();
 
-    let meData = { authenticated: false, is_gestionnaire: false };
-    try { meData = await fetch("/api/me").then(r => r.json()); } catch (e) {}
+    // Un seul appel d'identité pour tout le header (droits + profil) : /api/me
+    // et /api/social/me renvoyaient des infos redondantes, on ne garde que le
+    // second (mêmes champs de droits désormais), ce qui retire un aller-retour
+    // réseau — coûteux via le tunnel Cloudflare — à chaque navigation.
+    let sm = { authenticated: false };
+    try { sm = await me(); } catch (e) {}
+    const meData = {
+      authenticated: !!sm.authenticated, username: sm.username,
+      is_user: !!sm.is_user, is_gestionnaire: !!sm.is_gestionnaire, is_admin: !!sm.is_admin,
+    };
 
     // Le bouton est visible par tous : la fenêtre de choix explique le rôle
     // requis aux visiteurs et aux utilisateurs simples.
@@ -232,9 +272,8 @@ const L2M = (function () {
       const bell = document.getElementById("notif-bell");
       if (bell) { bell.style.display = ""; notifBell(bell); }
       um.style.display = "";
-      const sm = await me();
       const extraItems = opts.extraItems ? (typeof opts.extraItems === "function" ? opts.extraItems(meData) : opts.extraItems) : [];
-      userMenu(um, { username: sm.username || meData.username, display_name: sm.display_name, avatar: sm.avatar },
+      userMenu(um, { username: sm.username, display_name: sm.display_name, avatar: sm.avatar },
         { extraItems, onChange: k => {
           if (k === "lang") { refreshHeaderTexts(); if (opts.onLangChange) opts.onLangChange(getLang()); }
           if (opts.onMenuChange) opts.onMenuChange(k);

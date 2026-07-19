@@ -289,8 +289,11 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         # Capture le rôle à chaque passage authentifié (le header init l'appelle
         # sur chaque page) → badge de rôle disponible sur n'importe quel profil.
         role = _touch_role(conn, username, groups)
+    is_super = bool(groups & SUPERUSER_GROUPS)
+    is_gest = is_super or GROUP_GESTIONNAIRE in groups
+    is_user = is_gest or GROUP_USER in groups
     return {
-        "authenticated": True,
+        "authenticated": bool(username) and is_user,
         "username": username,
         "display_name": row["display_name"],
         "bio": row["bio"],
@@ -298,6 +301,9 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "city_id": row["city_id"], "city": row["city_label"],
         "artist_id": row["artist_id"], "artist": row["artist_label"],
         "is_moderator": _is_moderator(groups),
+        # Droits (mêmes champs que /api/me) : permet au header de n'appeler que
+        # cet endpoint, supprimant un aller-retour par navigation.
+        "is_user": is_user, "is_gestionnaire": is_gest, "is_admin": is_super,
         "role": role,
     }
 
