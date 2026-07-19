@@ -1,5 +1,29 @@
 # Notes
 
+2026-07-19 : **Barre de progression pendant la préparation** (preprod v1.6.6).
+Retour utilisateur : à l'étape « Détection des chansons » (whisper CPU, plusieurs
+minutes), aucun indicateur — impossible de savoir si ça tourne / où ça en est /
+si c'est bloqué. Ajout d'une barre par étape :
+- **Déterminée** (remplie au %) pour le téléchargement (yt-dlp `[download] x%`)
+  et la **transcription** : `preanalyze.transcribe` reçoit un callback
+  `progress(frac)` appelé segment par segment (position = `segment.end /
+  info.duration`), le générateur faster-whisper étant paresseux. Callback
+  throttlé (≥1 %) publié en SSE `phase=transcription, pct=…`. Avant le 1er
+  segment (chargement du modèle) : pas de pct → barre indéterminée.
+- **Indéterminée** (bande animée qui balaie) pour les phases non mesurables
+  (silences, analyse IA, découpe, tags, artwork, disc, bundle) — signale
+  « ça tourne » sans fausse précision. `@media(prefers-reduced-motion)` gère
+  l'accessibilité.
+- Front : `runProgress` restructure chaque `<li>` en tête (dot+label+pct) +
+  barre ; classes `.running/.done/.indet`, `.stage-fill` en `--accent`
+  (en cours) ou `--ok` (terminé). i18n `running_word` FR/EN ; « (long) »
+  retiré des libellés (la barre le dit mieux).
+- Test : `test_prepare_publishes_transcription_progress` (progression monotone
+  jusqu'à 100 %). 145 verts. Rendu validé au pixel (webshot, dark+light,
+  déterminée 42 % + indéterminée).
+- **E2E réel preprod** : préparation U2 complète, transcription émettant
+  5,6→21→37→57→73→88→100 % (monotone) puis analyse IA et fin. Projet test purgé.
+
 2026-07-19 : **Prod v1.7.0** — promotion complète de l'outil « album depuis un
 lien » (voir entrées 2026-07-18). Merge preprod->main via deploy-prod-live2mp3.sh
 (minor : première mise en service réelle de l'outil). Après déploiement Docker,
