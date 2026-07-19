@@ -83,6 +83,54 @@ const L2M = (function () {
   function getLang() { return localStorage.getItem("l2m-lang") || "fr"; }
   function applyLang(l) { localStorage.setItem("l2m-lang", l); document.documentElement.lang = l; }
 
+  /* ---------------- Fenêtre de choix d'import ---------------- */
+  // Visible par tous : les visiteurs et les utilisateurs simples y voient le
+  // rôle requis plutôt qu'un bouton absent (les droits réels restent côté API).
+  function openImportChoice(rights, tx, opts) {
+    const gest = !!(rights.is_gestionnaire || rights.is_admin);
+    const anon = !rights.authenticated;
+    document.getElementById("imp-choice-ovl")?.remove();
+    const ovl = document.createElement("div");
+    ovl.id = "imp-choice-ovl";
+    ovl.className = "imp-choice-ovl";
+    const card = (act, icon, t, d) => `
+      <button class="imp-card${gest ? "" : " locked"}" data-act="${act}"${gest ? "" : " disabled"}>
+        <span class="material-symbols-outlined imp-card-ic">${icon}</span>
+        <span class="imp-card-t">${t}</span>
+        <span class="imp-card-d">${d}</span>
+        ${gest ? "" : `<span class="imp-card-lock"><span class="material-symbols-outlined">lock</span>${tx.need_role}</span>`}
+      </button>`;
+    ovl.innerHTML = `
+      <div class="imp-choice" role="dialog" aria-modal="true">
+        <button class="imp-choice-x icon-btn icon-only" title="${tx.close}"><span class="material-symbols-outlined">close</span></button>
+        <h2 class="imp-choice-h">${tx.title}</h2>
+        <div class="imp-choice-grid">
+          ${card("manual", "upload_file", tx.manual_t, tx.manual_d)}
+          ${card("tool", "auto_fix_high", tx.tool_t, tx.tool_d)}
+        </div>
+        ${gest ? "" : `<div class="imp-choice-note">
+          <span class="material-symbols-outlined">info</span>
+          <span>${anon ? tx.note_anon : tx.note_user}</span>
+          ${anon ? `<a class="primary imp-choice-login" href="/outpost.goauthentik.io/start?rd=${encodeURIComponent(location.pathname)}">${tx.login}</a>` : ""}
+        </div>`}
+      </div>`;
+    document.body.appendChild(ovl);
+    requestAnimationFrame(() => ovl.classList.add("show"));
+    const close = () => { ovl.classList.remove("show"); setTimeout(() => ovl.remove(), 180); };
+    ovl.querySelector(".imp-choice-x").onclick = close;
+    ovl.onclick = e => { if (e.target === ovl) close(); };
+    document.addEventListener("keydown", function esc(e) {
+      if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
+    });
+    if (gest) ovl.querySelectorAll(".imp-card").forEach(b => {
+      b.onclick = () => {
+        close();
+        if (b.dataset.act === "tool") location.href = "/app";
+        else (opts.onImport || (() => { location.href = "/?import=1"; }))();
+      };
+    });
+  }
+
   /* ---------------- Header unifié ---------------- */
   async function initHeader(opts) {
     opts = opts || {};
@@ -91,8 +139,7 @@ const L2M = (function () {
     header.innerHTML = `
       <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
       <div class="tools">
-        <a id="tool-link" class="icon-btn" href="/app" style="display:none"><span class="material-symbols-outlined">build</span><span data-hk="tool"></span></a>
-        <button id="import-btn" class="icon-btn" style="display:none"><span class="material-symbols-outlined">library_add</span><span data-hk="import"></span></button>
+        <button id="import-btn" class="icon-btn"><span class="material-symbols-outlined">library_add</span><span data-hk="import"></span></button>
         <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label"></span></button>
         <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined"></span></button>
         <a id="login" class="icon-btn" style="display:none"><span class="material-symbols-outlined">login</span><span data-hk="login"></span></a>
@@ -102,6 +149,31 @@ const L2M = (function () {
     const HT = {
       fr: { tool: "Outil", import: "Importer", login: "Connexion" },
       en: { tool: "Tool", import: "Import", login: "Log in" },
+    };
+    // Textes de la fenêtre de choix d'import (partagée par toutes les pages).
+    const IT = {
+      fr: {
+        title: "Importer un album", close: "Fermer",
+        manual_t: "Importer manuellement",
+        manual_d: "Déposez des MP3 déjà découpés (ou un ZIP) et complétez les informations.",
+        tool_t: "Depuis un lien (assisté par IA)",
+        tool_d: "Collez le lien d'une captation : découpe, titres et métadonnées proposés automatiquement.",
+        need_role: "Réservé aux gestionnaires",
+        note_user: "L'import d'albums est réservé aux comptes gestionnaires. Demandez cet accès à un administrateur.",
+        note_anon: "L'import d'albums est réservé aux comptes gestionnaires. Connectez-vous avec un compte disposant de ce rôle.",
+        login: "Se connecter",
+      },
+      en: {
+        title: "Import an album", close: "Close",
+        manual_t: "Import manually",
+        manual_d: "Upload already-split MP3s (or a ZIP) and fill in the details.",
+        tool_t: "From a link (AI-assisted)",
+        tool_d: "Paste a concert link: splitting, titles and metadata are proposed automatically.",
+        need_role: "Managers only",
+        note_user: "Importing albums is restricted to manager accounts. Ask an administrator for this access.",
+        note_anon: "Importing albums is restricted to manager accounts. Log in with an account holding that role.",
+        login: "Log in",
+      },
     };
     function refreshHeaderTexts() {
       const lang = getLang();
@@ -127,12 +199,13 @@ const L2M = (function () {
     let meData = { authenticated: false, is_gestionnaire: false };
     try { meData = await fetch("/api/me").then(r => r.json()); } catch (e) {}
 
-    if (meData.is_gestionnaire || meData.is_admin) {
-      document.getElementById("tool-link").style.display = "";
-      const ib = document.getElementById("import-btn");
-      ib.style.display = "";
-      ib.onclick = opts.onImport || (() => { location.href = "/?import=1"; });
-    }
+    // Le bouton est visible par tous : la fenêtre de choix explique le rôle
+    // requis aux visiteurs et aux utilisateurs simples.
+    document.getElementById("import-btn").onclick = () => {
+      // `opts.rights` permet à la vitrine de refléter le mode « Voir en tant que ».
+      const r = (opts.rights ? opts.rights() : null) || meData;
+      openImportChoice(r, IT[getLang()] || IT.fr, opts);
+    };
 
     const um = document.getElementById("usermenu");
     if (meData.authenticated) {
@@ -145,22 +218,6 @@ const L2M = (function () {
           if (k === "lang") { refreshHeaderTexts(); if (opts.onLangChange) opts.onLangChange(getLang()); }
           if (opts.onMenuChange) opts.onMenuChange(k);
         }});
-      // Mobile : Outil + Importer vivent dans le menu avatar (.um-mobile, cachés
-      // en desktop par app.css) — le header n'a pas la place pour eux.
-      if (meData.is_gestionnaire || meData.is_admin) {
-        const sep = um.querySelector(".um-sep");
-        const tool = document.createElement("a");
-        tool.className = "um-item um-mobile";
-        tool.href = "/app";
-        tool.innerHTML = `<span class="material-symbols-outlined">build</span><span data-hk="tool"></span>`;
-        const imp = document.createElement("button");
-        imp.className = "um-item um-mobile";
-        imp.innerHTML = `<span class="material-symbols-outlined">library_add</span><span data-hk="import"></span>`;
-        imp.onclick = () => { um.classList.remove("open"); (opts.onImport || (() => { location.href = "/?import=1"; }))(); };
-        sep.parentNode.insertBefore(tool, sep);
-        sep.parentNode.insertBefore(imp, sep);
-        refreshHeaderTexts();
-      }
     } else {
       um.style.display = "none";
       const loginEl = document.getElementById("login");
