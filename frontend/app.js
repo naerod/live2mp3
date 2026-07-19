@@ -218,7 +218,10 @@ function runProgress(titleKey,stages,onComplete){
   const items={};
   stages.forEach(s=>{
     const li=document.createElement("li");
-    li.innerHTML=`<span class="dot"></span><span>${T("stage_"+s)}</span><span class="stage-pct"></span>`;
+    li.innerHTML=`<div class="stage-head"><span class="dot"></span>`+
+      `<span class="stage-label">${T("stage_"+s)}</span>`+
+      `<span class="stage-pct"></span></div>`+
+      `<div class="stage-bar"><div class="stage-fill"></div></div>`;
     ul.appendChild(li);items[s]=li;
   });
   const es=new EventSource(`/api/jobs/${slug}/events`);
@@ -226,13 +229,27 @@ function runProgress(titleKey,stages,onComplete){
     const ev=JSON.parse(e.data);
     const li=items[ev.stage];
     if(li){
-      li.classList.toggle("running",ev.status==="running");
-      li.classList.toggle("done",ev.status==="done");
+      const running=ev.status==="running",done=ev.status==="done";
+      li.classList.toggle("running",running);
+      li.classList.toggle("done",done);
       const pct=li.querySelector(".stage-pct");
-      if(ev.status==="running"&&ev.info){
-        if(ev.info.pct!=null)pct.textContent=Math.round(ev.info.pct)+" %";
-        else if(ev.info.phase)pct.textContent=T("phase_"+ev.info.phase);
-      }else if(ev.status==="done"){
+      const fill=li.querySelector(".stage-fill");
+      if(running){
+        const info=ev.info||{};
+        if(info.pct!=null){
+          // Progression connue -> barre remplie au pourcentage
+          li.classList.remove("indet");
+          fill.style.width=Math.round(info.pct)+"%";
+          pct.textContent=(info.phase?T("phase_"+info.phase)+" ":"")+Math.round(info.pct)+" %";
+        }else{
+          // Progression inconnue -> barre animée « ça tourne »
+          li.classList.add("indet");
+          fill.style.width="";
+          pct.textContent=info.phase?T("phase_"+info.phase):T("running_word");
+        }
+      }else if(done){
+        li.classList.remove("indet");
+        fill.style.width="100%";
         pct.textContent="";
         if(ev.stage==="ai_markers"&&ev.info&&ev.info.source)
           pct.textContent=T("src_"+ev.info.source)||"";

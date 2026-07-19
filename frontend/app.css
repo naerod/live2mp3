@@ -52,11 +52,27 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .note{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;
   margin-top:16px}
 .stages{list-style:none;padding:0;margin:0}
-.stages li{display:flex;align-items:center;gap:12px;padding:12px 0;
-  border-bottom:1px solid var(--border)}
-.stages .dot{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.stages li{display:block;padding:12px 0;border-bottom:1px solid var(--border)}
+.stage-head{display:flex;align-items:center;gap:12px}
+.stage-label{color:var(--fg)}
+.stages li:not(.running):not(.done) .stage-label{color:var(--muted)}
+.stages .dot{width:10px;height:10px;border-radius:50%;background:var(--border);flex-shrink:0}
 .stages li.running .dot{background:var(--run)}
 .stages li.done .dot{background:var(--ok)}
+/* Barre de progression : masquée tant que l'étape n'a pas démarré */
+.stage-bar{height:4px;margin-top:10px;border-radius:4px;overflow:hidden;
+  background:var(--border);display:none}
+.stages li.running .stage-bar,.stages li.done .stage-bar{display:block}
+.stage-fill{height:100%;border-radius:4px;background:var(--accent);width:0;
+  transition:width .35s ease}
+.stages li.done .stage-fill{width:100%;background:var(--ok);transition:none}
+/* Progression inconnue : bande qui balaie la barre pour signaler l'activité */
+.stages li.indet .stage-fill{width:40%;
+  animation:l2m-indet 1.15s cubic-bezier(.4,0,.6,1) infinite}
+@keyframes l2m-indet{0%{margin-left:-40%}100%{margin-left:100%}}
+@media(prefers-reduced-motion:reduce){
+  .stages li.indet .stage-fill{animation:none;width:100%;opacity:.5}
+}
 #peaks-container{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}

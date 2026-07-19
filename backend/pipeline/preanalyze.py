@@ -16,6 +16,7 @@ import struct
 import subprocess
 import wave
 from pathlib import Path
+from typing import Callable
 
 from ..manifest import Manifest
 
@@ -131,17 +132,32 @@ def whisper_model_choice() -> tuple[str, str]:
 
 
 def transcribe(master_wav: Path, model_size: str | None = None,
-               device: str | None = None) -> list[dict]:
-    """Transcription horodatée via faster-whisper."""
+               device: str | None = None,
+               progress: Callable[[float], None] | None = None) -> list[dict]:
+    """Transcription horodatée via faster-whisper.
+
+    `progress` reçoit une fraction 0..1 (position dans l'audio) au fil des
+    segments. La transcription CPU est le poste le plus long du pipeline :
+    ce retour alimente la barre de progression côté UI.
+    """
     from faster_whisper import WhisperModel  # import tardif (dépendance lourde)
 
     if device is None or model_size is None:
         device, model_size = whisper_model_choice()
     compute = "float16" if device == "cuda" else "int8"
     model = WhisperModel(model_size, device=device, compute_type=compute)
-    segments, _ = model.transcribe(str(master_wav))
-    return [{"start": s.start, "end": s.end, "text": s.text.strip()}
-            for s in segments]
+    # segments est un générateur paresseux : la transcription se fait à
+    # l'itération, donc on publie la progression au fur et à mesure.
+    segments, info = model.transcribe(str(master_wav))
+    total = float(getattr(info, "duration", 0.0) or 0.0)
+    out: list[dict] = []
+    for s in segments:
+        out.append({"start": s.start, "end": s.end, "text": s.text.strip()})
+        if progress and total:
+            progress(min(1.0, s.end / total))
+    if progress:
+        progress(1.0)
+    return out
 
 
 # ---- Orchestration -------------------------------------------------------
