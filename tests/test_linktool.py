@@ -348,6 +348,90 @@ def test_prepare_publishes_transcription_progress(client, monkeypatch, tmp_path)
                for e in events)
 
 
+def _seed_prepared(c, projects, tracks):
+    """Projet avec master.wav et download=done, prêt pour _run_prepare_bg."""
+    slug = c.post("/api/jobs", json=_job_payload(tracks=tracks),
+                  headers=GEST).json()["slug"]
+    project_dir = projects / slug
+    (project_dir / "source").mkdir(parents=True, exist_ok=True)
+    subprocess.run([
+        "ffmpeg", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=12",
+        "-ar", "44100", "-ac", "2",
+        str(project_dir / "source" / "master.wav")],
+        check=True, capture_output=True)
+    from backend.manifest import Manifest
+    Manifest.load(project_dir / "manifest.yaml").set_state("download", "done")
+    return slug, project_dir
+
+
+def test_skip_detection_before_start(client, monkeypatch):
+    """Skip demandé avant la transcription : whisper n'est jamais appelé."""
+    from backend import main
+    from backend.pipeline import preanalyze
+    from backend.manifest import Manifest
+    c, projects = client
+    slug, project_dir = _seed_prepared(
+        c, projects, [{"n": 1, "title": "A"}, {"n": 2, "title": "B"}])
+    monkeypatch.setattr(preanalyze, "detect_silences", lambda *a, **k: [])
+
+    def boom(*a, **k):
+        raise AssertionError("whisper ne doit pas être appelé après un skip")
+    monkeypatch.setattr(preanalyze, "transcribe", boom)
+
+    assert c.post(f"/api/jobs/{slug}/skip-detection",
+                  headers=GEST).status_code == 200
+    main._progress_last[slug] = []
+    main._run_prepare_bg(slug, "g")
+
+    events = main._progress_last[slug]
+    done = [e for e in events
+            if e["stage"] == "ai_markers" and e["status"] == "done"]
+    assert done and done[0]["info"]["source"] == "skipped", events
+    # Des coupes de secours sont posées : l'éditeur peut s'ouvrir.
+    m = Manifest.load(project_dir / "manifest.yaml")
+    assert all(t["start"] is not None and t["end"] is not None for t in m.tracks)
+    assert slug not in main._skip_detection      # drapeau consommé
+    assert any(e["stage"] == "prepare" and e["status"] == "complete"
+               for e in events)
+
+
+def test_skip_detection_during_transcription(client, monkeypatch):
+    """Skip pendant la transcription : interrompue au segment suivant."""
+    from backend import main
+    from backend.pipeline import preanalyze
+    c, projects = client
+    slug, _ = _seed_prepared(c, projects, [{"n": 1, "title": "A"}])
+    monkeypatch.setattr(preanalyze, "detect_silences", lambda *a, **k: [])
+    seen = []
+
+    def fake_transcribe(wav, progress=None):
+        progress(0.1)                       # 1er segment : poursuit
+        seen.append("running")
+        main._skip_detection.add(slug)      # l'utilisateur clique « passer »
+        progress(0.2)                       # doit lever _SkipDetection
+        raise AssertionError("la transcription aurait dû être interrompue")
+    monkeypatch.setattr(preanalyze, "transcribe", fake_transcribe)
+
+    main._progress_last[slug] = []
+    main._run_prepare_bg(slug, "g")
+
+    assert seen == ["running"]
+    done = [e for e in main._progress_last[slug]
+            if e["stage"] == "ai_markers" and e["status"] == "done"]
+    assert done and done[0]["info"]["source"] == "skipped"
+    assert slug not in main._skip_detection
+
+
+def test_skip_detection_auth_and_404(client):
+    c, projects = client
+    slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]
+    assert c.post(f"/api/jobs/{slug}/skip-detection").status_code == 401
+    assert c.post(f"/api/jobs/{slug}/skip-detection",
+                  headers=USER).status_code == 403
+    assert c.post("/api/jobs/inconnu-2020-01-01/skip-detection",
+                  headers=GEST).status_code == 404
+
+
 # --- Tags : artiste par piste ----------------------------------------------
 def test_tag_mp3_track_artist(tmp_path):
     mp3 = tmp_path / "01. Beautiful Day.mp3"

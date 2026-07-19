@@ -91,6 +91,16 @@ def _startup() -> None:
 _progress_bus: dict[str, "queue.Queue[dict]"] = {}
 _progress_last: dict[str, list[dict]] = {}
 
+# Détection des chansons passée à la demande : la transcription est le poste le
+# plus long et l'humain ajuste les coupes de toute façon. Le drapeau est relu
+# par le callback de progression whisper (à chaque segment), donc l'abandon
+# prend effet en quelques secondes.
+_skip_detection: set[str] = set()
+
+
+class _SkipDetection(Exception):
+    """Abandon volontaire de la détection IA (distinct d'un échec)."""
+
 
 def _publish(slug: str, event: dict) -> None:
     _progress_last.setdefault(slug, []).append(event)
@@ -915,24 +925,33 @@ def _run_prepare_bg(slug: str, username: str) -> None:
             m.set_state("ai_markers", "done")
             cb("ai_markers", "done", {"source": "timecodes"})
         else:
-            cb("ai_markers", "running", {"phase": "silences"})
+            # `skippable` signale au front qu'il peut proposer « passer ».
+            cb("ai_markers", "running", {"phase": "silences", "skippable": True})
             silences = preanalyze.detect_silences(wav)
             source = "ia"
             try:
+                if slug in _skip_detection:
+                    raise _SkipDetection()
                 # Phase transcription : d'abord sans pct (chargement du modèle
                 # -> barre indéterminée), puis pct au fil des segments whisper.
                 _publish(slug, {"stage": "ai_markers", "status": "running",
-                                "info": {"phase": "transcription"},
-                                "ts": time.time()})
+                                "info": {"phase": "transcription",
+                                         "skippable": True}, "ts": time.time()})
                 _tr_last = [0.0]
                 def tr_pct(frac: float) -> None:
+                    # Point d'abandon : appelé à chaque segment transcrit.
+                    if slug in _skip_detection:
+                        raise _SkipDetection()
                     pct = round(frac * 100, 1)
                     if pct - _tr_last[0] >= 1 or pct >= 100:
                         _tr_last[0] = pct
                         _publish(slug, {"stage": "ai_markers", "status": "running",
-                                        "info": {"phase": "transcription", "pct": pct},
+                                        "info": {"phase": "transcription", "pct": pct,
+                                                 "skippable": True},
                                         "ts": time.time()})
                 transcript = preanalyze.transcribe(wav, progress=tr_pct)
+                if slug in _skip_detection:
+                    raise _SkipDetection()
                 _publish(slug, {"stage": "ai_markers", "status": "running",
                                 "info": {"phase": "llm"}, "ts": time.time()})
                 if m.data.get("auto_setlist"):
@@ -952,12 +971,20 @@ def _run_prepare_bg(slug: str, username: str) -> None:
                                for t in m.tracks]
                     markers = llm.request_markers(setlist, transcript, silences)
                     m.merge_ai_markers(markers)
+            except _SkipDetection:
+                # Passage volontaire : mêmes frontières de secours (sur les
+                # silences), l'humain les place ensuite dans l'éditeur.
+                markers = _fallback_markers(len(m.tracks), duration, silences)
+                m.merge_ai_markers(markers)
+                source = "skipped"
             except Exception:
                 # IA indisponible : découpe de secours pour que l'éditeur
                 # s'ouvre quand même — l'humain replace les frontières.
                 markers = _fallback_markers(len(m.tracks), duration, silences)
                 m.merge_ai_markers(markers)
                 source = "fallback"
+            finally:
+                _skip_detection.discard(slug)
             m.set_state("ai_markers", "done")
             cb("ai_markers", "done", {"source": source})
 
@@ -985,9 +1012,24 @@ def start_prepare(slug: str,
         raise HTTPException(404, "projet introuvable")
     _progress_last[slug] = []
     _progress_bus[slug] = queue.Queue()
+    _skip_detection.discard(slug)   # repart d'un état propre
     threading.Thread(target=_run_prepare_bg,
                      args=(slug, identity.get("username") or ""),
                      daemon=True).start()
+    return {"ok": True, "slug": slug}
+
+
+@app.post("/api/jobs/{slug}/skip-detection")
+def skip_detection(slug: str,
+                   identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Abandonne la détection IA en cours : coupes de secours puis éditeur.
+
+    La transcription est le poste le plus long du pipeline et l'humain ajuste
+    les coupes de toute façon — ce raccourci mène directement à l'éditeur.
+    """
+    if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
+        raise HTTPException(404, "projet introuvable")
+    _skip_detection.add(slug)
     return {"ok": True, "slug": slug}
 
 

@@ -86,6 +86,10 @@
   <section id="step-progress" class="card hidden">
     <h1><span class="material-symbols-outlined step-ico">hourglass_top</span><span id="progress-title"></span></h1>
     <ul id="stages" class="stages"></ul>
+    <div id="skip-detect-wrap" class="skip-wrap hidden">
+      <button id="btn-skip-detect" class="icon-btn"><span class="material-symbols-outlined">skip_next</span> <span data-i18n="skip_detect">Passer cette étape</span></button>
+      <span class="skip-hint" data-i18n="skip_hint">La détection ne fait qu'estimer les coupes : vous les ajusterez de toute façon dans l'éditeur.</span>
+    </div>
     <p id="progress-err" class="note err hidden"></p>
     <div class="actions hidden" id="progress-actions">
       <button id="btn-err-back" class="icon-btn"><span class="material-symbols-outlined">arrow_back</span> <span data-i18n="back">Retour</span></button>

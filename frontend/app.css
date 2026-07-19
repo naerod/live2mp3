@@ -428,3 +428,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   .imp-choice-grid{grid-template-columns:1fr}
   .imp-card{padding:16px}
 }
+
+/* Bouton « passer » de l'étape de détection (la plus longue) */
+.skip-wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+.skip-wrap .icon-btn{margin:0;flex-shrink:0}
+.skip-hint{color:var(--muted);font-size:12.5px;line-height:1.4;flex:1;min-width:220px}
