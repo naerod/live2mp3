@@ -1,5 +1,32 @@
 # Notes
 
+2026-07-19 (setlist.fm) : **Setlist officielle du concert** (preprod v1.8.4).
+Complète la détection audio : celle-ci place les frontières, setlist.fm donne
+les *titres* exacts, leur ordre et les invités.
+- Clé API dans `/home/claude/.env` (`SETLISTFM_API_KEY`, depuis Bitwarden
+  « API KEY setlist.fm ») et dans le `.env` preprod de CT110. **À ajouter au
+  .env prod avant toute promotion**, sinon dégradation silencieuse (l'analyse
+  continue sans setlist).
+- `backend/setlistfm.py` : recherche autonome sur (artiste, date) — deux
+  informations que l'IA extrait déjà du titre/description. Cache 24 h, throttle
+  local (quotas de l'app : 2 req/s, 1440/jour ; on fait 1 appel par analyse).
+- Départage plusieurs setlists d'un même soir : la plus complète gagne (cas
+  réel U2 : « U2 » 4 titres vs « U2 with Bruce Springsteen » 2 titres).
+  Les invités deviennent l'artiste de piste (« U2 with Chris Martin ») ;
+  les morceaux `tape` (diffusés par la sono) sont écartés.
+- Fusion prudente (`linktool.apply_setlistfm`) : si des timecodes existent déjà
+  (chapitres vidéo) et que le nombre de titres diffère, on ne touche à rien ;
+  si le nombre correspond, on garde les timecodes et on prend les titres
+  officiels. Lieu/ville/tournée complétés depuis la donnée officielle.
+- ⚠️ **Attribution obligatoire** (CGU setlist.fm : « place an attribution link
+  each time you use setlist.fm data ») : l'URL suit la donnée de bout en bout —
+  bandeau dans l'outil (« Setlist officielle du concert (N titres) — source :
+  setlist.fm ») **et** crédit sous la setlist de la fiche album via
+  `meta.setlistfm_url`. Ne pas retirer ces liens.
+- **E2E réel** : le lien U2 remonte les 4 titres exacts avec Chris Martin ×2 et
+  Bruce Springsteen ×2, lieu « Times Square / New York » confirmé.
+- 162 tests verts (11 nouveaux, API simulée — aucun appel réseau en test).
+
 2026-07-19 (détection des coupes) : **Frontières par l'énergie du signal**
 (preprod v1.6.14). Retour utilisateur : les coupes IA tombaient au milieu des
 chansons alors que les transitions se voient à l'œil sur la forme d'onde.
