@@ -1,5 +1,30 @@
 # Notes
 
+2026-07-19 (skip détection) : **Bouton « passer » sur la détection des
+chansons** (preprod v1.6.13). Constat utilisateur : c'est l'étape la plus longue
+(transcription whisper) et elle ne fait qu'*estimer* les coupes, que l'humain
+ajuste de toute façon dans l'éditeur.
+- `POST /api/jobs/{slug}/skip-detection` (gestionnaire) pose un drapeau dans
+  `_skip_detection`. Il est relu **par le callback de progression whisper**
+  (appelé à chaque segment) qui lève `_SkipDetection` → abandon en quelques
+  secondes sans tuer le thread. Également vérifié avant de lancer whisper et
+  après la transcription.
+- Coupes de secours appliquées (`_fallback_markers` : frontières sur les
+  silences les plus longs, déjà détectés juste avant) pour que l'éditeur
+  s'ouvre avec des pistes exploitables plutôt que vide.
+- `source="skipped"` distinct de `"fallback"` (échec IA) → libellé dédié.
+  Drapeau nettoyé dans un `finally` + au lancement de `prepare`.
+- Front : bouton affiché tant que l'étape tourne (drapeau `skippable` porté par
+  les events SSE), avec une phrase d'explication ; i18n FR/EN.
+- ⚠️ **Limite connue** : si le skip est demandé pendant le *chargement* du
+  modèle whisper (avant le 1er segment), il ne prend effet qu'au premier
+  segment — quelques secondes si le modèle est en cache disque, mais 1-2 min au
+  tout premier usage après un rebuild (téléchargement ~460 Mo, le cache HF
+  n'est pas persisté dans un volume). Piste d'amélioration : monter un volume
+  sur ~/.cache/huggingface.
+- 148 tests verts (skip avant lancement / pendant la transcription / auth+404).
+- **preprod uniquement** (demande explicite).
+
 2026-07-19 (header) : **Boutons Outil + Importer fusionnés** (preprod v1.6.12).
 Un seul bouton « Importer » dans le header, **visible par tous** (y compris
 visiteurs anonymes) ; il ouvre une fenêtre de choix (`openImportChoice` dans
