@@ -38,6 +38,7 @@ const show=id=>{STEPS.forEach(s=>$(s).classList.toggle("hidden",s!==id));
 
 let slug=null;          // slug du projet en cours
 let videoInfo=null;     // métadonnées de la vidéo sondée
+let setlistSource=null; // provenance de la setlist (setlist.fm) + attribution
 let currentPhase=null;  // "prepare" | "render" (pour le bouton réessayer)
 let peaksInstance=null;
 
@@ -70,6 +71,7 @@ $("btn-analyze").onclick=async()=>{
     const d=await r.json();
     setAnalyzing(false);
     videoInfo=d.video;
+    setlistSource=d.setlist_source||null;
     fillForm(d.suggestion,d.video,d.ai);
     show("step-form");
   }catch(e){
@@ -130,6 +132,17 @@ function fillForm(sug,video,ai){
   }else{
     $("src-card").classList.add("hidden");
   }
+  // Provenance de la setlist — l'attribution setlist.fm est obligatoire.
+  const src=$("setlist-src");
+  if(src){
+    if(setlistSource){
+      src.classList.remove("hidden");
+      src.innerHTML=`<span class="material-symbols-outlined">verified</span>`+
+        `<span>${T("setlist_official")(setlistSource.tracks)} `+
+        `<a href="${setlistSource.url}" target="_blank" rel="noopener">`+
+        `${setlistSource.name}</a></span>`;
+    }else{src.classList.add("hidden");}
+  }
   // Setlist
   $("track-rows").innerHTML="";
   (sug.tracks||[]).forEach(t=>addFormRow(t));
@@ -183,6 +196,7 @@ $("btn-create").onclick=async()=>{
     source_url:(videoInfo&&videoInfo.webpage_url)||$("l-url").value.trim(),
     video:$("f-video").checked,
     thumbnail_url:(videoInfo&&videoInfo.thumbnail)||"",
+    setlistfm_url:(setlistSource&&setlistSource.url)||"",
     duration:(videoInfo&&videoInfo.duration)||null,
   };
   $("btn-create").disabled=true;

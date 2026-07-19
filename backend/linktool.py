@@ -26,7 +26,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from . import llm
+from . import llm, setlistfm
 from .auth import require_gestionnaire
 from .covers import _now, _on_covers_changed, cover_file, covers_dir
 from .db import get_conn
@@ -153,7 +153,52 @@ def analyze(payload: AnalyzeIn,
             suggestion = None
     if suggestion is None:
         suggestion = heuristic_suggestion(video)
-    return {"video": video, "suggestion": suggestion, "ai": ai}
+
+    setlist_src = apply_setlistfm(suggestion)
+    return {"video": video, "suggestion": suggestion, "ai": ai,
+            "setlist_source": setlist_src}
+
+
+def apply_setlistfm(suggestion: dict) -> dict | None:
+    """Complète la suggestion avec la setlist officielle du concert.
+
+    L'IA lit le titre et la description de la vidéo — souvent incomplets ;
+    setlist.fm donne les titres exacts, leur ordre et les invités. On ne
+    remplace la setlist que si l'on n'y perd pas d'information : jamais
+    lorsque des timecodes ont déjà été trouvés (chapitres de la vidéo) et que
+    le nombre de titres diffère.
+    """
+    artist, date = suggestion.get("artist", ""), suggestion.get("date") or ""
+    try:
+        sl = setlistfm.lookup(artist, date)
+    except setlistfm.SetlistUnavailable:
+        return None
+    if not sl or not sl["tracks"]:
+        return None
+
+    current = suggestion.get("tracks") or []
+    has_timecodes = any(t.get("start") is not None for t in current)
+    if has_timecodes and len(current) != len(sl["tracks"]):
+        return None                       # les timecodes priment
+    if has_timecodes:
+        # Mêmes morceaux : on garde les timecodes, on prend les titres officiels.
+        for t, off in zip(current, sl["tracks"]):
+            t["title"] = off["title"]
+            if off["artist"]:
+                t["artist"] = off["artist"]
+    else:
+        suggestion["tracks"] = sl["tracks"]
+    # Lieu : la donnée officielle est plus fiable que celle déduite du titre.
+    if sl["venue"]:
+        suggestion["venue"] = sl["venue"]
+    if sl["city"] and not suggestion.get("city"):
+        suggestion["city"] = sl["city"]
+    if sl["tour"] and not suggestion.get("festival"):
+        suggestion["festival"] = sl["tour"]
+    # Obligation d'attribution : l'URL suit la donnée jusqu'à l'affichage.
+    suggestion["setlistfm_url"] = sl["url"]
+    return {"name": setlistfm.ATTRIBUTION, "url": sl["url"],
+            "tracks": len(sl["tracks"])}
 
 
 # --- Helpers phase préparation --------------------------------------------

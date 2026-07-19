@@ -145,6 +145,7 @@ class JobIn(BaseModel):
     video: bool = False           # True = télécharger la vidéo + clips MP4
     thumbnail_url: str = ""       # miniature -> proposition de pochette
     duration: float | None = None  # durée de la source (bornage des coupes)
+    setlistfm_url: str = ""       # setlist officielle (attribution obligatoire)
 
 
 class SetlistTrackIn(BaseModel):
@@ -338,6 +339,8 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
         "source_url": src.get("url", "") or "",
+        # Attribution setlist.fm — obligatoire partout où la donnée est affichée.
+        "setlistfm_url": meta.get("setlistfm_url", "") or "",
         "source_label": src.get("label", "") or "",
         "per_track_covers": bool(m.data.get("album", {}).get("per_track_covers", False)),
         "track_covers": _list_track_covers_public(slug),
@@ -848,6 +851,9 @@ def create_job(job: JobIn,
         "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "import_source": "url",
     }
+    if job.setlistfm_url:
+        # L'attribution suit la donnée : affichée sur la fiche album (ToS).
+        m.data["meta"]["setlistfm_url"] = job.setlistfm_url
     # Un album créé par l'outil naît dépublié : le volume est partagé
     # prod/preprod, rien ne doit devenir public avant validation explicite.
     m.data["published"] = False

@@ -325,6 +325,7 @@ const T={
       dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",
       not_found:"Album introuvable.",
       unpublished:"Dépublié",
+      setlist_src:"Setlist :",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
@@ -353,6 +354,7 @@ const T={
       dltrack:"Download this track",lockdl:"Log in to download",
       not_found:"Album not found.",
       unpublished:"Unpublished",
+      setlist_src:"Setlist:",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
@@ -530,6 +532,7 @@ function renderAlbum(d){
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
+      ${d.setlistfm_url?`<p class="setlist-credit">${t('setlist_src')} <a href="${d.setlistfm_url}" target="_blank" rel="noopener">setlist.fm</a></p>`:''}
     </div>
     <div class="sec" id="sec-comments"></div>
   `;

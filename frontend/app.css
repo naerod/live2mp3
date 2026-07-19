@@ -433,3 +433,11 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .skip-wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
 .skip-wrap .icon-btn{margin:0;flex-shrink:0}
 .skip-hint{color:var(--muted);font-size:12.5px;line-height:1.4;flex:1;min-width:220px}
+
+/* Provenance de la setlist (attribution setlist.fm — imposée par leurs CGU) */
+.setlist-src{display:flex;align-items:center;gap:8px;margin:0 0 10px;
+  font-size:13px;color:var(--muted)}
+.setlist-src .material-symbols-outlined{font-size:18px;color:var(--ok)}
+.setlist-src a{color:var(--accent);text-decoration:underline}
+.setlist-credit{margin:10px 0 0;font-size:12px;color:var(--muted)}
+.setlist-credit a{color:var(--accent);text-decoration:underline}
