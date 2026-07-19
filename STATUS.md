@@ -18,7 +18,11 @@
   `/artist/{id}` · `/festival/{slug}` · `/venue/{slug}` regroupant tous les
   posts liés, bouton Suivre/Suivi + cloche façon X/YouTube. Métadonnées
   canoniques (artiste + invités + festival) en liste déroulante dans l'éditeur.
-  Badge de rôle (utilisateur/gestionnaire/admin) sur les profils. Phases 2
-  (notifications in-app) et 3 (email RGPD) à venir — voir NOTES.md/BACKLOG.md.
+  Badge de rôle (utilisateur/gestionnaire/admin) sur les profils.
+- **Notifications in-app (preprod v1.8.6)** : fan-out à la publication d'un album
+  vers les abonnés concernés (cloche + préférences par type/canal, dédup,
+  idempotent). Cloche dans le header (compteur + dropdown), page `/notifications`,
+  page `/settings` (préférences RGPD, email prévu mais coupé). Phase 3 (envoi
+  email) à venir — voir NOTES.md/BACKLOG.md.
 
 Voir DEPLOY.md pour le workflow complet.

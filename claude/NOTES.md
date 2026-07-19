@@ -1,5 +1,33 @@
 # Notes
 
+2026-07-19 (suivi — Phase 2) : **Notifications in-app** (preprod v1.8.6).
+- `backend/notifications.py` : fan-out à la **publication** d'un album
+  (`set_published` → `announce_post`). Destinataires = abonnés des entités
+  liées (artiste principal + invités + festival + lieu) et de l'auteur, avec la
+  cloche active (`follows.notify=1`) et la catégorie non coupée. **Dédup** : une
+  seule notif par destinataire même s'il suit plusieurs entités du post ;
+  l'auteur ne se notifie pas.
+- **Idempotence par environnement** : table `post_announcements` (les manifests
+  sont partagés prod/preprod, pas les notifs). `ensure_seeded()` au démarrage
+  marque « déjà annoncés » les posts publiés antérieurs (pas de spam
+  rétroactif) — 22 posts seedés en preprod.
+- **Préférences** (`notif_prefs`, opt-out RGPD) : 4 catégories `new_post:{artist,
+  festival,venue,user}` × 2 canaux (`inapp`, `email`). Ligne absente = tout
+  activé. L'email est **modélisé mais jamais envoyé** tant que
+  `NOTIFY_EMAIL_ENABLED` est faux (Phase 3).
+- **UI** : cloche dans le header (`L2M.notifBell`, compteur non-lus + dropdown
+  des 8 dernières + « tout marquer lu »), page `/notifications` (liste paginée),
+  page `/settings` (rubrique Notifications, interrupteurs par type × canal,
+  bandeau « email prochainement » + mention RGPD). Entrées Notifications +
+  Paramètres dans le menu utilisateur.
+- E2E preprod : fan-out réel vérifié (album synthétique sans média → hors
+  catalogue, sans effet de bord ; `announce → 2` dont un abonné réel), captures
+  cloche+dropdown / centre / réglages. Données de test purgées de la base
+  preprod. 184 tests verts (+6).
+- **Reste** : Phase 3 email RGPD — ⚠️ **bloquée** sur le choix du relais
+  (expéditeur dédié `noreply@…`, provider transactionnel à créer). Le socle
+  email est déjà là (colonne `email` des prefs, master-switch, footer prévu).
+
 2026-07-19 (suivi — Phase 1) : **Socle du système de suivi & pages d'entités**
 (preprod v1.8.5). Grosse mission « suivi + notifications » découpée en 3 phases ;
 Phase 1 livrée et vérifiée E2E sur preprod.
