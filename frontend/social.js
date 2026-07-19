@@ -17,6 +17,11 @@ const L2M = (function () {
       view_profile: "Voir le profil", language: "Langue", logout: "Déconnexion",
       theme_dark: "Mode sombre", theme_light: "Mode clair", back: "Retour",
       published_by: "Publié par",
+      follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
+      login_follow: "Connectez-vous pour suivre",
+      notify_on: "Notifications activées", notify_off: "Notifications coupées",
+      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      followers: "abonnés", posts: "posts",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -32,6 +37,11 @@ const L2M = (function () {
       view_profile: "View profile", language: "Language", logout: "Log out",
       theme_dark: "Dark mode", theme_light: "Light mode", back: "Back",
       published_by: "Published by",
+      follow: "Follow", following: "Following", unfollow: "Unfollow",
+      login_follow: "Log in to follow",
+      notify_on: "Notifications on", notify_off: "Notifications off",
+      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      followers: "followers", posts: "posts",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -327,6 +337,71 @@ const L2M = (function () {
     };
   }
 
+  /* ---------------- Bouton de suivi + cloche (façon X / YouTube) ----------------
+     followButton(el, {type, id, label, state, onChange})
+     - `state` (optionnel) : {following, notify, followers} déjà connu de la page,
+       sinon récupéré via /api/social/follow-state ;
+     - le bouton bascule Suivre → Suivi (+/✓) ; une fois suivi, une cloche
+       apparaît (notifications on/off) — activer la cloche implique de suivre.
+     - `onChange(state)` rappelé après chaque changement (compteur d'abonnés…). */
+  async function followButton(el, opts) {
+    const { type, id } = opts;
+    const label = opts.label || "";
+    const meData = await me();
+    let st = opts.state;
+    if (!st) {
+      try {
+        st = await api("GET", `/api/social/follow-state?target_type=${encodeURIComponent(type)}&target_id=${encodeURIComponent(id)}`);
+      } catch (e) { st = { following: false, notify: false, followers: 0 }; }
+    }
+    const body = () => ({ target_type: type, target_id: id, target_label: label });
+
+    function paint() {
+      const bell = st.following ? `
+        <button class="bell-btn${st.notify ? " on" : ""}" data-act="bell"
+                title="${esc(st.notify ? t("notify_on") : t("notify_off"))}"
+                aria-pressed="${st.notify}">
+          <span class="material-symbols-outlined">${st.notify ? "notifications_active" : "notifications_off"}</span>
+        </button>` : "";
+      el.innerHTML = `
+        <button class="follow-btn${st.following ? " following" : ""}" data-act="follow"
+                title="${esc(st.following ? t("unfollow") : (meData.authenticated ? t("follow") : t("login_follow")))}">
+          <span class="material-symbols-outlined">${st.following ? "check" : "add"}</span>
+          <span class="follow-lbl">${st.following ? t("following") : t("follow")}</span>
+        </button>${bell}`;
+      wire();
+    }
+    function wire() {
+      const fb = el.querySelector('[data-act="follow"]');
+      const bb = el.querySelector('[data-act="bell"]');
+      fb.onclick = async () => {
+        if (!meData.authenticated) { location.href = loginUrl(); return; }
+        fb.disabled = true;
+        try { st = await api("POST", "/api/social/follow", body()); }
+        catch (e) { if (e.status === 401) return (location.href = loginUrl()); }
+        paint(); if (opts.onChange) opts.onChange(st);
+      };
+      if (bb) bb.onclick = async () => {
+        bb.disabled = true;
+        try { st = await api("PATCH", "/api/social/follow/notify", { ...body(), notify: !st.notify }); }
+        catch (e) { bb.disabled = false; return; }
+        paint(); if (opts.onChange) opts.onChange(st);
+      };
+    }
+    paint();
+    return { get: () => st };
+  }
+
+  // Badge de rôle (utilisateur / gestionnaire / admin) — affiché sur les profils.
+  function roleBadge(role) {
+    if (!role) return "";
+    const icon = role === "admin" ? "shield_person"
+      : role === "gestionnaire" ? "manage_accounts" : "person";
+    return `<span class="role-badge role-${role}"><span class="material-symbols-outlined">${icon}</span>${t("role_" + role)}</span>`;
+  }
+
+  const entityHref = (type, id) => `/${type}/${encodeURIComponent(id)}`;
+
   /* ---------------- Widget commentaires ---------------- */
   /* `opts.coverId` bascule le widget sur le fil d'une pochette au lieu de celui
      de l'album. Les deux peuvent coexister (fil d'album + modale pochette), donc
@@ -578,7 +653,12 @@ const L2M = (function () {
      → { get() → {id,label}, clear() } */
   function autocomplete(el, opts) {
     const { endpoint, placeholder = "", icon = "", onPick } = opts;
-    let picked = opts.value && opts.value.id ? { ...opts.value } : { id: "", label: "" };
+    // `allowFree` : autorise une valeur saisie qui ne figure pas dans la liste
+    // (id vide, libellé = texte tapé). Sert aux festivals, dont la liste
+    // s'auto-construit — un festival inédit se crée en texte libre.
+    const allowFree = !!opts.allowFree;
+    let picked = opts.value && (opts.value.id || (allowFree && opts.value.label))
+      ? { ...opts.value } : { id: "", label: "" };
     let items = [], active = -1, seq = 0, timer = null;
 
     el.classList.add("ac");
@@ -601,7 +681,15 @@ const L2M = (function () {
     function commit(entry) {
       picked = entry ? { id: entry.id, label: entry.label } : { id: "", label: "" };
       input.value = picked.label;
-      clearBtn.style.display = picked.id ? "flex" : "none";
+      clearBtn.style.display = (picked.id || picked.label) ? "flex" : "none";
+      close();
+      if (onPick) onPick(picked);
+    }
+    // Valeur libre (allowFree) : conserve le texte tapé, id vide.
+    function commitFree() {
+      const v = input.value.trim();
+      picked = { id: "", label: v };
+      clearBtn.style.display = v ? "flex" : "none";
       close();
       if (onPick) onPick(picked);
     }
@@ -632,14 +720,20 @@ const L2M = (function () {
     }
 
     input.addEventListener("input", () => {
-      if (picked.id && input.value !== picked.label) commit(null);
+      // Canonique : éditer une valeur choisie l'annule. Libre : on ne touche pas
+      // au texte tapé (il devient la valeur au blur).
+      if (picked.id && input.value !== picked.label && !allowFree) commit(null);
       const q = input.value.trim();
       clearTimeout(timer);
       if (q.length < 2) { items = []; return close(); }
       timer = setTimeout(() => search(q), 250);
     });
     input.addEventListener("keydown", (e) => {
-      if (list.hidden || !items.length) return;
+      if (list.hidden || !items.length) {
+        // Entrée sur un champ libre sans liste ouverte = valider le texte tapé.
+        if (e.key === "Enter" && allowFree) { e.preventDefault(); commitFree(); }
+        return;
+      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
@@ -647,8 +741,14 @@ const L2M = (function () {
       } else if (e.key === "Enter") { e.preventDefault(); commit(items[active]); }
       else if (e.key === "Escape") close();
     });
-    // Texte libre non validé = pas de valeur : on restaure l'état canonique.
-    input.addEventListener("blur", () => setTimeout(() => { input.value = picked.label; close(); }, 120));
+    // Sans allowFree : texte non validé = pas de valeur, on restaure l'état
+    // canonique. Avec allowFree : on garde le texte tapé comme valeur libre.
+    input.addEventListener("blur", () => setTimeout(() => {
+      if (allowFree) {
+        const v = input.value.trim();
+        if (v !== picked.label) commitFree(); else close();
+      } else { input.value = picked.label; close(); }
+    }, 120));
     clearBtn.onclick = () => { commit(null); input.focus(); };
 
     return { get: () => ({ ...picked }), clear: () => commit(null) };
@@ -656,7 +756,8 @@ const L2M = (function () {
 
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
-    likeButton, comments, userMenu, autocomplete, LANG,
+    likeButton, followButton, roleBadge, entityHref, comments, userMenu,
+    autocomplete, LANG,
     getTheme, applyTheme, getLang, applyLang, initHeader,
   };
 })();

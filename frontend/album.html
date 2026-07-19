@@ -180,10 +180,13 @@
         <h2 id="t-meta">Informations</h2>
         <div class="field-grid">
           <div class="fg full"><label id="t-f-title">Titre</label><input id="e-title" type="text"></div>
-          <div class="fg"><label id="t-f-artist">Artiste</label><input id="e-artist" type="text"></div>
+          <div class="fg"><label id="t-f-artist">Artiste</label><div id="e-artist"></div></div>
           <div class="fg"><label id="t-f-date">Date</label><input id="e-date" type="text" placeholder="2026-03-04"></div>
+          <div class="fg full"><label id="t-f-guests">Artistes invités</label>
+            <div class="guest-list" id="guest-list"></div>
+            <div id="e-guest-add"></div></div>
           <div class="fg"><label id="t-f-venue">Lieu</label><input id="e-venue" type="text"></div>
-          <div class="fg"><label id="t-f-festival">Festival</label><input id="e-festival" type="text"></div>
+          <div class="fg"><label id="t-f-festival">Festival</label><div id="e-festival"></div></div>
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
         </div>
@@ -233,6 +236,7 @@ L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
       f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
@@ -245,6 +249,7 @@ const TT={
       status_draft:"Dépublié — visible uniquement des gestionnaires"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_guests:"Featured artists",artist_ph:"Search: Coldplay…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       no_cover:"No cover",no_traycard:"No tray card",
@@ -267,8 +272,12 @@ function applyLang(){
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-date").textContent=t.f_date;
+  document.getElementById("t-f-guests").textContent=t.f_guests;
   document.getElementById("t-f-venue").textContent=t.f_venue;
   document.getElementById("t-f-festival").textContent=t.f_festival;
+  // Placeholders des autocompletes (mis à jour au changement de langue).
+  const acPh=(id,ph)=>{const i=document.querySelector(`#${id} input`);if(i)i.placeholder=ph;};
+  acPh("e-artist",t.artist_ph);acPh("e-festival",t.festival_ph);acPh("e-guest-add",t.guests_ph);
   document.getElementById("t-f-src-label").textContent=t.f_src_label;
   document.getElementById("t-f-src-url").textContent=t.f_src_url;
   document.getElementById("t-tracks-h").textContent=t.tracks_h;
@@ -308,6 +317,13 @@ function refreshPublishBtn(){
   }
 }
 let DATA=null,labels=[],tracks=[],PENDING_COVER_DELETE=false;
+// Autocompletes canoniques (artiste principal + festival) et invités (id Deezer).
+let artistAC=null,festivalAC=null,guests=[];
+function renderGuests(){
+  const box=document.getElementById("guest-list");
+  box.innerHTML=guests.map((g,i)=>`<span class="guest-chip">${L2M.esc(g.name||g.label)}<button type="button" data-i="${i}" title="×"><span class="material-symbols-outlined">close</span></button></span>`).join("");
+  box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{guests.splice(+b.dataset.i,1);renderGuests();});
+}
 
 function toast(msg,err=false){
   const el=document.getElementById("toast");el.textContent=msg;
@@ -446,11 +462,14 @@ document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
 // Save all
 document.getElementById("save-all").onclick=async()=>{
-  const p={artist:document.getElementById("e-artist").value.trim(),
+  const aPick=artistAC?artistAC.get():{id:"",label:""};
+  const fPick=festivalAC?festivalAC.get():{id:"",label:""};
+  const p={artist:(aPick.label||"").trim(),artist_id:aPick.id||"",
     title:document.getElementById("e-title").value.trim(),
     date:document.getElementById("e-date").value.trim(),
     venue:document.getElementById("e-venue").value.trim(),
-    festival:document.getElementById("e-festival").value.trim(),
+    festival:(fPick.label||"").trim(),festival_id:fPick.id||"",
+    guests:guests.map(g=>({id:String(g.id),name:g.name})),
     source_url:document.getElementById("e-src-url").value.trim(),
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
@@ -619,10 +638,25 @@ async function load(){
   const a=DATA.album||{};
   document.title=`live2mp3 — ${a.title||SLUG}`;
   document.getElementById("e-title").value=a.title||"";
-  document.getElementById("e-artist").value=a.artist||"";
   document.getElementById("e-date").value=a.date||"";
   document.getElementById("e-venue").value=a.venue||"";
-  document.getElementById("e-festival").value=a.festival||"";
+  const tt=TT[L()];
+  // Artiste principal : autocomplete Deezer, texte libre autorisé (un artiste
+  // absent de Deezer reste enregistrable, simplement non lié à une page).
+  artistAC=L2M.autocomplete(document.getElementById("e-artist"),{
+    endpoint:"/api/social/suggest/artists",icon:"music_note",allowFree:true,
+    placeholder:tt.artist_ph,value:{id:a.artist_id||"",label:a.artist||""}});
+  // Festival : liste auto-construite + création en texte libre.
+  festivalAC=L2M.autocomplete(document.getElementById("e-festival"),{
+    endpoint:"/api/social/suggest/festivals",icon:"festival",allowFree:true,
+    placeholder:tt.festival_ph,value:{id:a.festival_id||"",label:a.festival||""}});
+  // Invités : canonique seulement (un id est requis pour lier la page artiste).
+  guests=(a.guests||[]).map(g=>({id:String(g.id),name:g.name||g.label}));
+  renderGuests();
+  let guestAC;
+  guestAC=L2M.autocomplete(document.getElementById("e-guest-add"),{
+    endpoint:"/api/social/suggest/artists",icon:"person_add",placeholder:tt.guests_ph,
+    onPick:(p)=>{if(p&&p.id){if(!guests.some(g=>g.id===p.id)){guests.push({id:p.id,name:p.label});renderGuests();}setTimeout(()=>guestAC.clear(),0);}}});
   document.getElementById("e-src-url").value=DATA.source_url||"";
   document.getElementById("e-src-label").value=DATA.source_label||"";
   labels=(DATA.labels||[]).slice();

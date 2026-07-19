@@ -125,12 +125,12 @@
             ${DATA.is_self ? `<label class="cam" title="${t("change_photo")}"><span class="material-symbols-outlined">photo_camera</span>
               <input type="file" accept="image/*" id="avatar-input" hidden></label>` : ""}</div>
           <div class="prof-id">
-            <h1>${esc(p.display_name)}</h1>
+            <h1>${esc(p.display_name)} ${L2M.roleBadge(p.role)}</h1>
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}
           </div>
-          ${editBtn}
+          ${DATA.is_self ? editBtn : `<div class="follow-wrap" id="prof-follow"></div>`}
         </div>
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
@@ -170,6 +170,13 @@
     wirePubSort();
 
     if (DATA.is_self) wireEdit();
+    else {
+      const slot = document.getElementById("prof-follow");
+      const f = DATA.follow || { followers: 0, following: false, notify: false };
+      if (slot) L2M.followButton(slot, {
+        type: "user", id: p.username, label: p.display_name, state: f,
+      });
+    }
   }
 
   function wireEdit() {

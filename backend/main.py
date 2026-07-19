@@ -32,7 +32,7 @@ import re
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.id3 import ID3, APIC, ID3NoHeaderError
-from . import catalogue, jobs, linktool, llm
+from . import catalogue, entities, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
     _file_track_n,
@@ -63,6 +63,7 @@ from .covers import (
 )
 from .printable import cover_pdf, traycard_pdf
 from .social import router as social_router
+from .follows import router as follows_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -74,6 +75,8 @@ app = FastAPI(title="live2mp3", docs_url="/api/docs")
 
 # Système social (profils, favoris, commentaires) — routes /api/social, /u, /avatar.
 app.include_router(social_router)
+# Suivi + pages auto d'entités — routes /api/social/follow*, /artist, /festival, /venue.
+app.include_router(follows_router)
 app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
@@ -160,12 +163,20 @@ class SetlistIn(BaseModel):
     tracks: list[SetlistTrackIn]
 
 
+class GuestIn(BaseModel):
+    id: str
+    name: str
+
+
 class AlbumMetaIn(BaseModel):
     artist: str
+    artist_id: str = ""            # id Deezer canonique (liste déroulante)
     title: str
     date: str | None = None
     venue: str | None = None
     festival: str | None = None
+    festival_id: str = ""          # slug canonique (dérivé si absent)
+    guests: list[GuestIn] = []     # artistes invités canoniques (id Deezer)
     source_url: str = ""
     source_label: str = ""
 
@@ -330,6 +341,9 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
     return {
         "slug": slug,
         "album": m.data.get("album", {}),
+        # Entités canoniques liées (artiste, festival, lieu) : ids exacts pour
+        # rendre les noms cliquables vers leurs pages auto.
+        "entities": entities.album_entities(m.data.get("album", {})),
         "labels": cat.get("labels", []),
         "has_cover": cat.get("has_cover", False),
         "has_traycard": cat.get("has_traycard", False),
@@ -609,6 +623,24 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     alb["date"] = payload.date or ""
     alb["venue"] = payload.venue or ""
     alb["festival"] = payload.festival or ""
+
+    # Champs canoniques (liens de suivi / pages auto). Nettoyés s'ils sont vides
+    # pour garder le manifest lisible.
+    if payload.artist_id.strip():
+        alb["artist_id"] = payload.artist_id.strip()
+    else:
+        alb.pop("artist_id", None)
+    if payload.festival:
+        alb["festival_id"] = payload.festival_id.strip() or entities.festival_slug(payload.festival)
+    else:
+        alb.pop("festival_id", None)
+    guests = [{"id": g.id.strip(), "name": g.name.strip()}
+              for g in payload.guests if g.id.strip() and g.name.strip()]
+    if guests:
+        alb["guests"] = guests
+    else:
+        alb.pop("guests", None)
+
     src = m.data.setdefault("source", {})
     src["url"] = payload.source_url
     src["label"] = payload.source_label

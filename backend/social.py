@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from . import catalogue, suggest
 from .auth import (
     GROUP_GESTIONNAIRE,
+    GROUP_USER,
     SUPERUSER_GROUPS,
     current_identity,
     require_user,
@@ -53,6 +54,31 @@ def _now() -> str:
 
 def _is_moderator(groups: set[str]) -> bool:
     return bool(groups & SUPERUSER_GROUPS) or GROUP_GESTIONNAIRE in groups
+
+
+def _role_of(groups: set[str]) -> str:
+    """Rôle canonique (le plus élevé) à partir des groupes Authentik."""
+    if groups & SUPERUSER_GROUPS:
+        return "admin"
+    if GROUP_GESTIONNAIRE in groups:
+        return "gestionnaire"
+    if GROUP_USER in groups:
+        return "user"
+    return ""
+
+
+def _touch_role(conn: sqlite3.Connection, username: str, groups: set[str]) -> str:
+    """Met à jour le rôle en cache si les groupes ont changé. Retourne le rôle."""
+    role = _role_of(groups)
+    if not role:
+        return ""
+    row = conn.execute("SELECT role FROM profiles WHERE username=?", (username,)).fetchone()
+    if row is not None and row["role"] != role:
+        conn.execute(
+            "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+            (role, _now(), username),
+        )
+    return role
 
 
 def _safe_username(username: str) -> str:
@@ -257,8 +283,12 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     username = identity.get("username")
     if not username:
         return {"authenticated": False}
+    groups = identity.get("groups", set())
     with get_conn() as conn:
         row = _ensure_profile(conn, username)
+        # Capture le rôle à chaque passage authentifié (le header init l'appelle
+        # sur chaque page) → badge de rôle disponible sur n'importe quel profil.
+        role = _touch_role(conn, username, groups)
     return {
         "authenticated": True,
         "username": username,
@@ -267,7 +297,8 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "avatar": bool(row["avatar_ext"]),
         "city_id": row["city_id"], "city": row["city_label"],
         "artist_id": row["artist_id"], "artist": row["artist_label"],
-        "is_moderator": _is_moderator(identity.get("groups", set())),
+        "is_moderator": _is_moderator(groups),
+        "role": role,
     }
 
 
@@ -341,6 +372,22 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
                 "is_reply": r["parent_id"] is not None,
             })
 
+        # État de suivi de ce profil par le visiteur (bouton Suivre/cloche).
+        followers = conn.execute(
+            "SELECT COUNT(*) AS n FROM follows WHERE target_type='user' AND target_id=?",
+            (username,),
+        ).fetchone()["n"]
+        following = notify = False
+        if viewer and not is_self:
+            frow = conn.execute(
+                "SELECT notify FROM follows WHERE username=? AND target_type='user' "
+                "AND target_id=?",
+                (viewer, username),
+            ).fetchone()
+            if frow is not None:
+                following = True
+                notify = bool(frow["notify"])
+
     prof = {
         "username": username,
         "display_name": (row["display_name"] if row else username),
@@ -350,6 +397,7 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         "city": (row["city_label"] if row else ""),
         "artist_id": (row["artist_id"] if row else ""),
         "artist": (row["artist_label"] if row else ""),
+        "role": (row["role"] if row else ""),
         "created_at": (row["created_at"] if row else ""),
     }
     return {
@@ -360,6 +408,7 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
             "comments": len(comments),
             "likes": len(likes),
         },
+        "follow": {"followers": followers, "following": following, "notify": notify},
         "publications": publications,
         "comments": comments,
         "likes": likes,

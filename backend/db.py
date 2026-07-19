@@ -53,6 +53,26 @@ CREATE TABLE IF NOT EXISTS favorites (
 );
 CREATE INDEX IF NOT EXISTS idx_favorites_slug ON favorites(slug);
 
+-- Suivis (« follow » façon X/YouTube). Une ligne = un utilisateur suit une
+-- entité. `target_type` ∈ {artist, festival, venue, user}. `target_id` est la
+-- clé canonique de l'entité (id Deezer, slug festival/lieu, ou username).
+-- `target_label` est le libellé figé au moment du suivi — pour afficher la
+-- liste « Abonnements » sans re-solliciter une source tierce.
+-- `notify` = la cloche : 1 = notifications actives (défaut au suivi), 0 = suivi
+-- mais en sourdine. Le suivi seul alimentera le futur feed ; la cloche pilote
+-- les notifications.
+CREATE TABLE IF NOT EXISTS follows (
+    username     TEXT NOT NULL,
+    target_type  TEXT NOT NULL,
+    target_id    TEXT NOT NULL,
+    target_label TEXT NOT NULL DEFAULT '',
+    notify       INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (username, target_type, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_user   ON follows(username);
+CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_type, target_id);
+
 CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     slug       TEXT NOT NULL,
@@ -173,6 +193,14 @@ def init_db() -> None:
                 conn.execute(
                     f"ALTER TABLE profiles ADD COLUMN {col} TEXT NOT NULL DEFAULT ''"
                 )
+        # Migration : rôle en cache (utilisateur/gestionnaire/admin). Renseigné
+        # à chaque passage authentifié depuis les groupes Authentik (voir
+        # social.social_me) — permet d'afficher un badge de rôle sur n'importe
+        # quel profil sans dépendre de l'API Authentik.
+        if "role" not in pcols:
+            conn.execute(
+                "ALTER TABLE profiles ADD COLUMN role TEXT NOT NULL DEFAULT ''"
+            )
         # Regroupements « même ville » / « même artiste » sur la clé canonique.
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_profiles_city ON profiles(city_id)"

@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from . import entities
 from .db import get_conn
 from .manifest import Manifest, PROJECTS_DIR
 
@@ -75,6 +76,11 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         albums.append({
             "slug": pdir.name,
             "artist": album.get("artist", ""),
+            "artist_id": album.get("artist_id", ""),
+            "guests": [g for g in (album.get("guests") or []) if isinstance(g, dict)],
+            "festival_id": album.get("festival_id") or (
+                entities.festival_slug(album["festival"]) if album.get("festival") else ""),
+            "entities": entities.album_entities(album),
             "title": album.get("title", ""),
             "date": album.get("date", ""),
             "venue": album.get("venue", ""),

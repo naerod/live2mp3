@@ -78,7 +78,11 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 #peaks-container{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}
-.actions{display:flex;gap:10px}
+.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* dans une barre d'actions, le margin-top hérité de `button,.primary`
+   désaligne verticalement les boutons -> neutralisé, l'espacement vient
+   du margin-top du conteneur .actions */
+.actions>button,.actions>.primary,.actions>.icon-btn{margin-top:0}
 @media(max-width:640px){.grid{grid-template-columns:1fr}}
 
 /* Titre de page */
@@ -441,3 +445,77 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .setlist-src a{color:var(--accent);text-decoration:underline}
 .setlist-credit{margin:10px 0 0;font-size:12px;color:var(--muted)}
 .setlist-credit a{color:var(--accent);text-decoration:underline}
+
+/* ============================================================
+   Suivi (bouton Suivre / cloche), badge de rôle, page d'entité
+   Partagé : pages artiste/festival/lieu (entity.js) et profils.
+   ============================================================ */
+.follow-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
+/* Bouton Suivre → Suivi (façon X). Non suivi = CTA plein accent ;
+   suivi = contour discret, survol rouge pour signaler « ne plus suivre ». */
+.follow-btn{display:inline-flex;align-items:center;gap:6px;margin:0;height:38px;
+  padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;
+  border:1px solid var(--accent);background:var(--accent);color:#0d0f13;
+  transition:background .15s,border-color .15s,color .15s}
+.follow-btn .material-symbols-outlined{font-size:18px}
+.follow-btn:hover{filter:brightness(1.06)}
+.follow-btn.following{background:var(--card);color:var(--fg);border-color:var(--border)}
+.follow-btn.following:hover{border-color:var(--like);color:var(--like);
+  background:color-mix(in srgb,var(--like) 10%,var(--card));filter:none}
+/* Cloche (notifications) — visible une fois suivi. `on` = notifications actives. */
+.bell-btn{display:inline-flex;align-items:center;justify-content:center;margin:0;
+  width:38px;height:38px;padding:0;border-radius:50%;cursor:pointer;
+  border:1px solid var(--border);background:var(--card);color:var(--muted)}
+.bell-btn .material-symbols-outlined{font-size:19px}
+.bell-btn:hover{border-color:var(--accent);color:var(--fg)}
+.bell-btn.on{background:color-mix(in srgb,var(--accent) 16%,var(--card));
+  border-color:var(--accent);color:var(--accent)}
+
+/* Badge de rôle sur un profil (utilisateur / gestionnaire / admin) */
+.role-badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
+  border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle;
+  border:1px solid var(--border);background:var(--bg);color:var(--muted)}
+.role-badge .material-symbols-outlined{font-size:15px}
+.role-badge.role-user{color:var(--muted)}
+.role-badge.role-gestionnaire{color:var(--accent);border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.role-badge.role-admin{color:var(--run);border-color:var(--run);
+  background:color-mix(in srgb,var(--run) 12%,transparent)}
+
+/* Page d'entité (hero) */
+.entity-hero .entity-pic{width:88px;height:88px;border-radius:50%;object-fit:cover;
+  flex-shrink:0;border:1px solid var(--border)}
+.entity-hero .entity-pic.ph{display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb,var(--accent) 12%,var(--card))}
+.entity-hero .entity-pic.ph .material-symbols-outlined{font-size:40px;color:var(--accent)}
+.entity-kind{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+  font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
+.entity-kind .material-symbols-outlined{font-size:16px}
+.entity-stats{margin-top:8px;color:var(--muted);font-size:13.5px}
+.entity-stats b{color:var(--fg);font-weight:700}
+.entity-stats .dot{margin:0 4px;color:var(--border)}
+
+/* Liens d'entité cliquables dans les cartes / fiches album */
+.entity-link{color:inherit;text-decoration:none}
+.entity-link:hover{text-decoration:underline}
+
+/* Saisie des artistes invités (métadonnées album) — puces + autocomplete */
+.guest-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.guest-chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 12px;
+  border-radius:999px;font-size:13px;background:var(--bg);border:1px solid var(--border);color:var(--fg)}
+.guest-chip button{margin:0;padding:0;width:22px;height:22px;border:none;border-radius:50%;
+  background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center}
+.guest-chip button:hover{background:var(--border);color:var(--fg)}
+.guest-chip button .material-symbols-outlined{font-size:16px}
+
+@media (max-width:700px){
+  .follow-btn,.bell-btn{height:44px}
+  .bell-btn{width:44px}
+  .entity-hero .entity-pic{width:72px;height:72px}
+}
+
+/* Invités sur la fiche album (liens vers pages artiste) */
+.al-guests{display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  color:var(--muted);font-size:14px;margin-top:8px}
+.al-guests .material-symbols-outlined{font-size:17px;color:var(--accent)}
+.al-guests a{color:var(--accent)}

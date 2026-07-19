@@ -507,18 +507,27 @@ function renderAlbum(d){
   const posterHtml=posterFor(d.imported_by);
   const dateStr=a.date||t('date_unknown');
   const venueStr=a.venue||t('venue_unknown');
+  // Noms cliquables vers les pages auto d'entités (ids exacts fournis par l'API).
+  const ents=d.entities||[];
+  const entOf=(type,label)=>ents.find(e=>e.type===type&&e.label===label);
+  const entLink=(type,label,text)=>{const e=entOf(type,label);
+    return e?`<a class="entity-link" href="/${type}/${encodeURIComponent(e.id)}">${L2M.esc(text)}</a>`:L2M.esc(text);};
+  const gGuests=(a.guests||[]).filter(g=>g&&g.id);
+  const guestsHtml=gGuests.length?`<div class="al-guests"><span class="material-symbols-outlined">group</span>${
+    gGuests.map(g=>`<a class="entity-link" href="/artist/${encodeURIComponent(g.id)}">${L2M.esc(g.name||g.label)}</a>`).join(', ')}</div>`:'';
 
   document.getElementById('content').innerHTML=`
     <div class="al-layout">
       <div class="al-cover-col" id="cover-col"></div>
       <div class="al-info">
-        ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
+        ${a.artist?`<div class="al-artist">${entLink('artist',a.artist,a.artist)}</div>`:''}
         <h1 class="al-title">${L2M.esc(a.title||slug)}${d.published===false?` <span class="unpub-chip"><span class="material-symbols-outlined">visibility_off</span>${t('unpublished')}</span>`:''}</h1>
         <div class="al-meta">
           <span class="al-meta-item${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</span>
-          <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</span>
-          ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${L2M.esc(a.festival)}</span>`:''}
+          <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink('venue',a.venue,venueStr):L2M.esc(venueStr)}</span>
+          ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${entLink('festival',a.festival,a.festival)}</span>`:''}
         </div>
+        ${guestsHtml}
         ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
