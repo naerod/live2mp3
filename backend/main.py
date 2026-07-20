@@ -28,18 +28,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import re
-
-from mutagen.mp3 import MP3
-from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, APIC, ID3NoHeaderError
 from . import catalogue, entities, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
-    _file_track_n,
     _rename_audio_files,
     _sanitize_filename,
     _write_album_cover,
     _write_album_tags,
+    _write_track_tags,
 )
 from .auth import (
     GROUP_GESTIONNAIRE,
@@ -748,32 +744,9 @@ def update_tracks(slug: str, payload: TracksEditIn,
     m.data["tracks"] = new_tracks
     m.save()
 
-    # Écriture des tags ID3 dans les fichiers MP3
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    tagged = 0
-    if audio_dir.exists():
-        total = len(new_tracks)
-        # n original → (nouvelle position, titre)
-        pos_by_n = {t["n"]: (i + 1, t["title"]) for i, t in enumerate(new_tracks)}
-        for mp3_path in sorted(audio_dir.glob("*.mp3")):
-            file_n = _file_track_n(mp3_path.stem)
-            if file_n is None or file_n not in pos_by_n:
-                continue
-            new_pos, title = pos_by_n[file_n]
-            try:
-                try:
-                    tags = EasyID3(str(mp3_path))
-                except ID3NoHeaderError:
-                    tags = EasyID3()
-                    tags.save(str(mp3_path))
-                    tags = EasyID3(str(mp3_path))
-                tags["tracknumber"] = [f"{new_pos}/{total}"]
-                tags["title"] = [title]
-                tags.save()
-                tagged += 1
-            except Exception:
-                pass
-    # aussi rafraîchir TALB/TPE1/TDRC sur tous les fichiers
+    # Tags ID3 par piste (titre + numéro), mapping fichier↔piste par titre
+    # (robuste aux noms de fichiers hétérogènes), puis tags communs à l'album.
+    tagged = _write_track_tags(slug, m)
     tagged += _write_album_tags(slug, m)
     renamed = _rename_audio_files(slug, m)
     return {"ok": True, "tracks": len(new_tracks), "mp3_tagged": tagged, "renamed": renamed}

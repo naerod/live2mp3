@@ -572,6 +572,14 @@ function isNew(a){
   return (Date.now()-new Date(ref).getTime())/(864e5)<=NEW_DAYS;
 }
 
+// Nom d'entité cliquable vers sa page auto (artiste/lieu/festival), comme sur la
+// fiche album. L'id exact vient de a.entities ; à défaut, texte simple.
+function entLink(a,type,label){
+  if(!label) return "";
+  const e=(a.entities||[]).find(x=>x.type===type&&x.label===label);
+  return e?`<a class="entity-link" href="/${type}/${encodeURIComponent(e.id)}">${L2M.esc(label)}</a>`:L2M.esc(label);
+}
+
 function albumCard(a){
   const md=meDisplay();
   const hasDownloadable=a.has_mp3||a.has_mp4||a.has_cover||a.has_traycard;
@@ -598,10 +606,11 @@ function albumCard(a){
     ${newBadge}
     <div class="cover">${coverHtml(a)}</div>
     <div class="body">
-      ${showArtist&&a.artist?`<div class="al-artist">${a.artist}</div>`:""}
+      ${showArtist&&a.artist?`<div class="al-artist">${entLink(a,'artist',a.artist)}</div>`:""}
       <div class="al-title">${a.title||a.slug}</div>
       <div class="al-line${a.date?"":" muted-placeholder"}"><span class="material-symbols-outlined">calendar_month</span>${a.date||T[L()].date_unknown}</div>
-      <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue||T[L()].venue_unknown}</div>
+      <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink(a,'venue',a.venue):T[L()].venue_unknown}</div>
+      ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${entLink(a,'festival',a.festival)}</div>`:""}
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
     </div>
     <div class="al-social"></div>

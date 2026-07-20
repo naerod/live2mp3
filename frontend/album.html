@@ -41,6 +41,14 @@
     color:var(--muted);margin:0 0 12px}
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;
     padding:16px 18px;margin-bottom:14px}
+  /* Repère « écrit dans les métadonnées ID3 des pistes MP3 ». */
+  .fg-head{display:flex;align-items:center;gap:5px}
+  .meta-badge{font-size:14px;color:var(--accent);cursor:help;
+    font-variation-settings:'FILL' 1,'opsz' 20}
+  .meta-legend{display:flex;align-items:center;gap:6px;color:var(--muted);
+    font-size:12px;margin:2px 0 12px}
+  .meta-legend .material-symbols-outlined{font-size:15px;color:var(--accent);
+    font-variation-settings:'FILL' 1}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
@@ -181,10 +189,11 @@
       <!-- Infos album -->
       <div class="sec">
         <h2 id="t-meta">Informations</h2>
+        <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-meta-legend"></span></p>
         <div class="field-grid">
-          <div class="fg full"><label id="t-f-title">Titre</label><input id="e-title" type="text"></div>
-          <div class="fg"><label id="t-f-artist">Artiste</label><div id="e-artist"></div></div>
-          <div class="fg"><label id="t-f-date">Date</label><input id="e-date" type="text" placeholder="2026-03-04"></div>
+          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-title" type="text"></div>
+          <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
+          <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-date" type="text" placeholder="2026-03-04"></div>
           <div class="fg full"><label id="t-f-guests">Artistes invités</label>
             <div class="guest-list" id="guest-list"></div>
             <div id="e-guest-add"></div></div>
@@ -203,6 +212,7 @@
       <!-- Pistes -->
       <div class="sec">
         <h2 id="t-tracks-h">Pistes</h2>
+        <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-tracks-legend"></span></p>
         <ul class="tracks-list" id="tracks-list"></ul>
         <div class="add-track-row">
           <input id="new-track" type="text" placeholder="Nouveau titre…">
@@ -243,6 +253,9 @@ const TT={
       f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
+      meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
+      meta_legend:"Les champs marqués d'un tag sont écrits dans les métadonnées ID3 des pistes MP3 à l'enregistrement.",
+      tracks_legend:"Les titres de pistes sont écrits dans les métadonnées ID3 (titre + numéro de piste) des MP3.",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
@@ -256,6 +269,9 @@ const TT={
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
+      meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
+      meta_legend:"Fields marked with a tag are written to the MP3 tracks' ID3 metadata on save.",
+      tracks_legend:"Track titles are written to the MP3 ID3 metadata (title + track number).",
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
@@ -273,6 +289,9 @@ function applyLang(){
   document.getElementById("t-back").textContent=t.back;
   document.getElementById("t-save-all").textContent=t.save_all;
   document.getElementById("t-meta").textContent=t.meta;
+  document.getElementById("t-meta-legend").textContent=t.meta_legend;
+  document.getElementById("t-tracks-legend").textContent=t.tracks_legend;
+  document.querySelectorAll(".meta-badge").forEach(b=>b.title=t.meta_badge_title);
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-date").textContent=t.f_date;
