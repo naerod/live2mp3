@@ -257,6 +257,10 @@
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}
+            <div class="prof-stats">
+              <button type="button" class="prof-stat${activeTab === "following" ? " active" : ""}" data-go="following"><b>${c.following}</b> ${t("following").toLowerCase()}</button>
+              <button type="button" class="prof-stat${activeTab === "followers" ? " active" : ""}" data-go="followers"><b>${c.followers}</b> ${t("followers").toLowerCase()}</button>
+            </div>
           </div>
           ${DATA.is_self ? "" : `<div class="follow-wrap" id="prof-follow"></div>`}
         </div>
@@ -286,20 +290,22 @@
         <button data-tab="publications" class="${activeTab === "publications" ? "active" : ""}">${t("publications")}<span class="cnt">${c.publications}</span></button>
         <button data-tab="comments" class="${activeTab === "comments" ? "active" : ""}">${t("comments")}<span class="cnt">${c.comments}</span></button>
         <button data-tab="likes" class="${activeTab === "likes" ? "active" : ""}">${t("likes")}<span class="cnt">${c.likes}</span></button>
-        <button data-tab="following" class="${activeTab === "following" ? "active" : ""}">${t("following")}<span class="cnt">${c.following}</span></button>
-        <button data-tab="followers" class="${activeTab === "followers" ? "active" : ""}">${t("followers")}<span class="cnt">${c.followers}</span></button>
       </div>
       <div id="tab-content">${tabContent()}</div>`;
 
-    document.querySelectorAll(".prof-tabs button").forEach((b) => b.onclick = () => {
-      activeTab = b.dataset.tab;
-      document.querySelectorAll(".prof-tabs button").forEach((x) => x.classList.toggle("active", x === b));
+    // Bascule de section, partagée par les onglets et la ligne de stats (Twitter-like).
+    const switchTab = (name) => {
+      activeTab = name;
+      document.querySelectorAll(".prof-tabs button").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
+      document.querySelectorAll(".prof-stat").forEach((s) => s.classList.toggle("active", s.dataset.go === name));
       document.getElementById("tab-content").innerHTML = tabContent();
       wirePubSort();
       wireFollowRows();
       wireFollowGroups();
       hydrateArtistPics();
-    });
+    };
+    document.querySelectorAll(".prof-tabs button").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
+    document.querySelectorAll(".prof-stat").forEach((s) => s.onclick = () => switchTab(s.dataset.go));
     wirePubSort();
     wireFollowRows();
     wireFollowGroups();

@@ -187,6 +187,14 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   font-size:13px;color:var(--fg)}
 .prof-chip .material-symbols-outlined{font-size:16px;color:var(--accent);
   font-variation-settings:'opsz' 20,'wght' 400,'GRAD' 0,'FILL' 0}
+/* Ligne de stats abonnements/abonnés (façon Twitter) */
+.prof-stats{display:flex;gap:20px;margin-top:14px}
+.prof-stat{margin:0;padding:0;border:none;background:none;cursor:pointer;
+  font-family:inherit;font-size:14px;color:var(--muted);transition:color .12s}
+.prof-stat b{color:var(--fg);font-weight:700;margin-right:2px}
+.prof-stat:hover{color:var(--fg)}
+.prof-stat:hover b{text-decoration:underline}
+.prof-stat.active b{color:var(--accent)}
 
 /* Autocomplétion (ville, artiste favori) — voir L2M.autocomplete */
 .ac{position:relative}
