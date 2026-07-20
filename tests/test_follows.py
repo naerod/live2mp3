@@ -116,6 +116,17 @@ def test_user_follow_state_on_profile(client):
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
 
 
+def test_effective_role_publisher_floor():
+    from backend.social import _effective_role
+    pubs = {"nathan", "louis"}
+    # Cache autoritaire prioritaire (ex: admin déjà capturé).
+    assert _effective_role("admin", "naerod", pubs) == "admin"
+    # Rôle vide + a publié -> plancher gestionnaire.
+    assert _effective_role("", "nathan", pubs) == "gestionnaire"
+    # Rôle vide + n'a jamais publié -> inconnu (pas de badge).
+    assert _effective_role("", "alice", pubs) == ""
+
+
 def test_artist_pics_batch(client, monkeypatch):
     from backend import follows
     monkeypatch.setattr(follows.suggest, "resolve_artist",

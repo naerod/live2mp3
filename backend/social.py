@@ -319,6 +319,30 @@ def batch_profiles(u: str = "", identity: dict = Depends(current_identity)) -> d
         return _profiles_map(conn, users)
 
 
+def _publisher_usernames() -> set[str]:
+    """Auteurs d'au moins un album (publié ou brouillon).
+
+    Importer/publier un album exige les droits **gestionnaire** (contrôlé à
+    l'écriture) : la présence dans `imported_by` est donc un plancher de rôle
+    fiable, indépendant de la capture Authentik au `/me`. Permet d'afficher le
+    badge « Gestionnaire » sur le profil de quelqu'un qui ne s'est pas reconnecté
+    depuis la mise en place de la capture de rôle."""
+    return {
+        a.get("imported_by")
+        for a in catalogue.list_albums(include_drafts=True)
+        if a.get("imported_by")
+    }
+
+
+def _effective_role(cached: str, username: str, publishers: set[str]) -> str:
+    """Rôle affichable : cache autoritaire s'il existe, sinon plancher déduit."""
+    if cached:
+        return cached
+    if username in publishers:
+        return "gestionnaire"
+    return ""
+
+
 def _roles_map(conn: sqlite3.Connection, usernames: set[str]) -> dict[str, str]:
     if not usernames:
         return {}
@@ -345,7 +369,8 @@ def _viewer_follow_set(conn: sqlite3.Connection, viewer: str | None) -> dict[tup
     }
 
 
-def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None) -> tuple:
+def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None,
+                  publishers: set[str] | None = None) -> tuple:
     """Abonnements (groupés par type) et abonnés d'un profil.
 
     Chaque item porte l'état de suivi *du visiteur* (`viewer_following` /
@@ -354,6 +379,8 @@ def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None) -> t
     liste (façon « faire du tri »).
     """
     vset = _viewer_follow_set(conn, viewer)
+    if publishers is None:
+        publishers = _publisher_usernames()
 
     # --- Abonnements de `owner`, groupés par type ---
     rows = conn.execute(
@@ -378,7 +405,7 @@ def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None) -> t
             p = uprofs.get(tid, {})
             item["label"] = p.get("display_name") or tid
             item["avatar"] = p.get("avatar", False)
-            item["role"] = uroles.get(tid, "")
+            item["role"] = _effective_role(uroles.get(tid, ""), tid, publishers)
         following.setdefault(tt, []).append(item)
 
     # --- Abonnés de `owner` (uniquement des utilisateurs) ---
@@ -399,7 +426,7 @@ def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None) -> t
             "id": u,
             "label": p.get("display_name") or u,
             "avatar": p.get("avatar", False),
-            "role": froles.get(u, ""),
+            "role": _effective_role(froles.get(u, ""), u, publishers),
             "viewer_following": ("user", u) in vset,
             "viewer_notify": vset.get(("user", u), False),
         })
@@ -490,8 +517,20 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
                 following = True
                 notify = bool(frow["notify"])
 
+        # Rôle affichable : cache autoritaire, sinon plancher « gestionnaire »
+        # déduit d'une publication (voir _publisher_usernames). Persisté si le
+        # profil existe, pour que toutes les vues (listes incluses) concordent.
+        publishers = _publisher_usernames()
+        role = _effective_role((row["role"] if row else ""), username, publishers)
+        if role and row is not None and row["role"] != role:
+            conn.execute(
+                "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+                (role, _now(), username),
+            )
+
         # Abonnements (groupés par type) + abonnés de ce profil.
-        followed, followers_list, following_total = _follow_lists(conn, username, viewer)
+        followed, followers_list, following_total = _follow_lists(
+            conn, username, viewer, publishers)
 
     prof = {
         "username": username,
@@ -502,7 +541,7 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         "city": (row["city_label"] if row else ""),
         "artist_id": (row["artist_id"] if row else ""),
         "artist": (row["artist_label"] if row else ""),
-        "role": (row["role"] if row else ""),
+        "role": role,
         "created_at": (row["created_at"] if row else ""),
     }
     return {
