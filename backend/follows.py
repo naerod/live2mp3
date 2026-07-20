@@ -232,7 +232,8 @@ def entity_data(etype: str, eid: str,
         meta = _artist_meta(eid)
         if meta:
             label = meta.get("label") or label
-            picture = meta.get("picture") or ""
+            # Grand format pour l'en-tête (évite le flou de la miniature 56px).
+            picture = meta.get("picture_hd") or meta.get("picture") or ""
     with get_conn() as conn:
         state = _follow_state(conn, identity.get("username"), etype, eid)
     # Une entité sans aucun post publié et que personne ne suit n'existe pas.

@@ -213,8 +213,12 @@ def resolve_artist(artist_id: str) -> dict | None:
     if a.get("error") or not a.get("name"):
         _cache_put(key, {}, RESOLVE_TTL)
         return None
+    # `picture` : miniature (avatars/listes). `picture_hd` : grand format pour
+    # l'en-tête de la page artiste (88px @2x) — sinon la 56px est floue à l'agrandi.
     out = {"id": str(a["id"]), "label": a["name"],
-           "picture": a.get("picture_small") or ""}
+           "picture": a.get("picture_small") or "",
+           "picture_hd": (a.get("picture_xl") or a.get("picture_big")
+                          or a.get("picture_medium") or a.get("picture") or "")}
     _cache_put(key, out, RESOLVE_TTL)
     return out
 
