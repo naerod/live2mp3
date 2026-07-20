@@ -879,7 +879,21 @@ const L2M = (function () {
     }, 120));
     clearBtn.onclick = () => { commit(null); input.focus(); };
 
-    return { get: () => ({ ...picked }), clear: () => commit(null) };
+    // get() réconcilie avec la saisie en cours : cliquer « Enregistrer » sans
+    // quitter le champ ne laisse pas le temps au blur (setTimeout 120 ms) de
+    // committer. Pour un champ libre, le texte tapé fait foi ; s'il diffère de
+    // la valeur choisie, c'est une valeur libre (id perdu). Sans allowFree, la
+    // saisie non validée n'a pas de valeur : on renvoie l'état canonique.
+    return {
+      get: () => {
+        if (allowFree) {
+          const v = input.value.trim();
+          if (v !== picked.label) picked = { id: "", label: v };
+        }
+        return { ...picked };
+      },
+      clear: () => commit(null),
+    };
   }
 
   return {

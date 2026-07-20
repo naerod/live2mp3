@@ -604,10 +604,16 @@ def album_detail(slug: str,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     album = m.data.get("album", {})
+    src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
     return {
         "slug": slug,
         "album": album,
+        # Source affichée/éditée sur la fiche. Stockée sous `source` (pas sous
+        # `album`) : l'import y met aussi master_mkv, thumbnail… on n'expose que
+        # les deux champs saisissables, sinon le formulaire les perd au save.
+        "source_url": src.get("url", "") or "",
+        "source_label": src.get("label", "") or "",
         "labels": list(album.get("labels", []) or []),
         "derived_labels": [l for l in cat.get("labels", []) if l in DERIVED_LABELS],
         "all_labels": catalogue.all_labels(),
