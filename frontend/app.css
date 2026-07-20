@@ -472,13 +472,19 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   border-color:var(--accent);color:var(--accent)}
 
 /* Listes Abonnements / Abonnés sur un profil */
-.follow-grp{margin-top:18px}
-.follow-grp:first-child{margin-top:8px}
-.follow-grp-h{display:flex;align-items:center;gap:8px;margin:0 0 4px;
-  font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.04em}
+.follow-grp{margin-top:10px}
+.follow-grp:first-child{margin-top:4px}
+/* En-tête de groupe repliable (bouton pleine largeur) */
+.follow-grp-h{display:flex;align-items:center;gap:8px;width:100%;margin:0;
+  padding:8px 6px;border:none;background:transparent;cursor:pointer;
+  border-radius:8px;font-size:13px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;transition:background .12s}
+.follow-grp-h:hover{background:var(--bg)}
+.follow-grp-h .grp-chevron{font-size:20px;transition:transform .18s ease;color:var(--muted)}
+.follow-grp.collapsed .follow-grp-h .grp-chevron{transform:rotate(-90deg)}
 .follow-grp-h .cnt{font-size:12px;color:var(--muted);background:var(--bg);
   border:1px solid var(--border);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.follow-grp.collapsed .follow-list{display:none}
 .follow-row{display:flex;align-items:center;gap:12px;padding:10px 0;
   border-top:1px solid var(--border)}
 .follow-list .follow-row:first-child{border-top:none}

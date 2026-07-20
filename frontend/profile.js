@@ -106,14 +106,46 @@
     </div>`;
   }
 
+  // Groupes repliés (persisté entre visites) : Set des types repliés.
+  const COLLAPSE_KEY = "l2m-prof-collapsed";
+  function loadCollapsed() {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "[]")); }
+    catch (e) { return new Set(); }
+  }
+  let collapsedGrps = loadCollapsed();
+  function saveCollapsed() {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedGrps])); } catch (e) {}
+  }
+
   function followingContent() {
     const groups = DATA.following_list || {};
     const blocks = GRP_ORDER
       .filter((tt) => (groups[tt] || []).length)
-      .map((tt) => `<div class="follow-grp"><h3 class="follow-grp-h">${t("grp_" + tt)}
-        <span class="cnt">${groups[tt].length}</span></h3>
-        <div class="follow-list">${groups[tt].map(followRow).join("")}</div></div>`);
+      .map((tt) => {
+        const collapsed = collapsedGrps.has(tt);
+        return `<div class="follow-grp${collapsed ? " collapsed" : ""}" data-grp="${tt}">
+          <button type="button" class="follow-grp-h" aria-expanded="${!collapsed}">
+            <span class="material-symbols-outlined grp-chevron">expand_more</span>
+            <span class="grp-title">${t("grp_" + tt)}</span>
+            <span class="cnt">${groups[tt].length}</span>
+          </button>
+          <div class="follow-list">${groups[tt].map(followRow).join("")}</div></div>`;
+      });
     return blocks.length ? blocks.join("") : `<div class="soc-empty">${t("no_following")}</div>`;
+  }
+
+  // Pli/dépli des groupes d'abonnements au clic sur l'en-tête.
+  function wireFollowGroups() {
+    document.querySelectorAll(".follow-grp .follow-grp-h").forEach((h) => {
+      h.onclick = () => {
+        const grp = h.closest(".follow-grp");
+        const tt = grp.dataset.grp;
+        const collapsed = grp.classList.toggle("collapsed");
+        h.setAttribute("aria-expanded", String(!collapsed));
+        if (collapsed) collapsedGrps.add(tt); else collapsedGrps.delete(tt);
+        saveCollapsed();
+      };
+    });
   }
 
   function followersContent() {
@@ -241,9 +273,11 @@
       document.getElementById("tab-content").innerHTML = tabContent();
       wirePubSort();
       wireFollowRows();
+      wireFollowGroups();
     });
     wirePubSort();
     wireFollowRows();
+    wireFollowGroups();
 
     if (DATA.is_self) wireEdit();
     else {
