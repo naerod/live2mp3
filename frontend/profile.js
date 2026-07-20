@@ -240,8 +240,12 @@
   function renderProfile() {
     const p = DATA.profile, c = DATA.counts;
     const since = p.created_at ? new Date(p.created_at).toLocaleDateString(LANG(), { year: "numeric", month: "long" }) : "";
-    const editBtn = DATA.is_self
-      ? `<button class="icon-btn" id="edit-btn"><span class="material-symbols-outlined">edit</span> ${t("edit")}</button>` : "";
+    // Bouton « Modifier le profil » dans la barre haute (comme « Gérer » sur un album).
+    const topEdit = document.getElementById("edit-btn");
+    if (topEdit) {
+      topEdit.style.display = DATA.is_self ? "" : "none";
+      const lbl = topEdit.querySelector("#t-edit"); if (lbl) lbl.textContent = t("edit");
+    }
     document.getElementById("content").innerHTML = `
       <div class="card">
         <div class="prof-hero">
@@ -254,7 +258,7 @@
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}
           </div>
-          ${DATA.is_self ? editBtn : `<div class="follow-wrap" id="prof-follow"></div>`}
+          ${DATA.is_self ? "" : `<div class="follow-wrap" id="prof-follow"></div>`}
         </div>
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
