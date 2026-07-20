@@ -25,6 +25,10 @@ const L2M = (function () {
       notifications: "Notifications", settings: "Paramètres",
       notif_empty: "Aucune notification pour l'instant.",
       notif_new: "Nouveau post de", notif_mark_all: "Tout marquer comme lu",
+      notif_like_post: "a aimé votre publication",
+      notif_like_comment: "a aimé votre commentaire",
+      notif_comment_post: "a commenté votre publication",
+      notif_reply_comment: "a répondu à votre commentaire",
       notif_see_all: "Voir toutes les notifications",
     },
     en: {
@@ -49,6 +53,10 @@ const L2M = (function () {
       notifications: "Notifications", settings: "Settings",
       notif_empty: "No notifications yet.",
       notif_new: "New post from", notif_mark_all: "Mark all as read",
+      notif_like_post: "liked your post",
+      notif_like_comment: "liked your comment",
+      notif_comment_post: "commented on your post",
+      notif_reply_comment: "replied to your comment",
       notif_see_all: "See all notifications",
     },
   };
@@ -457,13 +465,28 @@ const L2M = (function () {
 
   /* ---------------- Notifications (cloche header + centre) ---------------- */
   const NOTIF_ICON = { artist: "artist", festival: "festival", venue: "location_on", user: "person" };
+  // Icône par type d'interaction (like / commentaire) — prime sur reason_type.
+  const NOTIF_TYPE_ICON = { like_post: "favorite", like_comment: "favorite",
+                            comment_post: "chat_bubble", reply_comment: "reply" };
+  // Ligne « raison » selon le type : nouveau post d'une entité suivie, ou
+  // interaction d'un utilisateur (nom porté par reason_label).
+  function notifReason(n) {
+    const who = `<b>${esc(n.reason_label)}</b>`;
+    switch (n.type) {
+      case "like_post": return `${who} ${t("notif_like_post")}`;
+      case "like_comment": return `${who} ${t("notif_like_comment")}`;
+      case "comment_post": return `${who} ${t("notif_comment_post")}`;
+      case "reply_comment": return `${who} ${t("notif_reply_comment")}`;
+      default: return `${t("notif_new")} ${who}`;
+    }
+  }
   // Rendu d'une notification (réutilisé par la cloche et la page centre).
   function notifItem(n) {
-    const icon = NOTIF_ICON[n.reason_type] || "notifications";
+    const icon = NOTIF_TYPE_ICON[n.type] || NOTIF_ICON[n.reason_type] || "notifications";
     return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
       <span class="notif-ic material-symbols-outlined">${icon}</span>
       <span class="notif-body">
-        <span class="notif-reason">${t("notif_new")} <b>${esc(n.reason_label)}</b></span>
+        <span class="notif-reason">${notifReason(n)}</span>
         <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
         <span class="notif-time">${timeAgo(n.created_at)}</span>
       </span>

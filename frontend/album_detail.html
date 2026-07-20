@@ -35,7 +35,11 @@
   .al-meta-item{display:inline-flex;align-items:center;gap:5px}
   .al-meta-item .material-symbols-outlined{font-size:16px;color:var(--muted)}
   .al-meta-item.muted-placeholder{opacity:.45;font-style:italic}
-  .al-poster{margin-top:2px}
+  .al-poster{margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .al-import-manner{color:var(--muted);font-size:12px}
+  .al-cover-note{display:inline-flex;align-items:center;gap:5px;margin-top:4px;
+    color:var(--muted);font-size:12px}
+  .al-cover-note .material-symbols-outlined{font-size:15px;color:var(--accent)}
   .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;flex-wrap:wrap}
   .source-row .material-symbols-outlined{font-size:14px;flex-shrink:0}
   .source-link{color:var(--accent);text-decoration:none;word-break:break-all}
@@ -330,6 +334,7 @@ const T={
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil",
+      import_auto:"(automatiquement)",import_manual:"(manuellement)",cover_auto_badge:"Pochette automatique",
       cv_by:"Pochette par",cv_prev:"Précédent",cv_next:"Suivant",
       cv_cover:"Pochette",cv_see_tray:"Voir la tray card",cv_see_cover:"Voir la pochette",
       cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
@@ -359,6 +364,7 @@ const T={
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile",
+      import_auto:"(automatically)",import_manual:"(manually)",cover_auto_badge:"Automatic cover",
       cv_by:"Cover by",cv_prev:"Previous",cv_next:"Next",
       cv_cover:"Cover",cv_see_tray:"View tray card",cv_see_cover:"View cover",
       cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
@@ -489,9 +495,9 @@ function renderAlbum(d){
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
     if(d.has_cover)links+=dlSplit('image',t('cover'),`/download/${slug}/cover`,`/download/${slug}/cover/pdf`);
     if(d.has_traycard)links+=dlSplit('description',t('traycard'),`/download/${slug}/traycard`,`/download/${slug}/traycard/pdf`);
-    if(links)dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl">${links}</div></div>`;
+    if(links)dlHtml=`<div class="al-dl">${links}</div>`;
   }else{
-    dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
+    dlHtml=`<div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div>`;
   }
 
   const srcUrl=d.source_url||'';
@@ -528,16 +534,17 @@ function renderAlbum(d){
           ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${entLink('festival',a.festival,a.festival)}</span>`:''}
         </div>
         ${guestsHtml}
-        ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
+        ${posterHtml?`<div class="al-poster">${posterHtml}<span class="al-import-manner">${d.import_source==='url'?t('import_auto'):t('import_manual')}</span></div>`:''}
+        ${d.cover_auto?`<div class="al-cover-note"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
         <div class="al-social">
           <button id="like-btn" class="soc-btn is-like"><span class="material-symbols-outlined">favorite</span><span id="like-count">—</span></button>
           <button id="comment-btn" class="soc-btn is-comment" onclick="scrollToComments()"><span class="material-symbols-outlined">chat_bubble</span><span id="comment-count">—</span></button>
         </div>
-        ${dlHtml}
       </div>
     </div>
+    ${dlHtml?`<div class="sec sec-dl"><h3>${t('downloads')}</h3>${dlHtml}</div>`:''}
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>

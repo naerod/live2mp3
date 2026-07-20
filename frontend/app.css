@@ -587,6 +587,9 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   display:flex;align-items:center;justify-content:center}
 .set-colhead{background:var(--bg);padding:9px 14px}
 .set-colhead .set-cell{font-weight:600;text-transform:uppercase;letter-spacing:.03em;font-size:11px}
+.set-group-title{background:var(--bg);padding:9px 14px;font-weight:700;font-size:11px;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  border-bottom:1px solid var(--border)}
 .set-note{margin-top:14px}
 .set-rgpd{margin-top:10px}
 .set-note .material-symbols-outlined,.set-rgpd .material-symbols-outlined{color:var(--accent);flex-shrink:0}

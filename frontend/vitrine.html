@@ -555,7 +555,9 @@ function extractYear(date){
 
 function matches(a){
   const q=norm(document.getElementById("q").value);
-  const hay=norm([a.title,a.artist,a.venue,a.festival,a.date].join(" "));
+  // Recherche globale : titre, artiste, invités, lieu, ville, festival, date.
+  const guests=(a.guests||[]).map(g=>g&&(g.name||g.label)||"").join(" ");
+  const hay=norm([a.title,a.artist,guests,a.venue,a.city,a.festival,a.date].join(" "));
   if(q&&!hay.includes(q)) return false;
   if(filterArtist&&norm(a.artist)!==norm(filterArtist)) return false;
   if(filterYear&&extractYear(a.date)!==filterYear) return false;

@@ -84,6 +84,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "title": album.get("title", ""),
             "date": album.get("date", ""),
             "venue": album.get("venue", ""),
+            "city": album.get("city", ""),
             "festival": album.get("festival", ""),
             "tracks": len(m.tracks),
             "has_mp3": has_mp3,

@@ -32,10 +32,21 @@ router = APIRouter()
 BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
 
-# Catégories de notification (clé de préférence). Le suffixe = le type d'entité
-# suivie qui déclenche (reason_type). Extensible (reply, follow…) plus tard.
-NOTIF_CATEGORIES = ["new_post:artist", "new_post:festival",
-                    "new_post:venue", "new_post:user"]
+# Catégories de notification (clé de préférence), regroupées pour l'UI en trois
+# rubriques : nouveaux posts, likes, commentaires. Chaque clé pilote un canal
+# in-app (et email en Phase 3).
+NOTIF_NEW_POST = ["new_post:artist", "new_post:festival",
+                  "new_post:venue", "new_post:user"]
+NOTIF_LIKE = ["like:post", "like:comment"]
+NOTIF_COMMENT = ["comment:post", "comment:reply"]
+NOTIF_CATEGORIES = NOTIF_NEW_POST + NOTIF_LIKE + NOTIF_COMMENT
+
+# Regroupement présenté dans /settings (l'ordre fait foi côté UI).
+NOTIF_GROUPS = [
+    {"key": "new_posts", "keys": NOTIF_NEW_POST},
+    {"key": "likes", "keys": NOTIF_LIKE},
+    {"key": "comments", "keys": NOTIF_COMMENT},
+]
 
 # Master-switch d'envoi email (Phase 3). Faux par défaut → aucun email en
 # preprod ; l'utilisateur l'activera en prod une fois le relais d'envoi choisi.
@@ -90,7 +101,7 @@ class PrefsIn(BaseModel):
 def get_prefs(identity: dict = Depends(require_user)) -> dict:
     with get_conn() as conn:
         prefs = _prefs_map(conn, identity["username"])
-    return {"categories": NOTIF_CATEGORIES, "prefs": prefs,
+    return {"categories": NOTIF_CATEGORIES, "groups": NOTIF_GROUPS, "prefs": prefs,
             "email_enabled": EMAIL_ENABLED}
 
 
@@ -119,6 +130,42 @@ def _display_name(conn, username: str) -> str:
         "SELECT display_name FROM profiles WHERE username=?", (username,)
     ).fetchone()
     return (row["display_name"] if row and row["display_name"] else username)
+
+
+def album_publisher_title(slug: str) -> tuple[str, str, str]:
+    """(auteur, titre, artiste) d'un album. ('', '', '') si introuvable."""
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    if not mpath.is_file():
+        return "", "", ""
+    try:
+        m = Manifest.load(mpath)
+    except Exception:
+        return "", "", ""
+    alb = m.data.get("album", {})
+    pub = (m.data.get("meta", {}) or {}).get("imported_by", "") or ""
+    return pub, alb.get("title", slug), alb.get("artist", "")
+
+
+def notify(conn, *, recipient: str, actor: str, ntype: str, pref_key: str,
+           slug: str = "", title: str = "", subtitle: str = "") -> bool:
+    """Crée une notification in-app pour une interaction (like/commentaire).
+
+    Ne notifie jamais l'acteur lui-même, ni si le destinataire a coupé la
+    catégorie. `reason_label` porte le nom d'affichage de l'acteur (le front
+    l'utilise pour « X a aimé votre… »). Retourne True si une notif est créée.
+    """
+    if not recipient or recipient == actor:
+        return False
+    if not _pref_allows(conn, recipient, pref_key, "inapp"):
+        return False
+    conn.execute(
+        "INSERT INTO notifications(username, type, actor, reason_type, reason_id, "
+        "reason_label, slug, title, subtitle, read, created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,0,?)",
+        (recipient, ntype, actor, "", "", _display_name(conn, actor),
+         slug, title, subtitle, _now()),
+    )
+    return True
 
 
 def announce_post(slug: str) -> int:

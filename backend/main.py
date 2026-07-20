@@ -363,6 +363,12 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "tracks": tracks,
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
+        # Provenance affichée sur la fiche : "url" = import auto par l'outil de
+        # lien, sinon album créé/renseigné manuellement. `cover_auto` : la
+        # pochette est la miniature auto-extraite (dossier artwork/covers/),
+        # par opposition à une pochette téléversée (artwork/cover.ext).
+        "import_source": meta.get("import_source", "") or "",
+        "cover_auto": str(m.data.get("album", {}).get("cover", "") or "").startswith("artwork/covers/"),
         "source_url": src.get("url", "") or "",
         # Attribution setlist.fm — obligatoire partout où la donnée est affichée.
         "setlistfm_url": meta.get("setlistfm_url", "") or "",

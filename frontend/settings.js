@@ -10,10 +10,15 @@
       back: "Retour", title: "Paramètres", notifs: "Notifications",
       notifs_sub: "Choisissez ce qui déclenche une notification et par quel canal.",
       col_inapp: "Sur le site", col_email: "Email",
+      "grp:new_posts": "Nouveaux posts", "grp:likes": "Likes", "grp:comments": "Commentaires",
       "new_post:artist": "Nouveaux posts d'un artiste / groupe suivi",
       "new_post:festival": "Nouveaux posts d'un festival suivi",
       "new_post:venue": "Nouveaux posts d'un lieu suivi",
       "new_post:user": "Nouveaux posts d'un utilisateur suivi",
+      "like:post": "Un utilisateur a aimé votre post",
+      "like:comment": "Un utilisateur a aimé votre commentaire",
+      "comment:post": "Commentaires d'un utilisateur sous votre post",
+      "comment:reply": "Réponse à votre commentaire",
       email_off: "Les notifications par email seront activées prochainement. Vos choix sont enregistrés dès maintenant.",
       saved: "Enregistré", login: "Connectez-vous pour accéder à vos paramètres.", login_btn: "Connexion",
       rgpd: "Vous pouvez désactiver n'importe quelle notification à tout moment. Aucun email ne vous sera envoyé pour une catégorie décochée.",
@@ -23,10 +28,15 @@
       back: "Back", title: "Settings", notifs: "Notifications",
       notifs_sub: "Choose what triggers a notification and through which channel.",
       col_inapp: "On site", col_email: "Email",
+      "grp:new_posts": "New posts", "grp:likes": "Likes", "grp:comments": "Comments",
       "new_post:artist": "New posts from a followed artist / band",
       "new_post:festival": "New posts from a followed festival",
       "new_post:venue": "New posts from a followed venue",
       "new_post:user": "New posts from a followed user",
+      "like:post": "Someone liked your post",
+      "like:comment": "Someone liked your comment",
+      "comment:post": "Comments from a user under your post",
+      "comment:reply": "Reply to your comment",
       email_off: "Email notifications will be enabled soon. Your choices are saved now.",
       saved: "Saved", login: "Log in to access your settings.", login_btn: "Log in",
       rgpd: "You can turn off any notification at any time. No email will be sent for an unchecked category.",
@@ -46,14 +56,19 @@
   function render() {
     const p = DATA.prefs;
     const emailOff = !DATA.email_enabled;
-    const rows = DATA.categories.map(cat => `
+    const catRow = cat => `
       <div class="set-row">
         <div class="set-label">${t(cat)}</div>
         <div class="set-toggles">
           <div class="set-cell">${toggle(cat, "inapp", p[cat].inapp)}</div>
           <div class="set-cell">${toggle(cat, "email", p[cat].email)}</div>
         </div>
-      </div>`).join("");
+      </div>`;
+    // Regroupement en rubriques (nouveaux posts / likes / commentaires).
+    const groups = DATA.groups || [{ key: null, keys: DATA.categories }];
+    const rows = groups.map(g => `
+      ${g.key ? `<div class="set-group-title">${t("grp:" + g.key)}</div>` : ""}
+      ${g.keys.map(catRow).join("")}`).join("");
     document.getElementById("content").innerHTML = `
       <div class="card set-card">
         <div class="set-head">

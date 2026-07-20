@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import catalogue, suggest
+from . import catalogue, notifications, suggest
 from .auth import (
     GROUP_GESTIONNAIRE,
     GROUP_USER,
@@ -602,6 +602,11 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
                 "INSERT INTO favorites(username, slug, created_at) VALUES(?,?,?)",
                 (username, slug, _now()),
             )
+            # Notifie l'auteur du post (« X a aimé votre publication »).
+            pub, title, artist = notifications.album_publisher_title(slug)
+            notifications.notify(conn, recipient=pub, actor=username,
+                                 ntype="like_post", pref_key="like:post",
+                                 slug=slug, title=title, subtitle=artist)
         return _album_social(conn, slug, username)
 
 
@@ -739,6 +744,18 @@ def create_comment(slug: str, payload: CommentIn,
         )
         new_id = cur.lastrowid
         row = conn.execute("SELECT * FROM comments WHERE id=?", (new_id,)).fetchone()
+        # Notifications : commentaire racine → auteur du post ; réponse →
+        # auteur du commentaire parent.
+        pub, title, _ = notifications.album_publisher_title(slug)
+        snippet = body[:80]
+        if parent_id is None:
+            notifications.notify(conn, recipient=pub, actor=username,
+                                 ntype="comment_post", pref_key="comment:post",
+                                 slug=slug, title=title, subtitle=snippet)
+        elif reply_to:
+            notifications.notify(conn, recipient=reply_to, actor=username,
+                                 ntype="reply_comment", pref_key="comment:reply",
+                                 slug=slug, title=title, subtitle=snippet)
         profiles = _profiles_map(conn, {username})
     return _comment_dict(row, profiles, {new_id: {"likes": 0, "liked": False, "likers": []}})
 
@@ -788,7 +805,7 @@ def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dic
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id, deleted FROM comments WHERE id=?", (comment_id,)
+            "SELECT id, deleted, username, slug FROM comments WHERE id=?", (comment_id,)
         ).fetchone()
         if not row or row["deleted"]:
             raise HTTPException(404, "commentaire introuvable")
@@ -806,6 +823,11 @@ def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dic
                 "INSERT INTO comment_likes(comment_id, username, created_at) VALUES(?,?,?)",
                 (comment_id, username, _now()),
             )
+            # Notifie l'auteur du commentaire (« X a aimé votre commentaire »).
+            _, ctitle, _ = notifications.album_publisher_title(row["slug"])
+            notifications.notify(conn, recipient=row["username"], actor=username,
+                                 ntype="like_comment", pref_key="like:comment",
+                                 slug=row["slug"], title=ctitle)
         ld = _comment_likes(conn, [comment_id], username)[comment_id]
     return {"ok": True, "id": comment_id, **ld}
 
