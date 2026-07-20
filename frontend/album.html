@@ -608,11 +608,12 @@ document.getElementById("save-all").onclick=async()=>{
     if(rDel.ok){DATA.has_cover=false;PENDING_COVER_DELETE=false;}
     else{savingError("save-all");toast("Erreur suppression pochette ("+rDel.status+")",true);return;}
   }
-  const [rMeta,rTracks,rLabels]=await Promise.all([
-    fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}),
-    fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})  }),
-    fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})})
-  ]);
+  // Sérialisé (et non Promise.all) : les trois endpoints rechargent et
+  // réécrivent le même manifest.yaml ; en parallèle, le dernier write écrase les
+  // autres (perte de champs, ex. la date). On enchaîne donc les écritures.
+  const rMeta=await fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+  const rTracks=await fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})});
+  const rLabels=await fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})});
   if(rMeta.ok) document.title=`live2mp3 — ${p.title}`;
   if(rLabels.ok){const d=await rLabels.json();labels=d.labels;renderChips();}
   if(rMeta.ok&&rTracks.ok&&rLabels.ok){showSaved("save-all");}
