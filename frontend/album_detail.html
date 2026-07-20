@@ -37,9 +37,9 @@
   .al-meta-item.muted-placeholder{opacity:.45;font-style:italic}
   .al-poster{margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .al-import-manner{color:var(--muted);font-size:12px}
-  .al-cover-note{display:inline-flex;align-items:center;gap:5px;margin-top:4px;
-    color:var(--muted);font-size:12px}
-  .al-cover-note .material-symbols-outlined{font-size:15px;color:var(--accent)}
+  /* Crédit « Pochette automatique » — même emplacement/allure que « Pochette par X ». */
+  .cr-auto{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+  .cr-auto .material-symbols-outlined{font-size:18px;color:var(--accent)}
   .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;flex-wrap:wrap}
   .source-row .material-symbols-outlined{font-size:14px;flex-shrink:0}
   .source-link{color:var(--accent);text-decoration:none;word-break:break-all}
@@ -425,6 +425,7 @@ async function loadContent(){
   try{const r=await fetch(`/api/catalogue/${slug}`);if(!r.ok)throw 0;d=await r.json();}
   catch(e){showNotFound();return;}
   if(!d||!d.album){showNotFound();return;}
+  COVER_AUTO=!!d.cover_auto;   // pochette = miniature d'import auto (crédit dédié)
 
   document.title=`live2mp3 — ${d.album.title||slug}`;
 
@@ -535,7 +536,6 @@ function renderAlbum(d){
         </div>
         ${guestsHtml}
         ${posterHtml?`<div class="al-poster">${posterHtml}<span class="al-import-manner">${d.import_source==='url'?t('import_auto'):t('import_manual')}</span></div>`:''}
-        ${d.cover_auto?`<div class="al-cover-note"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
         <div class="al-social">
@@ -629,7 +629,7 @@ async function initSocialActions(){
 // face, suivie de sa tray card quand elle en a une. La tray card reste ainsi
 // une colonne de sa cover (jamais une entrée indépendante), et les flèches
 // parcourent aussi bien les faces d'une pochette que les pochettes entre elles.
-let COVERS=[], SLIDES=[], IDX=0;
+let COVERS=[], SLIDES=[], IDX=0, COVER_AUTO=false;
 
 function buildSlides(){
   SLIDES=[];
@@ -666,7 +666,13 @@ const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
 function footerHtml(c,kind){
   if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
-  if(!c.id)return `<div class="cr-footer"></div>`;
+  // Pochette auto (miniature d'import) : pas d'entrée covers → créditée
+  // « Pochette automatique », au même emplacement que « Pochette par X ».
+  if(!c.id){
+    if(COVER_AUTO&&kind==='cover')
+      return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
+    return `<div class="cr-footer"></div>`;
+  }
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
   return `<div class="cr-footer">${poster}</div>`;
