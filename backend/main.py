@@ -296,14 +296,32 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
     return RedirectResponse(url="/", status_code=302)
 
 
-def _track_file(project_dir: Path, n: int) -> Path | None:
-    """Retrouve le MP3 d'une piste (préfixe numéro : '01_…' ou '01 - …')."""
+def _norm_title(s: str) -> str:
+    """Normalise pour comparer titres et noms de fichiers : minuscules, sans
+    ponctuation ni casse, espaces compactés."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def _track_file(project_dir: Path, n: int, title: str = "") -> Path | None:
+    """Retrouve le MP3 d'une piste.
+
+    Priorité au **titre** : les fichiers le portent quasi toujours, quel que
+    soit leur préfixe (`02.`, `[SPOTDOWNLOADER.COM]`, artiste…), et ce préfixe
+    numérique ne correspond pas forcément au `n` du manifest (imports externes).
+    Le matching par numéro de piste ne sert plus que de secours pour les albums
+    rendus par le pipeline dont le fichier n'embarque pas le titre.
+    """
     src = project_dir / "build" / "audio"
     if not src.exists():
         return None
-    import re
+    files = sorted(src.glob("*.mp3"))
+    nt = _norm_title(title)
+    if nt:
+        for f in files:
+            if nt in _norm_title(f.stem):
+                return f
     pat = re.compile(rf"^0*{int(n)}(?=\D)")
-    for f in sorted(src.glob("*.mp3")):
+    for f in files:
         if pat.match(f.name):
             return f
     return None
@@ -345,7 +363,7 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         tracks.append({
             "n": t.get("n"),
             "title": t.get("title"),
-            "dl": _track_file(project_dir, t.get("n")) is not None,
+            "dl": _track_file(project_dir, t.get("n"), t.get("title", "")) is not None,
         })
     meta = m.data.get("meta", {})
     src = m.data.get("source", {})
@@ -491,12 +509,16 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
 @app.get("/download/{slug}/track/{n}")
 def download_track(slug: str, n: int,
                    identity: dict = Depends(require_user)) -> FileResponse:
-    _ensure_album_visible(slug, identity)
+    m = _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    f = _track_file(project_dir, n)
+    title = next((t.get("title", "") for t in m.tracks if t.get("n") == n), "")
+    f = _track_file(project_dir, n, title)
     if not f:
         raise HTTPException(404, "piste introuvable")
-    return FileResponse(f, filename=f.name, media_type="audio/mpeg")
+    # Nom de téléchargement propre (les fichiers source ont des noms parasites :
+    # « [SPOTDOWNLOADER.COM]… », préfixes numériques incohérents…).
+    dl_name = f"{title}.mp3" if title else f.name
+    return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
 
 
 @app.get("/download/{slug}/cover")
