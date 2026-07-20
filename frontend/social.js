@@ -30,6 +30,10 @@ const L2M = (function () {
       notif_comment_post: "a commenté votre publication",
       notif_reply_comment: "a répondu à votre commentaire",
       notif_see_all: "Voir toutes les notifications",
+      notif_admin_action: "Action administrateur",
+      notif_role_granted: "Vous êtes désormais gestionnaire 🎉",
+      notif_role_revoked: "Votre rôle de gestionnaire a été retiré",
+      notif_role_by: "par",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -58,6 +62,10 @@ const L2M = (function () {
       notif_comment_post: "commented on your post",
       notif_reply_comment: "replied to your comment",
       notif_see_all: "See all notifications",
+      notif_admin_action: "Administrator action",
+      notif_role_granted: "You are now a manager 🎉",
+      notif_role_revoked: "Your manager role has been removed",
+      notif_role_by: "by",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -482,12 +490,32 @@ const L2M = (function () {
   }
   // Rendu d'une notification (réutilisé par la cloche et la page centre).
   function notifItem(n) {
+    if (n.type === "role_grant" || n.type === "role_revoke") return notifRoleItem(n);
     const icon = NOTIF_TYPE_ICON[n.type] || NOTIF_ICON[n.reason_type] || "notifications";
     return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
       <span class="notif-ic material-symbols-outlined">${icon}</span>
       <span class="notif-body">
         <span class="notif-reason">${notifReason(n)}</span>
         <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
+  // Notification d'action administrateur (promotion / rétrogradation gestionnaire).
+  // Non désactivable ; la promotion a un habillage « valorisant » (couleur dorée).
+  function notifRoleItem(n) {
+    const grant = n.type === "role_grant";
+    const href = n.username ? `/u/${encodeURIComponent(n.username)}` : "/";
+    const icon = grant ? "workspace_premium" : "remove_moderator";
+    const msg = grant ? t("notif_role_granted") : t("notif_role_revoked");
+    return `<a class="notif-item notif-admin${grant ? " notif-grant" : ""}${n.read ? "" : " unread"}" href="${href}" data-id="${n.id}">
+      <span class="notif-ic material-symbols-outlined">${icon}</span>
+      <span class="notif-body">
+        <span class="notif-admin-tag"><span class="material-symbols-outlined">shield_person</span>${t("notif_admin_action")}</span>
+        <span class="notif-reason">${msg}</span>
+        <span class="notif-post">${t("notif_role_by")} <b>${esc(n.reason_label)}</b></span>
         <span class="notif-time">${timeAgo(n.created_at)}</span>
       </span>
       ${n.read ? "" : `<span class="notif-dot"></span>`}

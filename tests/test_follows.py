@@ -128,6 +128,45 @@ def test_user_follow_state_on_profile(client):
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
 
 
+def test_admin_promote_demote_and_notify(client, monkeypatch):
+    from backend import authentik, social
+    c = client
+    monkeypatch.setattr(authentik, "enabled", lambda: True)
+    # Simule Authentik : add -> user dans le groupe gestionnaire ; remove -> user simple.
+    state = {"g": {"live2mp3-user"}}
+    def fake_set(username, grant):
+        state["g"] = {"live2mp3-user", "live2mp3-gestionnaire"} if grant else {"live2mp3-user"}
+        return state["g"]
+    monkeypatch.setattr(authentik, "set_gestionnaire", fake_set)
+
+    c.get("/api/social/me", headers=USER2)          # crée bob (simple user)
+    url = "/api/social/users/bob/gestionnaire"
+
+    # Non-admin refusé.
+    assert c.post(url, json={"grant": True}, headers=USER).status_code == 403
+    assert c.post(url, json={"grant": True}).status_code == 401
+
+    # Admin promeut bob -> gestionnaire + notif non lue de type role_grant.
+    r = c.post(url, json={"grant": True}, headers=ADMIN).json()
+    assert r["role"] == "gestionnaire" and r["gestionnaire"] is True
+    prof = c.get("/api/social/users/bob").json()
+    assert prof["profile"]["role"] == "gestionnaire"
+    notifs = c.get("/api/social/notifications", headers=USER2).json()
+    assert notifs["items"][0]["type"] == "role_grant"
+    assert notifs["items"][0]["username"] == "bob"
+    assert notifs["unread"] >= 1
+
+    # Admin rétrograde bob.
+    r = c.post(url, json={"grant": False}, headers=ADMIN).json()
+    assert r["role"] == "user"
+    notifs = c.get("/api/social/notifications", headers=USER2).json()
+    assert notifs["items"][0]["type"] == "role_revoke"
+
+    # Pas sur soi-même.
+    assert c.post("/api/social/users/root/gestionnaire",
+                  json={"grant": True}, headers=ADMIN).status_code == 400
+
+
 def test_effective_role_publisher_floor():
     from backend.social import _effective_role
     pubs = {"nathan", "louis"}

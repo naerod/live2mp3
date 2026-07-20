@@ -17,6 +17,10 @@
       grp_festival: "Festivals", grp_venue: "Lieux",
       no_following: "Aucun abonnement.", no_followers: "Aucun abonné.",
       its_you: "C'est vous",
+      promote: "Promouvoir gestionnaire", demote: "Retirer des gestionnaires",
+      confirm_promote: "Attention, êtes-vous sûr de vouloir ajouter cet utilisateur comme gestionnaire ?",
+      confirm_demote: "Attention, êtes-vous sûr de vouloir retirer cet utilisateur des gestionnaires ?",
+      yes: "Oui", no: "Non", role_err: "Action impossible. Réessayez.",
       city: "Ville", artist: "Artiste/groupe favori",
       city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
       pick_hint: "Choisissez une entrée dans la liste",
@@ -37,6 +41,10 @@
       grp_festival: "Festivals", grp_venue: "Venues",
       no_following: "Not following anyone yet.", no_followers: "No followers yet.",
       its_you: "That's you",
+      promote: "Promote to manager", demote: "Remove from managers",
+      confirm_promote: "Warning: are you sure you want to add this user as a manager?",
+      confirm_demote: "Warning: are you sure you want to remove this user from managers?",
+      yes: "Yes", no: "No", role_err: "Action failed. Please try again.",
       city: "City", artist: "Favourite artist/band",
       sort_by: "Sort", sort_date: "Concert date", sort_new: "Published",
       city_ph: "Start typing: Dijon…", artist_ph: "Start typing: Coldplay…",
@@ -237,6 +245,62 @@
     };
   }
 
+  // Bouton admin : promouvoir/rétrograder gestionnaire (visible aux admins,
+  // sauf sur soi-même et sur un autre admin).
+  function adminRoleBtn(p) {
+    if (!(ME.is_admin && !DATA.is_self && p.role !== "admin")) return "";
+    const isGest = p.role === "gestionnaire";
+    return `<button class="icon-btn role-btn${isGest ? " danger" : ""}" id="role-btn" data-grant="${isGest ? 0 : 1}">
+      <span class="material-symbols-outlined">${isGest ? "person_remove" : "shield_person"}</span>${isGest ? t("demote") : t("promote")}</button>`;
+  }
+
+  // Modale de confirmation Oui/Non (promise<bool>), stylée (pas de confirm() natif).
+  function confirmDialog(message) {
+    return new Promise((resolve) => {
+      const ov = document.createElement("div");
+      ov.className = "modal-ov";
+      ov.innerHTML = `<div class="modal-box" role="alertdialog" aria-modal="true">
+        <div class="modal-ic"><span class="material-symbols-outlined">warning</span></div>
+        <p class="modal-msg">${esc(message)}</p>
+        <div class="modal-actions">
+          <button class="icon-btn" data-a="no">${t("no")}</button>
+          <button class="primary" data-a="yes">${t("yes")}</button>
+        </div></div>`;
+      const close = (v) => { ov.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+      const onKey = (e) => { if (e.key === "Escape") close(false); };
+      ov.addEventListener("click", (e) => { if (e.target === ov) close(false); });
+      ov.querySelector('[data-a="no"]').onclick = () => close(false);
+      ov.querySelector('[data-a="yes"]').onclick = () => close(true);
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(ov);
+      ov.querySelector('[data-a="yes"]').focus();
+    });
+  }
+
+  function wireAdminRole() {
+    const btn = document.getElementById("role-btn");
+    if (!btn) return;
+    btn.onclick = async () => {
+      const grant = btn.dataset.grant === "1";
+      const ok = await confirmDialog(t(grant ? "confirm_promote" : "confirm_demote"));
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        const r = await fetch(`/api/social/users/${encodeURIComponent(DATA.profile.username)}/gestionnaire`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grant }),
+        });
+        if (!r.ok) throw new Error();
+        const res = await r.json();
+        DATA.profile.role = res.role;   // rôle recalculé côté serveur
+        renderProfile();
+      } catch (e) {
+        btn.disabled = false;
+        alert(t("role_err"));
+      }
+    };
+  }
+
   function renderProfile() {
     const p = DATA.profile, c = DATA.counts;
     const since = p.created_at ? new Date(p.created_at).toLocaleDateString(LANG(), { year: "numeric", month: "long" }) : "";
@@ -262,7 +326,10 @@
               <button type="button" class="prof-stat${activeTab === "followers" ? " active" : ""}" data-go="followers"><b>${c.followers}</b> ${t("followers").toLowerCase()}</button>
             </div>
           </div>
-          ${DATA.is_self ? "" : `<div class="follow-wrap" id="prof-follow"></div>`}
+          ${DATA.is_self ? "" : `<div class="prof-actions">
+            <div class="follow-wrap" id="prof-follow"></div>
+            ${adminRoleBtn(p)}
+          </div>`}
         </div>
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
@@ -318,6 +385,7 @@
       if (slot) L2M.followButton(slot, {
         type: "user", id: p.username, label: p.display_name, state: f,
       });
+      wireAdminRole();
     }
   }
 

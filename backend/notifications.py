@@ -168,6 +168,24 @@ def notify(conn, *, recipient: str, actor: str, ntype: str, pref_key: str,
     return True
 
 
+def notify_role(conn, *, recipient: str, actor: str, granted: bool) -> bool:
+    """Notifie une action administrateur sur le rôle (promotion/rétrogradation).
+
+    **Non désactivable** : aucune vérification de préférence (contrairement à
+    `notify`) — une décision d'admin doit toujours être portée à la connaissance
+    de l'intéressé. `type` = `role_grant` / `role_revoke` ; `reason_type=admin`
+    (badge « Action administrateur » côté front) ; `reason_label` = nom de
+    l'admin. Pas de `slug` : ces notifs pointent vers le profil, pas un album."""
+    conn.execute(
+        "INSERT INTO notifications(username, type, actor, reason_type, reason_id, "
+        "reason_label, slug, title, subtitle, read, created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,0,?)",
+        (recipient, "role_grant" if granted else "role_revoke", actor, "admin", "",
+         _display_name(conn, actor), "", "", "", _now()),
+    )
+    return True
+
+
 def announce_post(slug: str) -> int:
     """Annonce un post publié à ses abonnés. Idempotent par environnement.
 
@@ -273,6 +291,7 @@ def _notif_dict(r) -> dict:
     return {
         "id": r["id"],
         "type": r["type"],
+        "username": r["username"],
         "actor": r["actor"],
         "reason_type": r["reason_type"],
         "reason_id": r["reason_id"],

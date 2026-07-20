@@ -60,6 +60,21 @@ def require_gestionnaire(
     raise HTTPException(403, "accès outil requis (live2mp3-gestionnaire)")
 
 
+def require_admin(
+    x_authentik_username: str | None = Header(default=None),
+    x_authentik_groups: str | None = Header(default=None),
+) -> dict:
+    """Réservé aux superusers Authentik. L'autorisation se base sur les groupes
+    *transmis en direct* par le forward-auth (jamais le rôle en cache), pour
+    éviter toute élévation de privilège via un cache obsolète."""
+    groups = _groups(x_authentik_groups)
+    if not x_authentik_username:
+        raise HTTPException(401, "authentification requise")
+    if not _is_super(groups):
+        raise HTTPException(403, "réservé aux administrateurs")
+    return {"username": x_authentik_username, "groups": groups}
+
+
 def roles(
     x_authentik_username: str | None = Header(default=None),
     x_authentik_groups: str | None = Header(default=None),

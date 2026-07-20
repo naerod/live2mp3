@@ -24,12 +24,13 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import catalogue, notifications, suggest
+from . import authentik, catalogue, notifications, suggest
 from .auth import (
     GROUP_GESTIONNAIRE,
     GROUP_USER,
     SUPERUSER_GROUPS,
     current_identity,
+    require_admin,
     require_user,
 )
 from .db import AVATARS_DIR, get_conn
@@ -573,6 +574,48 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         "following_list": followed,
         "followers_list": followers_list,
     }
+
+
+class RoleChange(BaseModel):
+    grant: bool
+
+
+@router.post("/api/social/users/{username}/gestionnaire")
+def set_gestionnaire_role(username: str, payload: RoleChange,
+                          identity: dict = Depends(require_admin)) -> dict:
+    """Promeut (`grant=True`) ou rétrograde un compte au rôle gestionnaire, en
+    l'ajoutant/retirant du groupe Authentik applicatif. Réservé aux admins.
+
+    Met à jour le rôle en cache (source = groupes Authentik résultants) et notifie
+    l'intéressé (action non désactivable)."""
+    username = username.strip()
+    if username == identity["username"]:
+        raise HTTPException(400, "action impossible sur son propre compte")
+    if not authentik.enabled():
+        raise HTTPException(503, "API Authentik non configurée")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT role FROM profiles WHERE username=?", (username,)
+        ).fetchone()
+    if row is not None and row["role"] == "admin":
+        raise HTTPException(400, "compte administrateur — non modifiable ici")
+    try:
+        groups = authentik.set_gestionnaire(username, payload.grant)
+    except authentik.AuthentikError:
+        raise HTTPException(502, "Authentik indisponible — réessayez")
+    new_role = _role_of(groups)
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        # Action explicite d'admin : on écrit le rôle directement (contourne le
+        # cache monotone, seule voie de rétrogradation assumée).
+        conn.execute(
+            "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+            (new_role, _now(), username),
+        )
+        notifications.notify_role(
+            conn, recipient=username, actor=identity["username"], granted=payload.grant)
+    return {"ok": True, "username": username, "role": new_role,
+            "gestionnaire": payload.grant}
 
 
 def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]:
