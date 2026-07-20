@@ -349,6 +349,18 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         })
     meta = m.data.get("meta", {})
     src = m.data.get("source", {})
+    # Pochette « automatique » = miniature récupérée par l'import auto (outil de
+    # lien). Distinguée des pochettes faites main : celles-ci sont soit des
+    # `legacy_cover` (import historique), soit un téléversement `artwork/cover.ext`,
+    # et leur album n'a pas `import_source == "url"`. On exige donc l'import auto
+    # ET une pochette issue du dossier covers/ qui ne soit pas la legacy.
+    _cover_rel = str(m.data.get("album", {}).get("cover", "") or "")
+    _cover_name = _cover_rel.rsplit("/", 1)[-1]
+    cover_auto = (
+        meta.get("import_source") == "url"
+        and _cover_rel.startswith("artwork/covers/")
+        and not _cover_name.startswith("legacy_cover")
+    )
     return {
         "slug": slug,
         "album": m.data.get("album", {}),
@@ -364,11 +376,9 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
         # Provenance affichée sur la fiche : "url" = import auto par l'outil de
-        # lien, sinon album créé/renseigné manuellement. `cover_auto` : la
-        # pochette est la miniature auto-extraite (dossier artwork/covers/),
-        # par opposition à une pochette téléversée (artwork/cover.ext).
+        # lien, sinon album créé/renseigné manuellement.
         "import_source": meta.get("import_source", "") or "",
-        "cover_auto": str(m.data.get("album", {}).get("cover", "") or "").startswith("artwork/covers/"),
+        "cover_auto": cover_auto,
         "source_url": src.get("url", "") or "",
         # Attribution setlist.fm — obligatoire partout où la donnée est affichée.
         "setlistfm_url": meta.get("setlistfm_url", "") or "",
