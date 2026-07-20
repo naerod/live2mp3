@@ -208,6 +208,29 @@ def my_follows(identity: dict = Depends(current_identity)) -> dict:
     return {"authenticated": True, **out}
 
 
+@router.get("/api/social/artist-pics")
+def artist_pics(ids: str = "", identity: dict = Depends(current_identity)) -> dict:
+    """Photos d'artistes (Deezer, best-effort) pour un lot d'ids — alimente les
+    vignettes des listes d'abonnements côté client (lazy-load).
+
+    Résolution via le cache de `suggest` : un artiste déjà vu ne coûte aucun
+    appel réseau. Un id introuvable ou une source indisponible = simplement
+    absent du résultat (le client garde son icône de repli)."""
+    out: dict[str, str] = {}
+    seen = set()
+    for eid in (i.strip() for i in ids.split(",")):
+        if not eid or eid in seen:
+            continue
+        seen.add(eid)
+        if len(seen) > 60:      # borne : évite un abus de la route
+            break
+        meta = _artist_meta(eid)
+        pic = meta.get("picture") if meta else ""
+        if pic:
+            out[eid] = pic
+    return out
+
+
 @router.get("/api/social/follow-state")
 def follow_state(target_type: str, target_id: str,
                  identity: dict = Depends(current_identity)) -> dict:

@@ -116,6 +116,17 @@ def test_user_follow_state_on_profile(client):
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
 
 
+def test_artist_pics_batch(client, monkeypatch):
+    from backend import follows
+    monkeypatch.setattr(follows.suggest, "resolve_artist",
+                        lambda i: {"id": i, "label": "A" + i, "picture": f"http://pic/{i}.jpg"})
+    r = client.get("/api/social/artist-pics?ids=892,163,892").json()
+    assert r == {"892": "http://pic/892.jpg", "163": "http://pic/163.jpg"}
+    # id sans photo -> absent
+    monkeypatch.setattr(follows.suggest, "resolve_artist", lambda i: {"id": i, "label": "x", "picture": ""})
+    assert client.get("/api/social/artist-pics?ids=999").json() == {}
+
+
 def test_profile_following_and_followers_lists(client):
     c = client
     c.get("/api/social/me", headers=USER2)             # crée bob

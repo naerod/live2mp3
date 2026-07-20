@@ -91,9 +91,14 @@
   function followRow(it) {
     const isUser = it.type === "user";
     const href = isUser ? `/u/${encodeURIComponent(it.id)}` : L2M.entityHref(it.type, it.id);
-    const media = isUser
-      ? L2M.avatar({ username: it.id, display_name: it.label, avatar: it.avatar }, false)
-      : `<span class="fr-ic"><span class="material-symbols-outlined">${FOLLOW_ICON[it.type] || "tag"}</span></span>`;
+    let media;
+    if (isUser) {
+      media = L2M.avatar({ username: it.id, display_name: it.label, avatar: it.avatar }, false);
+    } else {
+      // Artiste : icône de repli + `data-artist-id` pour hydrater la photo Deezer.
+      const attr = it.type === "artist" ? ` data-artist-id="${esc(it.id)}"` : "";
+      media = `<span class="fr-ic"${attr}><span class="material-symbols-outlined">${FOLLOW_ICON[it.type] || "tag"}</span></span>`;
+    }
     const role = isUser && it.role ? " " + L2M.roleBadge(it.role) : "";
     return `<div class="follow-row">
       <a class="fr-main" href="${href}">
@@ -132,6 +137,21 @@
           <div class="follow-list">${groups[tt].map(followRow).join("")}</div></div>`;
       });
     return blocks.length ? blocks.join("") : `<div class="soc-empty">${t("no_following")}</div>`;
+  }
+
+  // Récupère les photos d'artistes (Deezer) et remplace les icônes de repli.
+  async function hydrateArtistPics() {
+    const els = [...document.querySelectorAll(".fr-ic[data-artist-id]")];
+    const ids = [...new Set(els.map((e) => e.dataset.artistId))];
+    if (!ids.length) return;
+    let pics = {};
+    try {
+      pics = await (await fetch("/api/social/artist-pics?ids=" + encodeURIComponent(ids.join(",")))).json();
+    } catch (e) { return; }
+    els.forEach((e) => {
+      const p = pics[e.dataset.artistId];
+      if (p) { e.classList.add("has-pic"); e.innerHTML = `<img src="${esc(p)}" alt="" loading="lazy">`; }
+    });
   }
 
   // Pli/dépli des groupes d'abonnements au clic sur l'en-tête.
@@ -274,10 +294,12 @@
       wirePubSort();
       wireFollowRows();
       wireFollowGroups();
+      hydrateArtistPics();
     });
     wirePubSort();
     wireFollowRows();
     wireFollowGroups();
+    hydrateArtistPics();
 
     if (DATA.is_self) wireEdit();
     else {
