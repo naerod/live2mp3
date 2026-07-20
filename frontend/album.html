@@ -58,9 +58,30 @@
     justify-content:center;cursor:pointer}
   .date-cal-btn:hover{color:var(--accent);background:var(--bg)}
   .date-cal-btn .material-symbols-outlined{font-size:19px}
-  /* input date natif : invisible, sert seulement à ouvrir le calendrier natif. */
-  #e-date-native{position:absolute;right:8px;bottom:0;width:1px;height:1px;
-    padding:0;margin:0;border:0;opacity:0;pointer-events:none}
+  /* Calendrier personnalisé (aux couleurs du site, dark/light automatique). */
+  .cal-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:min(290px,88vw);
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    box-shadow:0 14px 34px rgba(0,0,0,.38);padding:12px;color:var(--fg)}
+  .cal-pop[hidden]{display:none}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .cal-title{font-weight:600;font-size:14px;text-transform:capitalize}
+  .cal-nav{width:30px;height:30px;border:none;background:transparent;color:var(--muted);
+    border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0;padding:0}
+  .cal-nav:hover{background:var(--bg);color:var(--fg)}
+  .cal-nav .material-symbols-outlined{font-size:20px}
+  .cal-wd{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px}
+  .cal-wd span{text-align:center;font-size:11px;color:var(--muted);padding:2px 0;text-transform:capitalize}
+  .cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .cal-day{height:32px;border:none;background:transparent;color:var(--fg);border-radius:8px;
+    cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0;padding:0}
+  .cal-day.empty{visibility:hidden;pointer-events:none}
+  .cal-day:hover{background:var(--bg)}
+  .cal-day.today{box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+  .cal-day.sel{background:var(--accent);color:#fff;font-weight:600}
+  .cal-day.sel:hover{background:var(--accent)}
+  .cal-foot{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+  .cal-act{border:none;background:transparent;color:var(--accent);font-size:13px;cursor:pointer;margin:0;padding:4px 8px;border-radius:7px}
+  .cal-act:hover{background:var(--bg)}
   .date-field #e-date.date-invalid{border-color:#e5484d}
   .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
   .date-hint.show{display:block}
@@ -212,7 +233,19 @@
             <div class="date-field">
               <input id="e-date" type="text" placeholder="AAAA-MM-JJ" inputmode="numeric" autocomplete="off">
               <button type="button" class="date-cal-btn" id="date-cal-btn"><span class="material-symbols-outlined">calendar_month</span></button>
-              <input type="date" id="e-date-native" tabindex="-1" aria-hidden="true">
+              <div class="cal-pop" id="cal-pop" hidden>
+                <div class="cal-head">
+                  <button type="button" class="cal-nav" data-d="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                  <span class="cal-title" id="cal-title"></span>
+                  <button type="button" class="cal-nav" data-d="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                </div>
+                <div class="cal-wd" id="cal-wd"></div>
+                <div class="cal-days" id="cal-days"></div>
+                <div class="cal-foot">
+                  <button type="button" class="cal-act" id="cal-clear"></button>
+                  <button type="button" class="cal-act" id="cal-today"></button>
+                </div>
+              </div>
             </div>
             <div class="date-hint" id="date-hint"></div></div>
           <div class="fg full"><label id="t-f-guests">Artistes invités</label>
@@ -275,7 +308,7 @@ const TT={
       save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
-      date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",
+      date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",cal_clear:"Effacer",cal_today:"Aujourd'hui",
       date_invalid:"Date non reconnue — essayez « AAAA-MM-JJ » (ou « juin 2024 », « 03/06/2024 »…) ou le calendrier.",
       meta_legend:"Les champs marqués d'un tag sont écrits dans les métadonnées ID3 des pistes MP3 à l'enregistrement.",
       tracks_legend:"Les titres de pistes sont écrits dans les métadonnées ID3 (titre + numéro de piste) des MP3.",
@@ -293,7 +326,7 @@ const TT={
       save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
-      date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",
+      date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",cal_clear:"Clear",cal_today:"Today",
       date_invalid:"Date not recognised — try “YYYY-MM-DD” (or “June 2024”, “06/03/2024”…) or the calendar.",
       meta_legend:"Fields marked with a tag are written to the MP3 tracks' ID3 metadata on save.",
       tracks_legend:"Track titles are written to the MP3 ID3 metadata (title + track number).",
@@ -321,6 +354,8 @@ function applyLang(){
   document.getElementById("date-cal-btn").title=t.date_cal;
   document.getElementById("date-cal-btn").setAttribute("aria-label",t.date_cal);
   document.getElementById("date-hint").textContent=t.date_invalid;
+  document.getElementById("cal-clear").textContent=t.cal_clear;
+  document.getElementById("cal-today").textContent=t.cal_today;
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-date").textContent=t.f_date;
@@ -514,9 +549,8 @@ function addLabel(){
 document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
 // Date : saisie manuelle libre, reformulée automatiquement vers un format ISO
-// partiel (AAAA, AAAA-MM ou AAAA-MM-JJ). Le bouton calendrier ouvre le sélecteur
-// natif (renvoie toujours AAAA-MM-JJ). Une saisie non interprétable est refusée.
-const dateIsFull=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
+// partiel (AAAA, AAAA-MM ou AAAA-MM-JJ). Le bouton calendrier ouvre un sélecteur
+// personnalisé (aux couleurs du site). Une saisie non interprétable est refusée.
 const _DATE_MONTHS={
   janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12,
   january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
@@ -572,15 +606,46 @@ function validateDate(){
 }
 (function initDatePicker(){
   const txt=document.getElementById("e-date");
-  const nat=document.getElementById("e-date-native");
   const btn=document.getElementById("date-cal-btn");
-  btn.onclick=()=>{
-    const v=txt.value.trim();
-    nat.value=dateIsFull(v)?v:"";
-    if(typeof nat.showPicker==="function"){try{nat.showPicker();}catch(e){nat.focus();nat.click();}}
-    else{nat.focus();nat.click();}
-  };
-  nat.onchange=()=>{ if(nat.value){txt.value=nat.value;validateDate();txt.focus();} };
+  const pop=document.getElementById("cal-pop");
+  const titleEl=document.getElementById("cal-title");
+  const wdEl=document.getElementById("cal-wd");
+  const daysEl=document.getElementById("cal-days");
+  const today=new Date();
+  let view=new Date();   // mois affiché
+  const pad=n=>String(n).padStart(2,"0");
+  const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const lang=()=>localStorage.getItem("l2m-lang")||"fr";
+  function parseSel(){ const m=txt.value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+  function render(){
+    const y=view.getFullYear(),mo=view.getMonth(),sel=parseSel();
+    titleEl.textContent=new Intl.DateTimeFormat(lang(),{month:"long",year:"numeric"}).format(view);
+    // En-tête jours (lundi en premier) via Intl — le 1er janv. 2024 est un lundi.
+    wdEl.innerHTML=Array.from({length:7},(_,i)=>
+      `<span>${new Intl.DateTimeFormat(lang(),{weekday:"short"}).format(new Date(2024,0,1+i))}</span>`).join("");
+    const startDow=(new Date(y,mo,1).getDay()+6)%7;   // lundi=0
+    const nDays=new Date(y,mo+1,0).getDate();
+    let h="";
+    for(let i=0;i<startDow;i++)h+=`<span class="cal-day empty"></span>`;
+    for(let d=1;d<=nDays;d++){
+      const isToday=today.getFullYear()===y&&today.getMonth()===mo&&today.getDate()===d;
+      const isSel=sel&&sel.getFullYear()===y&&sel.getMonth()===mo&&sel.getDate()===d;
+      h+=`<button type="button" class="cal-day${isSel?" sel":""}${isToday?" today":""}" data-d="${d}">${d}</button>`;
+    }
+    daysEl.innerHTML=h;
+    daysEl.querySelectorAll(".cal-day[data-d]").forEach(b=>b.onclick=()=>{
+      txt.value=ymd(new Date(y,mo,+b.dataset.d));validateDate();close();
+    });
+  }
+  function open(){ const s=parseSel();view=s?new Date(s.getFullYear(),s.getMonth(),1):new Date(today.getFullYear(),today.getMonth(),1);render();pop.hidden=false;
+    document.addEventListener("mousedown",onDoc,true);document.addEventListener("keydown",onKey); }
+  function close(){ pop.hidden=true;document.removeEventListener("mousedown",onDoc,true);document.removeEventListener("keydown",onKey); }
+  function onDoc(e){ if(!pop.contains(e.target)&&!btn.contains(e.target))close(); }
+  function onKey(e){ if(e.key==="Escape")close(); }
+  btn.onclick=e=>{ e.stopPropagation();pop.hidden?open():close(); };
+  pop.querySelectorAll(".cal-nav").forEach(b=>b.onclick=()=>{ view=new Date(view.getFullYear(),view.getMonth()+ +b.dataset.d,1);render(); });
+  document.getElementById("cal-today").onclick=()=>{ txt.value=ymd(today);validateDate();close(); };
+  document.getElementById("cal-clear").onclick=()=>{ txt.value="";validateDate();close(); };
   txt.addEventListener("blur",validateDate);
   txt.addEventListener("input",()=>{ if(txt.classList.contains("date-invalid"))validateDate(); });
 })();
