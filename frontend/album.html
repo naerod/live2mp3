@@ -49,6 +49,21 @@
     font-size:12px;margin:2px 0 12px}
   .meta-legend .material-symbols-outlined{font-size:15px;color:var(--accent);
     font-variation-settings:'FILL' 1}
+  /* Champ date : saisie manuelle + bouton calendrier (impose AAAA-MM-JJ). */
+  .date-field{position:relative;display:flex;align-items:center}
+  .date-field #e-date{flex:1;padding-right:38px;width:100%}
+  .date-cal-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+    width:30px;height:30px;margin:0;padding:0;border:none;background:transparent;
+    color:var(--muted);border-radius:8px;display:flex;align-items:center;
+    justify-content:center;cursor:pointer}
+  .date-cal-btn:hover{color:var(--accent);background:var(--bg)}
+  .date-cal-btn .material-symbols-outlined{font-size:19px}
+  /* input date natif : invisible, sert seulement à ouvrir le calendrier natif. */
+  #e-date-native{position:absolute;right:8px;bottom:0;width:1px;height:1px;
+    padding:0;margin:0;border:0;opacity:0;pointer-events:none}
+  .date-field #e-date.date-invalid{border-color:#e5484d}
+  .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
+  .date-hint.show{display:block}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
@@ -193,7 +208,13 @@
         <div class="field-grid">
           <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-title" type="text"></div>
           <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
-          <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-date" type="text" placeholder="2026-03-04"></div>
+          <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
+            <div class="date-field">
+              <input id="e-date" type="text" placeholder="AAAA-MM-JJ" inputmode="numeric" autocomplete="off">
+              <button type="button" class="date-cal-btn" id="date-cal-btn"><span class="material-symbols-outlined">calendar_month</span></button>
+              <input type="date" id="e-date-native" tabindex="-1" aria-hidden="true">
+            </div>
+            <div class="date-hint" id="date-hint"></div></div>
           <div class="fg full"><label id="t-f-guests">Artistes invités</label>
             <div class="guest-list" id="guest-list"></div>
             <div id="e-guest-add"></div></div>
@@ -254,6 +275,8 @@ const TT={
       save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
+      date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",
+      date_invalid:"Date invalide — format attendu : AAAA-MM-JJ (l'année seule ou année-mois sont acceptées).",
       meta_legend:"Les champs marqués d'un tag sont écrits dans les métadonnées ID3 des pistes MP3 à l'enregistrement.",
       tracks_legend:"Les titres de pistes sont écrits dans les métadonnées ID3 (titre + numéro de piste) des MP3.",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
@@ -270,6 +293,8 @@ const TT={
       save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
+      date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",
+      date_invalid:"Invalid date — expected format: YYYY-MM-DD (year or year-month also accepted).",
       meta_legend:"Fields marked with a tag are written to the MP3 tracks' ID3 metadata on save.",
       tracks_legend:"Track titles are written to the MP3 ID3 metadata (title + track number).",
       no_cover:"No cover",no_traycard:"No tray card",
@@ -292,6 +317,10 @@ function applyLang(){
   document.getElementById("t-meta-legend").textContent=t.meta_legend;
   document.getElementById("t-tracks-legend").textContent=t.tracks_legend;
   document.querySelectorAll(".meta-badge").forEach(b=>b.title=t.meta_badge_title);
+  document.getElementById("e-date").placeholder=t.date_ph;
+  document.getElementById("date-cal-btn").title=t.date_cal;
+  document.getElementById("date-cal-btn").setAttribute("aria-label",t.date_cal);
+  document.getElementById("date-hint").textContent=t.date_invalid;
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-date").textContent=t.f_date;
@@ -484,6 +513,34 @@ function addLabel(){
   if(v&&!labels.map(x=>x.toLowerCase()).includes(v.toLowerCase())){labels.push(v);renderChips();}inp.value="";}
 document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
+// Date : saisie manuelle libre, mais formalisme ISO imposé. Le bouton calendrier
+// ouvre le sélecteur natif (renvoie toujours AAAA-MM-JJ). L'année seule ou
+// année-mois restent acceptées (concerts anciens à date partielle).
+const DATE_RE=/^\d{4}(-\d{2}(-\d{2})?)?$/;
+const dateIsFull=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
+function validateDate(){
+  const txt=document.getElementById("e-date"),hint=document.getElementById("date-hint");
+  const v=txt.value.trim();
+  const ok=v===""||DATE_RE.test(v);
+  txt.classList.toggle("date-invalid",!ok);
+  hint.classList.toggle("show",!ok);
+  return ok;
+}
+(function initDatePicker(){
+  const txt=document.getElementById("e-date");
+  const nat=document.getElementById("e-date-native");
+  const btn=document.getElementById("date-cal-btn");
+  btn.onclick=()=>{
+    const v=txt.value.trim();
+    nat.value=dateIsFull(v)?v:"";
+    if(typeof nat.showPicker==="function"){try{nat.showPicker();}catch(e){nat.focus();nat.click();}}
+    else{nat.focus();nat.click();}
+  };
+  nat.onchange=()=>{ if(nat.value){txt.value=nat.value;validateDate();txt.focus();} };
+  txt.addEventListener("blur",validateDate);
+  txt.addEventListener("input",()=>{ if(txt.classList.contains("date-invalid"))validateDate(); });
+})();
+
 // Save all
 document.getElementById("save-all").onclick=async()=>{
   const aPick=artistAC?artistAC.get():{id:"",label:""};
@@ -499,6 +556,7 @@ document.getElementById("save-all").onclick=async()=>{
     source_url:document.getElementById("e-src-url").value.trim(),
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
+  if(!validateDate()){toast(TT[L()].date_invalid,true);document.getElementById("e-date").focus();return;}
   savingStart("save-all");
   if(PENDING_COVER_DELETE){
     const rDel=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
