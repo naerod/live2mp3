@@ -104,6 +104,18 @@ def test_role_capture_and_badge(client):
     assert prof["profile"]["role"] == "gestionnaire"
 
 
+def test_role_never_downgrades(client):
+    c = client
+    ADMIN_ROOT = {"X-authentik-username": "root", "X-authentik-groups": "authentik Admins"}
+    GEST_ROOT = {"X-authentik-username": "root", "X-authentik-groups": "live2mp3-gestionnaire"}
+    # root confirmé admin une fois...
+    assert c.get("/api/social/me", headers=ADMIN_ROOT).json()["role"] == "admin"
+    # ... puis rechargement sans le groupe superuser (Authentik ne le transmet pas) :
+    # le rôle reste admin (pas de rétrogradation automatique).
+    assert c.get("/api/social/me", headers=GEST_ROOT).json()["role"] == "admin"
+    assert c.get("/api/social/users/root").json()["profile"]["role"] == "admin"
+
+
 def test_user_follow_state_on_profile(client):
     c = client
     c.get("/api/social/me", headers=USER2)             # crée le profil bob

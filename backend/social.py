@@ -56,6 +56,9 @@ def _is_moderator(groups: set[str]) -> bool:
     return bool(groups & SUPERUSER_GROUPS) or GROUP_GESTIONNAIRE in groups
 
 
+_ROLE_RANK = {"": 0, "user": 1, "gestionnaire": 2, "admin": 3}
+
+
 def _role_of(groups: set[str]) -> str:
     """Rôle canonique (le plus élevé) à partir des groupes Authentik."""
     if groups & SUPERUSER_GROUPS:
@@ -68,17 +71,26 @@ def _role_of(groups: set[str]) -> str:
 
 
 def _touch_role(conn: sqlite3.Connection, username: str, groups: set[str]) -> str:
-    """Met à jour le rôle en cache si les groupes ont changé. Retourne le rôle."""
+    """Met à jour le rôle en cache **de façon monotone** (jamais de rétrogradation
+    automatique). Retourne le rôle effectif (le plus élevé confirmé).
+
+    Sur la preprod, l'outpost Authentik ne transmet pas toujours le groupe
+    superuser (« authentik Admins ») dans les en-têtes du forward-auth : sans
+    garde-fou, un admin qui recharge une page était rétrogradé en gestionnaire
+    dès que ce groupe manquait. On ne conserve donc que la promotion ; une vraie
+    rétrogradation se fait par une remise à zéro explicite du champ `role`."""
     role = _role_of(groups)
-    if not role:
-        return ""
     row = conn.execute("SELECT role FROM profiles WHERE username=?", (username,)).fetchone()
-    if row is not None and row["role"] != role:
+    cached = row["role"] if row is not None else ""
+    if not role:
+        return cached
+    if row is not None and _ROLE_RANK.get(role, 0) > _ROLE_RANK.get(cached, 0):
         conn.execute(
             "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
             (role, _now(), username),
         )
-    return role
+        return role
+    return cached or role
 
 
 def _safe_username(username: str) -> str:
