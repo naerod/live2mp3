@@ -12,6 +12,11 @@
       no_comments: "Aucun commentaire.", no_likes: "Aucun album aimé.",
       not_found: "Utilisateur introuvable.", on_album: "sur", edited: "modifié",
       titres: "titres", back: "Retour",
+      following: "Abonnements", followers: "Abonnés",
+      grp_artist: "Artistes", grp_user: "Utilisateurs",
+      grp_festival: "Festivals", grp_venue: "Lieux",
+      no_following: "Aucun abonnement.", no_followers: "Aucun abonné.",
+      its_you: "C'est vous",
       city: "Ville", artist: "Artiste/groupe favori",
       city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
       pick_hint: "Choisissez une entrée dans la liste",
@@ -27,6 +32,11 @@
       no_comments: "No comments yet.", no_likes: "No liked albums yet.",
       not_found: "User not found.", on_album: "on", edited: "edited",
       titres: "tracks", back: "Back",
+      following: "Following", followers: "Followers",
+      grp_artist: "Artists", grp_user: "Users",
+      grp_festival: "Festivals", grp_venue: "Venues",
+      no_following: "Not following anyone yet.", no_followers: "No followers yet.",
+      its_you: "That's you",
       city: "City", artist: "Favourite artist/band",
       sort_by: "Sort", sort_date: "Concert date", sort_new: "Published",
       city_ph: "Start typing: Dijon…", artist_ph: "Start typing: Coldplay…",
@@ -73,6 +83,66 @@
     </a>`;
   }
 
+  // ── Abonnements / Abonnés ──
+  const FOLLOW_ICON = { artist: "artist", festival: "festival", venue: "location_on", user: "person" };
+  const GRP_ORDER = ["artist", "user", "festival", "venue"];
+
+  // Une ligne : media + libellé (+ badge rôle) cliquable, puis slot bouton Suivre/cloche.
+  function followRow(it) {
+    const isUser = it.type === "user";
+    const href = isUser ? `/u/${encodeURIComponent(it.id)}` : L2M.entityHref(it.type, it.id);
+    const media = isUser
+      ? L2M.avatar({ username: it.id, display_name: it.label, avatar: it.avatar }, false)
+      : `<span class="fr-ic"><span class="material-symbols-outlined">${FOLLOW_ICON[it.type] || "tag"}</span></span>`;
+    const role = isUser && it.role ? " " + L2M.roleBadge(it.role) : "";
+    return `<div class="follow-row">
+      <a class="fr-main" href="${href}">
+        ${media}
+        <span class="fr-txt"><span class="fr-name">${esc(it.label)}${role}</span></span>
+      </a>
+      <div class="follow-wrap fr-act" data-type="${esc(it.type)}" data-id="${esc(it.id)}"
+           data-label="${esc(it.label)}" data-following="${it.viewer_following ? 1 : 0}"
+           data-notify="${it.viewer_notify ? 1 : 0}"></div>
+    </div>`;
+  }
+
+  function followingContent() {
+    const groups = DATA.following_list || {};
+    const blocks = GRP_ORDER
+      .filter((tt) => (groups[tt] || []).length)
+      .map((tt) => `<div class="follow-grp"><h3 class="follow-grp-h">${t("grp_" + tt)}
+        <span class="cnt">${groups[tt].length}</span></h3>
+        <div class="follow-list">${groups[tt].map(followRow).join("")}</div></div>`);
+    return blocks.length ? blocks.join("") : `<div class="soc-empty">${t("no_following")}</div>`;
+  }
+
+  function followersContent() {
+    const list = DATA.followers_list || [];
+    return list.length
+      ? `<div class="follow-list">${list.map(followRow).join("")}</div>`
+      : `<div class="soc-empty">${t("no_followers")}</div>`;
+  }
+
+  // Monte le bouton Suivre/cloche sur chaque ligne (état = relation du visiteur).
+  function wireFollowRows() {
+    document.querySelectorAll(".fr-act").forEach((slot) => {
+      const type = slot.dataset.type, id = slot.dataset.id;
+      // On ne se suit pas soi-même : pas de bouton sur sa propre ligne.
+      if (type === "user" && ME.authenticated && id === ME.username) {
+        slot.outerHTML = `<span class="fr-you">${t("its_you")}</span>`;
+        return;
+      }
+      L2M.followButton(slot, {
+        type, id, label: slot.dataset.label,
+        state: {
+          following: slot.dataset.following === "1",
+          notify: slot.dataset.notify === "1",
+          followers: 0,
+        },
+      });
+    });
+  }
+
   function sortedPubs() {
     const arr = [...DATA.publications];
     if (pubSort === "imported") arr.sort((a, b) => (b.imported_at || "").localeCompare(a.imported_at || ""));
@@ -92,6 +162,8 @@
         ? DATA.comments.map(commentItem).join("")
         : `<div class="soc-empty">${t("no_comments")}</div>`;
     }
+    if (activeTab === "following") return followingContent();
+    if (activeTab === "followers") return followersContent();
     return DATA.likes.length
       ? `<div class="prof-albums">${DATA.likes.map(albumCard).join("")}</div>`
       : `<div class="soc-empty">${t("no_likes")}</div>`;
@@ -158,6 +230,8 @@
         <button data-tab="publications" class="${activeTab === "publications" ? "active" : ""}">${t("publications")}<span class="cnt">${c.publications}</span></button>
         <button data-tab="comments" class="${activeTab === "comments" ? "active" : ""}">${t("comments")}<span class="cnt">${c.comments}</span></button>
         <button data-tab="likes" class="${activeTab === "likes" ? "active" : ""}">${t("likes")}<span class="cnt">${c.likes}</span></button>
+        <button data-tab="following" class="${activeTab === "following" ? "active" : ""}">${t("following")}<span class="cnt">${c.following}</span></button>
+        <button data-tab="followers" class="${activeTab === "followers" ? "active" : ""}">${t("followers")}<span class="cnt">${c.followers}</span></button>
       </div>
       <div id="tab-content">${tabContent()}</div>`;
 
@@ -166,8 +240,10 @@
       document.querySelectorAll(".prof-tabs button").forEach((x) => x.classList.toggle("active", x === b));
       document.getElementById("tab-content").innerHTML = tabContent();
       wirePubSort();
+      wireFollowRows();
     });
     wirePubSort();
+    wireFollowRows();
 
     if (DATA.is_self) wireEdit();
     else {
@@ -241,6 +317,7 @@
   async function load() {
     applyStaticI18n();
     await L2M.initHeader({onLangChange:()=>onLangChanged()});
+    ME = await L2M.me();
     const r = await fetch(`/api/social/users/${encodeURIComponent(USERNAME)}`);
     if (!r.ok) {
       document.getElementById("content").innerHTML =

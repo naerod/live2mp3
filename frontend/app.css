@@ -471,6 +471,30 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .bell-btn.on{background:color-mix(in srgb,var(--accent) 16%,var(--card));
   border-color:var(--accent);color:var(--accent)}
 
+/* Listes Abonnements / Abonnés sur un profil */
+.follow-grp{margin-top:18px}
+.follow-grp:first-child{margin-top:8px}
+.follow-grp-h{display:flex;align-items:center;gap:8px;margin:0 0 4px;
+  font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em}
+.follow-grp-h .cnt{font-size:12px;color:var(--muted);background:var(--bg);
+  border:1px solid var(--border);border-radius:999px;padding:1px 8px;letter-spacing:0}
+.follow-row{display:flex;align-items:center;gap:12px;padding:10px 0;
+  border-top:1px solid var(--border)}
+.follow-list .follow-row:first-child{border-top:none}
+.fr-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0;
+  text-decoration:none;color:var(--fg)}
+.fr-main:hover .fr-name{color:var(--accent)}
+.fr-ic{width:40px;height:40px;border-radius:50%;flex-shrink:0;display:flex;
+  align-items:center;justify-content:center;background:var(--bg);
+  border:1px solid var(--border);color:var(--muted)}
+.fr-ic .material-symbols-outlined{font-size:22px}
+.fr-txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.fr-name{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;display:flex;align-items:center;gap:6px}
+.fr-act{flex-shrink:0}
+.fr-you{font-size:12.5px;color:var(--muted);flex-shrink:0;font-style:italic}
+
 /* Badge de rôle sur un profil (utilisateur / gestionnaire / admin) */
 .role-badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
   border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle;

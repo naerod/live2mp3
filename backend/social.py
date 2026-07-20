@@ -319,6 +319,95 @@ def batch_profiles(u: str = "", identity: dict = Depends(current_identity)) -> d
         return _profiles_map(conn, users)
 
 
+def _roles_map(conn: sqlite3.Connection, usernames: set[str]) -> dict[str, str]:
+    if not usernames:
+        return {}
+    qs = ",".join("?" * len(usernames))
+    return {
+        r["username"]: (r["role"] or "")
+        for r in conn.execute(
+            f"SELECT username, role FROM profiles WHERE username IN ({qs})",
+            tuple(usernames),
+        ).fetchall()
+    }
+
+
+def _viewer_follow_set(conn: sqlite3.Connection, viewer: str | None) -> dict[tuple, bool]:
+    """(target_type, target_id) -> notify, pour l'état des boutons du visiteur."""
+    if not viewer:
+        return {}
+    return {
+        (r["target_type"], r["target_id"]): bool(r["notify"])
+        for r in conn.execute(
+            "SELECT target_type, target_id, notify FROM follows WHERE username=?",
+            (viewer,),
+        ).fetchall()
+    }
+
+
+def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None) -> tuple:
+    """Abonnements (groupés par type) et abonnés d'un profil.
+
+    Chaque item porte l'état de suivi *du visiteur* (`viewer_following` /
+    `viewer_notify`) pour que le bouton Suivre/Suivi + cloche reflète la relation
+    de celui qui regarde — permet de gérer ses propres abonnements depuis la
+    liste (façon « faire du tri »).
+    """
+    vset = _viewer_follow_set(conn, viewer)
+
+    # --- Abonnements de `owner`, groupés par type ---
+    rows = conn.execute(
+        "SELECT target_type, target_id, target_label, created_at FROM follows "
+        "WHERE username=? ORDER BY created_at DESC",
+        (owner,),
+    ).fetchall()
+    following: dict[str, list] = {"artist": [], "user": [], "festival": [], "venue": []}
+    followed_users = {r["target_id"] for r in rows if r["target_type"] == "user"}
+    uprofs = _profiles_map(conn, followed_users)
+    uroles = _roles_map(conn, followed_users)
+    for r in rows:
+        tt, tid = r["target_type"], r["target_id"]
+        item = {
+            "type": tt,
+            "id": tid,
+            "label": r["target_label"] or tid,
+            "viewer_following": (tt, tid) in vset,
+            "viewer_notify": vset.get((tt, tid), False),
+        }
+        if tt == "user":
+            p = uprofs.get(tid, {})
+            item["label"] = p.get("display_name") or tid
+            item["avatar"] = p.get("avatar", False)
+            item["role"] = uroles.get(tid, "")
+        following.setdefault(tt, []).append(item)
+
+    # --- Abonnés de `owner` (uniquement des utilisateurs) ---
+    frows = conn.execute(
+        "SELECT username, created_at FROM follows "
+        "WHERE target_type='user' AND target_id=? ORDER BY created_at DESC",
+        (owner,),
+    ).fetchall()
+    fusers = {r["username"] for r in frows}
+    fprofs = _profiles_map(conn, fusers)
+    froles = _roles_map(conn, fusers)
+    followers = []
+    for r in frows:
+        u = r["username"]
+        p = fprofs.get(u, {})
+        followers.append({
+            "type": "user",
+            "id": u,
+            "label": p.get("display_name") or u,
+            "avatar": p.get("avatar", False),
+            "role": froles.get(u, ""),
+            "viewer_following": ("user", u) in vset,
+            "viewer_notify": vset.get(("user", u), False),
+        })
+
+    following_total = sum(len(v) for v in following.values())
+    return following, followers, following_total
+
+
 @router.get("/api/social/users/{username}")
 def user_profile(username: str, identity: dict = Depends(current_identity)) -> dict:
     viewer = identity.get("username")
@@ -337,6 +426,13 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         if not has_activity:
             has_activity = conn.execute(
                 "SELECT 1 FROM favorites WHERE username=? LIMIT 1", (username,)
+            ).fetchone() is not None
+        # Suit quelqu'un, ou est suivi : le profil existe (au moins pour ses listes).
+        if not has_activity:
+            has_activity = conn.execute(
+                "SELECT 1 FROM follows WHERE username=? "
+                "OR (target_type='user' AND target_id=?) LIMIT 1",
+                (username, username),
             ).fetchone() is not None
 
         cat_all = _catalogue_map(include_drafts=is_self)
@@ -394,6 +490,9 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
                 following = True
                 notify = bool(frow["notify"])
 
+        # Abonnements (groupés par type) + abonnés de ce profil.
+        followed, followers_list, following_total = _follow_lists(conn, username, viewer)
+
     prof = {
         "username": username,
         "display_name": (row["display_name"] if row else username),
@@ -413,11 +512,15 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
             "publications": len(publications),
             "comments": len(comments),
             "likes": len(likes),
+            "following": following_total,
+            "followers": followers,
         },
         "follow": {"followers": followers, "following": following, "notify": notify},
         "publications": publications,
         "comments": comments,
         "likes": likes,
+        "following_list": followed,
+        "followers_list": followers_list,
     }
 
 

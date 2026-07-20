@@ -114,3 +114,31 @@ def test_user_follow_state_on_profile(client):
     # bob voit son propre profil : pas de bouton suivre (following False, followers 1)
     prof = c.get("/api/social/users/bob", headers=USER2).json()
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
+
+
+def test_profile_following_and_followers_lists(client):
+    c = client
+    c.get("/api/social/me", headers=USER2)             # crée bob
+    # alice suit un artiste + bob
+    c.post("/api/social/follow",
+           json={"target_type": "artist", "target_id": "42", "target_label": "U2"}, headers=USER)
+    c.post("/api/social/follow",
+           json={"target_type": "user", "target_id": "bob", "target_label": "Bob"}, headers=USER)
+
+    # Profil d'alice : ses abonnements groupés par type.
+    prof = c.get("/api/social/users/alice", headers=USER).json()
+    assert prof["counts"]["following"] == 2 and prof["counts"]["followers"] == 0
+    fl = prof["following_list"]
+    assert [i["id"] for i in fl["artist"]] == ["42"]
+    assert fl["user"][0]["id"] == "bob"
+    # Vu par alice (=viewer), chaque ligne porte son propre état de suivi.
+    assert fl["artist"][0]["viewer_following"] is True
+    assert fl["artist"][0]["viewer_notify"] is True
+
+    # Profil de bob : alice apparaît dans ses abonnés, avec l'état du visiteur.
+    prof = c.get("/api/social/users/bob", headers=USER).json()
+    assert prof["counts"]["followers"] == 1
+    fw = prof["followers_list"]
+    assert fw[0]["id"] == "alice" and fw[0]["type"] == "user"
+    # Le visiteur (alice) ne suit pas alice → viewer_following False.
+    assert fw[0]["viewer_following"] is False
