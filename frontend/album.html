@@ -63,8 +63,10 @@
     background:var(--card);border:1px solid var(--border);border-radius:14px;
     box-shadow:0 14px 34px rgba(0,0,0,.38);padding:12px;color:var(--fg)}
   .cal-pop[hidden]{display:none}
-  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-  .cal-title{font-weight:600;font-size:14px;text-transform:capitalize}
+  .cal-head{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .cal-nav-row{display:flex;align-items:center;justify-content:space-between}
+  .cal-year{font-weight:700;font-size:15px}
+  .cal-month{font-weight:600;font-size:13.5px;text-transform:capitalize;color:var(--muted)}
   .cal-nav{width:30px;height:30px;border:none;background:transparent;color:var(--muted);
     border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0;padding:0}
   .cal-nav:hover{background:var(--bg);color:var(--fg)}
@@ -235,9 +237,16 @@
               <button type="button" class="date-cal-btn" id="date-cal-btn"><span class="material-symbols-outlined">calendar_month</span></button>
               <div class="cal-pop" id="cal-pop" hidden>
                 <div class="cal-head">
-                  <button type="button" class="cal-nav" data-d="-1"><span class="material-symbols-outlined">chevron_left</span></button>
-                  <span class="cal-title" id="cal-title"></span>
-                  <button type="button" class="cal-nav" data-d="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                  <div class="cal-nav-row">
+                    <button type="button" class="cal-nav" data-y="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <span class="cal-year" id="cal-year"></span>
+                    <button type="button" class="cal-nav" data-y="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                  </div>
+                  <div class="cal-nav-row">
+                    <button type="button" class="cal-nav" data-m="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <span class="cal-month" id="cal-month"></span>
+                    <button type="button" class="cal-nav" data-m="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                  </div>
                 </div>
                 <div class="cal-wd" id="cal-wd"></div>
                 <div class="cal-days" id="cal-days"></div>
@@ -608,7 +617,8 @@ function validateDate(){
   const txt=document.getElementById("e-date");
   const btn=document.getElementById("date-cal-btn");
   const pop=document.getElementById("cal-pop");
-  const titleEl=document.getElementById("cal-title");
+  const yearEl=document.getElementById("cal-year");
+  const monthEl=document.getElementById("cal-month");
   const wdEl=document.getElementById("cal-wd");
   const daysEl=document.getElementById("cal-days");
   const today=new Date();
@@ -619,7 +629,8 @@ function validateDate(){
   function parseSel(){ const m=txt.value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
   function render(){
     const y=view.getFullYear(),mo=view.getMonth(),sel=parseSel();
-    titleEl.textContent=new Intl.DateTimeFormat(lang(),{month:"long",year:"numeric"}).format(view);
+    yearEl.textContent=y;
+    monthEl.textContent=new Intl.DateTimeFormat(lang(),{month:"long"}).format(view);
     // En-tête jours (lundi en premier) via Intl — le 1er janv. 2024 est un lundi.
     wdEl.innerHTML=Array.from({length:7},(_,i)=>
       `<span>${new Intl.DateTimeFormat(lang(),{weekday:"short"}).format(new Date(2024,0,1+i))}</span>`).join("");
@@ -643,7 +654,11 @@ function validateDate(){
   function onDoc(e){ if(!pop.contains(e.target)&&!btn.contains(e.target))close(); }
   function onKey(e){ if(e.key==="Escape")close(); }
   btn.onclick=e=>{ e.stopPropagation();pop.hidden?open():close(); };
-  pop.querySelectorAll(".cal-nav").forEach(b=>b.onclick=()=>{ view=new Date(view.getFullYear(),view.getMonth()+ +b.dataset.d,1);render(); });
+  pop.querySelectorAll(".cal-nav").forEach(b=>b.onclick=()=>{
+    if(b.dataset.y)view=new Date(view.getFullYear()+ +b.dataset.y,view.getMonth(),1);
+    else view=new Date(view.getFullYear(),view.getMonth()+ +b.dataset.m,1);
+    render();
+  });
   document.getElementById("cal-today").onclick=()=>{ txt.value=ymd(today);validateDate();close(); };
   document.getElementById("cal-clear").onclick=()=>{ txt.value="";validateDate();close(); };
   txt.addEventListener("blur",validateDate);
