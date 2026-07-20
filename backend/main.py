@@ -75,6 +75,23 @@ FRONTEND = BASE / "frontend"
 
 app = FastAPI(title="live2mp3", docs_url="/api/docs")
 
+
+@app.middleware("http")
+async def _static_revalidate(request, call_next):
+    """Force la revalidation des assets statiques (JS/CSS).
+
+    Servis sans `Cache-Control`, les navigateurs les mettaient en cache
+    heuristique → un déploiement ne se propageait pas (JS périmé, ex. la refonte
+    des réglages de notifications). `no-cache` = le navigateur revalide via
+    l'ETag à chaque chargement : 304 si inchangé (quasi gratuit), 200 avec la
+    nouvelle version sinon. Plus aucun asset figé après un déploiement.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Système social (profils, favoris, commentaires) — routes /api/social, /u, /avatar.
 app.include_router(social_router)
 # Suivi + pages auto d'entités — routes /api/social/follow*, /artist, /festival, /venue.
