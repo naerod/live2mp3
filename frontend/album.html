@@ -276,7 +276,7 @@ const TT={
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
       date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",
-      date_invalid:"Date invalide — format attendu : AAAA-MM-JJ (l'année seule ou année-mois sont acceptées).",
+      date_invalid:"Date non reconnue — essayez « AAAA-MM-JJ » (ou « juin 2024 », « 03/06/2024 »…) ou le calendrier.",
       meta_legend:"Les champs marqués d'un tag sont écrits dans les métadonnées ID3 des pistes MP3 à l'enregistrement.",
       tracks_legend:"Les titres de pistes sont écrits dans les métadonnées ID3 (titre + numéro de piste) des MP3.",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
@@ -294,7 +294,7 @@ const TT={
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
       date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",
-      date_invalid:"Invalid date — expected format: YYYY-MM-DD (year or year-month also accepted).",
+      date_invalid:"Date not recognised — try “YYYY-MM-DD” (or “June 2024”, “06/03/2024”…) or the calendar.",
       meta_legend:"Fields marked with a tag are written to the MP3 tracks' ID3 metadata on save.",
       tracks_legend:"Track titles are written to the MP3 ID3 metadata (title + track number).",
       no_cover:"No cover",no_traycard:"No tray card",
@@ -513,18 +513,62 @@ function addLabel(){
   if(v&&!labels.map(x=>x.toLowerCase()).includes(v.toLowerCase())){labels.push(v);renderChips();}inp.value="";}
 document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
-// Date : saisie manuelle libre, mais formalisme ISO imposé. Le bouton calendrier
-// ouvre le sélecteur natif (renvoie toujours AAAA-MM-JJ). L'année seule ou
-// année-mois restent acceptées (concerts anciens à date partielle).
-const DATE_RE=/^\d{4}(-\d{2}(-\d{2})?)?$/;
+// Date : saisie manuelle libre, reformulée automatiquement vers un format ISO
+// partiel (AAAA, AAAA-MM ou AAAA-MM-JJ). Le bouton calendrier ouvre le sélecteur
+// natif (renvoie toujours AAAA-MM-JJ). Une saisie non interprétable est refusée.
 const dateIsFull=v=>/^\d{4}-\d{2}-\d{2}$/.test(v);
+const _DATE_MONTHS={
+  janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12,
+  january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
+  janv:1,fevr:2,avr:4,juil:7,sept:9,oct:10,nov:11,dec:12,jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8};
+// Reformule une date libre en ISO partiel. "" pour vide, null si illisible.
+function normalizeDate(raw){
+  const strip=s=>s.normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const pad=n=>String(n).padStart(2,"0");
+  const iso=(y,m,d)=>{
+    if(m!=null&&(m<1||m>12))return null;
+    if(d!=null&&(d<1||d>31))return null;
+    let s=String(y).padStart(4,"0");
+    if(m!=null)s+="-"+pad(m);
+    if(d!=null)s+="-"+pad(d);
+    return s;
+  };
+  let v=strip((raw||"").trim().toLowerCase()).replace(/\s+/g," ");
+  if(!v)return "";
+  // 1) Mois en toutes lettres (fr/en) : "[jj] mois aaaa" / "mois [jj] aaaa".
+  for(const mt of Object.keys(_DATE_MONTHS).sort((a,b)=>b.length-a.length)){
+    if(new RegExp("(?:^|[^a-z])"+mt+"(?:[^a-z]|$)").test(v)){
+      const year=(v.match(/\b(\d{4})\b/)||[])[1];
+      if(!year)continue;
+      const nums=(v.match(/\b\d{1,2}\b/g)||[]);
+      return iso(parseInt(year,10),_DATE_MONTHS[mt],nums.length?parseInt(nums[0],10):null);
+    }
+  }
+  // 2) Numérique, séparateurs - / . espace.
+  const parts=v.split(/[-\/.\s]+/).filter(Boolean);
+  if(parts.length&&parts.every(p=>/^\d+$/.test(p))){
+    const P=parts.map(x=>parseInt(x,10));
+    if(parts.length===1&&parts[0].length===4)return iso(P[0]);
+    if(parts.length===2){
+      if(parts[0].length===4)return iso(P[0],P[1]);
+      if(parts[1].length===4)return iso(P[1],P[0]);
+    }
+    if(parts.length===3){
+      if(parts[0].length===4)return iso(P[0],P[1],P[2]);
+      if(parts[2].length===4)return iso(P[2],P[1],P[0]);   // jj/mm/aaaa (fr)
+    }
+  }
+  return null;
+}
+// Reformule en place ; marque invalide seulement si vraiment illisible.
 function validateDate(){
   const txt=document.getElementById("e-date"),hint=document.getElementById("date-hint");
-  const v=txt.value.trim();
-  const ok=v===""||DATE_RE.test(v);
-  txt.classList.toggle("date-invalid",!ok);
-  hint.classList.toggle("show",!ok);
-  return ok;
+  const norm=normalizeDate(txt.value);
+  if(norm===null){
+    txt.classList.add("date-invalid");hint.classList.add("show");return false;
+  }
+  if(norm!==txt.value.trim())txt.value=norm;   // reformulation visible
+  txt.classList.remove("date-invalid");hint.classList.remove("show");return true;
 }
 (function initDatePicker(){
   const txt=document.getElementById("e-date");
@@ -557,6 +601,7 @@ document.getElementById("save-all").onclick=async()=>{
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
   if(!validateDate()){toast(TT[L()].date_invalid,true);document.getElementById("e-date").focus();return;}
+  p.date=document.getElementById("e-date").value.trim();   // date reformulée par validateDate()
   savingStart("save-all");
   if(PENDING_COVER_DELETE){
     const rDel=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
