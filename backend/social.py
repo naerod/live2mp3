@@ -478,6 +478,13 @@ def suggest_artists(q: str = "", identity: dict = Depends(current_identity)) -> 
     return suggest.search_artists(q)
 
 
+@router.get("/api/social/suggest/world-cities")
+def suggest_world_cities(q: str = "", identity: dict = Depends(current_identity)) -> list[dict]:
+    """Villes du monde entier (case « City » d'un album), drapeau du pays en
+    vignette. Distinct de /cities (communes françaises du profil)."""
+    return suggest.search_world_cities(q)
+
+
 @router.post("/api/social/profile/avatar")
 async def upload_avatar(file: UploadFile = File(...),
                         identity: dict = Depends(require_user)) -> dict:

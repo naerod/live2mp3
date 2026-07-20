@@ -27,6 +27,20 @@ import requests
 
 GEO_URL = "https://geo.api.gouv.fr"
 DEEZER_URL = "https://api.deezer.com"
+# Villes du monde entier (case « City » d'un album, ≠ ville de profil qui reste
+# française). Nominatim/OpenStreetMap : public, sans clé. On dérive le drapeau
+# du pays depuis flagcdn (image, pas d'emoji — cohérent avec le rendu <img> des
+# autres suggestions).
+NOMINATIM_URL = "https://nominatim.openstreetmap.org"
+FLAG_URL = "https://flagcdn.com/w40"
+# Types de lieu OSM acceptés comme « ville ». On garde les niveaux ville + les
+# collectivités qui SONT une ville (Tokyo, Berlin… typées province/state/région
+# par OSM). On écarte explicitement pays, continents, rues et bâtiments.
+_CITY_OSM_TYPES = {
+    "city", "town", "village", "municipality", "hamlet", "suburb",
+    "borough", "city_district", "district",
+    "province", "state", "region", "county",   # capitales/métropoles = préfecture
+}
 TIMEOUT = 4.0
 SEARCH_TTL = 3600        # 1 h — la pertinence bouge peu
 RESOLVE_TTL = 6 * 3600   # 6 h — un libellé canonique bouge encore moins
@@ -202,4 +216,60 @@ def resolve_artist(artist_id: str) -> dict | None:
     out = {"id": str(a["id"]), "label": a["name"],
            "picture": a.get("picture_small") or ""}
     _cache_put(key, out, RESOLVE_TTL)
+    return out
+
+
+# --- Villes du monde (case « City » d'un album) ----------------------------
+def _flag_url(country_code: str) -> str:
+    cc = (country_code or "").strip().lower()
+    return f"{FLAG_URL}/{cc}.png" if cc else ""
+
+
+def search_world_cities(q: str) -> list[dict]:
+    """Villes du monde entier via OpenStreetMap/Nominatim, avec le drapeau du
+    pays en vignette. Champ libre autorisé côté client : une ville absente de la
+    source reste saisissable, simplement sans drapeau ni id canonique."""
+    q = (q or "").strip()
+    if len(q) < 2:
+        return []
+    key = f"wcity:s:{q.lower()}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    try:
+        rows = _get_json(f"{NOMINATIM_URL}/search", {
+            "q": q,
+            "format": "jsonv2",
+            "addressdetails": 1,
+            "accept-language": "fr,en",
+            "limit": MAX_RESULTS * 3,
+        })
+    except Exception:
+        return []
+
+    out, seen = [], set()
+    for r in rows:
+        if (r.get("addresstype") or r.get("type")) not in _CITY_OSM_TYPES:
+            continue
+        addr = r.get("address") or {}
+        name = (addr.get("city") or addr.get("town") or addr.get("village")
+                or addr.get("municipality") or r.get("name") or "").strip()
+        if not name:
+            continue
+        country = (addr.get("country") or "").strip()
+        cc = (addr.get("country_code") or "").strip().lower()
+        label = f"{name}, {country}" if country else name
+        dedup = label.casefold()
+        if dedup in seen:
+            continue
+        seen.add(dedup)
+        out.append({
+            "id": f"osm:{r.get('osm_type', '')[:1]}{r.get('osm_id', '')}",
+            "label": label,
+            "picture": _flag_url(cc),   # drapeau du pays (image)
+            "hint": country,
+        })
+        if len(out) >= MAX_RESULTS:
+            break
+    _cache_put(key, out, SEARCH_TTL)
     return out

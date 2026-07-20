@@ -183,6 +183,8 @@ class AlbumMetaIn(BaseModel):
     title: str
     date: str | None = None
     venue: str | None = None
+    city: str | None = None        # ville (optionnelle) — ≠ venue (lieu précis)
+    city_id: str = ""              # id canonique OSM (dérivé de la liste)
     festival: str | None = None
     festival_id: str = ""          # slug canonique (dérivé si absent)
     guests: list[GuestIn] = []     # artistes invités canoniques (id Deezer)
@@ -632,6 +634,16 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     alb["date"] = payload.date or ""
     alb["venue"] = payload.venue or ""
     alb["festival"] = payload.festival or ""
+    # Ville (optionnelle). Nettoyée si vide pour garder le manifest lisible.
+    if payload.city and payload.city.strip():
+        alb["city"] = payload.city.strip()
+        if payload.city_id.strip():
+            alb["city_id"] = payload.city_id.strip()
+        else:
+            alb.pop("city_id", None)
+    else:
+        alb.pop("city", None)
+        alb.pop("city_id", None)
 
     # Champs canoniques (liens de suivi / pages auto). Nettoyés s'ils sont vides
     # pour garder le manifest lisible.
