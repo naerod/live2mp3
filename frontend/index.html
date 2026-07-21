@@ -107,8 +107,12 @@
       <div id="overview"></div>
     </div>
     <div class="zoom-controls">
-      <button class="icon-btn icon-only" id="btn-zoom-in" title="Zoom +"><span class="material-symbols-outlined">zoom_in</span></button>
       <button class="icon-btn icon-only" id="btn-zoom-out" title="Zoom −"><span class="material-symbols-outlined">zoom_out</span></button>
+      <input type="range" id="zoom-window" class="zoom-range" min="15" max="600" step="5" value="240" data-i18n-title="zoom_window" title="Largeur de la fenêtre zoomée">
+      <button class="icon-btn icon-only" id="btn-zoom-in" title="Zoom +"><span class="material-symbols-outlined">zoom_in</span></button>
+      <span id="zoom-window-label" class="zoom-win-label">4:00</span>
+      <span class="zoom-spacer"></span>
+      <button class="icon-btn" id="btn-reset-cuts" data-i18n-title="reset_cuts_title" title="Rétablir les coupes de l'analyse IA d'origine"><span class="material-symbols-outlined">restart_alt</span> <span data-i18n="reset_cuts">Réinitialiser</span></button>
     </div>
     <audio id="ed-audio" controls preload="metadata"></audio>
     <div id="disc-warn" class="disc-warn hidden">

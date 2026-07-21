@@ -52,6 +52,13 @@ const I18N = {
     unlink_end:"Délier la fin pour couper la transition",
     set_start:"Définir le début à la position du lecteur",
     set_end:"Définir la fin à la position du lecteur",
+    seek_tc:"Cliquer pour écouter à ce timecode",
+    zoom_window:"Largeur de la fenêtre zoomée",
+    reset_cuts:"Réinitialiser",
+    reset_cuts_title:"Rétablir les coupes de l'analyse IA d'origine",
+    reset_confirm:"Réinitialiser toutes les coupes à l'analyse IA d'origine ? Vos ajustements manuels seront perdus.",
+    reset_done:"Coupes réinitialisées à l'analyse IA.",
+    dlg_yes:"Oui, réinitialiser",dlg_no:"Annuler",
     disc_warn:(min,n)=>`Durée totale : ${min} min — au-delà de la capacité d'un disque (88 min). ${n} disques nécessaires ; séparation marquée sur la forme d'onde.`,
     disc_point:d=>`Disque ${d}`,
     err_no_tracks:"Aucune piste à créer.",
@@ -113,6 +120,13 @@ const I18N = {
     unlink_end:"Unlink the end to cut the talk",
     set_start:"Set the start to the player position",
     set_end:"Set the end to the player position",
+    seek_tc:"Click to listen at this timecode",
+    zoom_window:"Zoomed window width",
+    reset_cuts:"Reset",
+    reset_cuts_title:"Restore the cuts from the original AI analysis",
+    reset_confirm:"Reset all cuts to the original AI analysis? Your manual adjustments will be lost.",
+    reset_done:"Cuts reset to the AI analysis.",
+    dlg_yes:"Yes, reset",dlg_no:"Cancel",
     disc_warn:(min,n)=>`Total length: ${min} min — beyond a single disc's capacity (88 min). ${n} discs needed; split shown on the waveform.`,
     disc_point:d=>`Disc ${d}`,
     err_no_tracks:"No tracks to create.",
@@ -135,5 +149,9 @@ function applyI18n(lang){
     const node=[...el.childNodes].find(n=>n.nodeType===3&&n.textContent.trim());
     if(node)node.textContent=t; else if(!el.children.length)el.textContent=t;
     else el.firstChild&&(el.firstChild.textContent=t);
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach(el=>{
+    const t=I18N[lang][el.getAttribute("data-i18n-title")];
+    if(t)el.title=t;
   });
 }

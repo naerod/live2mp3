@@ -334,6 +334,22 @@ const DISC_SECONDS=88*60;   // capacité d'un disque physique (88 min)
 // précédente (grisé, pas de gap). Toujours false pour la 1re piste (début
 // libre) ; la fin de la dernière piste reste toujours éditable.
 let EDIT=[];   // [{title, artist, start, end, linked}]
+let EDIT_ORIG=null;   // instantané de l'analyse IA d'origine (pour "Réinitialiser")
+
+// Reconstruit EDIT depuis les pistes brutes du manifeste (analyse IA).
+function buildEditFromTracks(tracks){
+  // Le DÉBUT de chaque chanson est la référence (l'IA l'indique, l'humain
+  // l'ajuste) : chaque piste commence pile sur sa musique. La FIN suit le
+  // début de la piste suivante, donc la transition parlée reste à la fin de la
+  // piste (skippable). endRaw = fin libre mémorisée (fin musicale détectée),
+  // restaurée si on délie pour couper la transition.
+  const e=tracks.filter(t=>t.start!=null&&t.end!=null)
+    .map(t=>({title:t.title||"",artist:t.artist||"",
+              start:+t.start,end:+t.end,endRaw:+t.end,linked:false}));
+  e.sort((a,b)=>a.start-b.start);
+  e.forEach((t,i)=>{t.linked=i<e.length-1;});  // fin liée sauf la dernière
+  return e;
+}
 
 async function openEditor(){
   show("step-editor");
@@ -341,16 +357,9 @@ async function openEditor(){
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
-  // Le DÉBUT de chaque chanson est la référence (l'IA l'indique, l'humain
-  // l'ajuste) : chaque piste commence pile sur sa musique. La FIN suit le
-  // début de la piste suivante, donc la transition parlée reste à la fin de la
-  // piste (skippable). endRaw = fin libre mémorisée (fin musicale détectée),
-  // restaurée si on délie pour couper la transition.
-  EDIT=m.tracks.filter(t=>t.start!=null&&t.end!=null)
-    .map(t=>({title:t.title||"",artist:t.artist||"",
-              start:+t.start,end:+t.end,endRaw:+t.end,linked:false}));
-  EDIT.sort((a,b)=>a.start-b.start);
-  EDIT.forEach((t,i)=>{t.linked=i<EDIT.length-1;});  // fin liée sauf la dernière
+  EDIT=buildEditFromTracks(m.tracks);
+  // Copie profonde figée : référence pour le bouton « Réinitialiser ».
+  EDIT_ORIG=JSON.parse(JSON.stringify(EDIT));
   relinkEnds();
   renderRows();
   updateDiscMarker();
@@ -364,21 +373,28 @@ async function openEditor(){
     .getPropertyValue("--muted").trim()||"#8b90a0";
   const options={
     zoomview:{container:$("zoom"),waveformColor:acc,playedWaveformColor:muted,
-      playheadColor:muted,axisLabelColor:muted,axisGridlineColor:"#44485a"},
+      playheadColor:muted,axisLabelColor:muted,axisGridlineColor:"#44485a",
+      // Étiquettes lisibles sur fond sombre dans la vue zoomée.
+      segmentOptions:{overlayLabelColor:muted}},
+    // Overview = repères visuels seulement : on masque les titres (couleur
+    // transparente) pour ne garder que des barres claires et distinctes.
     overview:{container:$("overview"),waveformColor:muted,highlightColor:acc,
-      playheadColor:muted},
+      playheadColor:muted,
+      segmentOptions:{overlayLabelColor:"rgba(0,0,0,0)"}},
     mediaElement:audio,
     dataUri:{arraybuffer:`/api/jobs/${slug}/waveform.dat`},
     zoomLevels:[512,1024,2048,4096,8192],
-    segmentOptions:{markers:true,overlay:true,overlayOpacity:0.2,
-      overlayBorderWidth:1.5},
+    segmentOptions:{markers:true,overlay:true,overlayOpacity:0.28,
+      overlayBorderWidth:2},
   };
   PeaksLib.init(options,(err,peaks)=>{
     if(err||!peaks){console.warn("Peaks indisponible:",err);return;}
     peaksInstance=peaks;
-    peaks.zoom.setZoom(2);   // ~1 min visible : transitions repérables d'un coup d'œil
     syncPeaks();
     updateDiscMarker();
+    // Fenêtre zoomée initiale = valeur du slider (240 s = 1 min derrière +
+    // 3 min devant), pilotée en secondes plutôt qu'en niveaux discrets.
+    applyZoomWindow(+($("zoom-window").value)||240);
     peaks.on("segments.dragend",({segment})=>{
       const i=+segment.id.slice(1);
       if(!EDIT[i])return;
@@ -390,8 +406,54 @@ async function openEditor(){
       else EDIT[i].endRaw=segment.endTime;
       commitEdit();
     });
-    $("btn-zoom-in").onclick=()=>peaks.zoom.zoomIn();
-    $("btn-zoom-out").onclick=()=>peaks.zoom.zoomOut();
+    // Clic sur la forme d'onde (ou saut du lecteur) → recentre la vue zoomée
+    // sur le point : 1 min derrière, 3 min devant (fenêtre de 4 min).
+    peaks.on("player.seeked",t=>frameAround(t));
+    wireZoomControls();
+  });
+}
+
+// Applique une largeur de fenêtre zoomée (en secondes) à la vue « zoom » et
+// synchronise le slider + son libellé.
+function applyZoomWindow(seconds){
+  seconds=Math.max(15,Math.min(600,Math.round(seconds)));
+  const zv=peaksInstance&&peaksInstance.views&&peaksInstance.views.getView("zoomview");
+  if(zv&&zv.setZoom)zv.setZoom({seconds});
+  const sl=$("zoom-window");if(sl)sl.value=seconds;
+  const lb=$("zoom-window-label");if(lb)lb.textContent=fmtClock(seconds);
+}
+
+// Recentre la vue zoomée autour d'un temps : 1 min avant, 3 min après.
+function frameAround(t){
+  const zv=peaksInstance&&peaksInstance.views&&peaksInstance.views.getView("zoomview");
+  if(!zv)return;
+  applyZoomWindow(240);            // 1 + 3 min
+  if(zv.setStartTime)zv.setStartTime(Math.max(0,t-60));
+}
+
+function wireZoomControls(){
+  const sl=$("zoom-window");
+  if(sl)sl.oninput=()=>applyZoomWindow(+sl.value);
+  // +/- ajustent la largeur de la fenêtre (zoom in = fenêtre plus courte).
+  $("btn-zoom-in").onclick=()=>applyZoomWindow((+$("zoom-window").value)-30);
+  $("btn-zoom-out").onclick=()=>applyZoomWindow((+$("zoom-window").value)+30);
+  $("btn-reset-cuts").onclick=resetCuts;
+}
+
+// mm:ss à partir d'un nombre de secondes.
+function fmtClock(s){
+  s=Math.round(s);
+  return Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+}
+
+// Réinitialise toutes les coupes à l'analyse IA d'origine (après confirmation).
+function resetCuts(){
+  if(!EDIT_ORIG)return;
+  confirmDialog(T("reset_confirm"),()=>{
+    EDIT=JSON.parse(JSON.stringify(EDIT_ORIG));
+    commitEdit();
+    if(peaksInstance){const a=$("ed-audio");frameAround(a.currentTime||0);}
+    toast(T("reset_done"));
   });
 }
 
@@ -449,10 +511,10 @@ function buildEditRow(t,i){
     <input class="t-title" placeholder="${T('tr_title_ph')}">
     <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
-      <input class="t-time t-start" value="${fmtTime(t.start)}">
+      <input class="t-time t-start seekable" value="${fmtTime(t.start)}" title="${T('seek_tc')}">
       <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"><span class="material-symbols-outlined">first_page</span></button>
       <span class="t-sep">→</span>
-      <input class="t-time t-end" value="${fmtTime(t.end)}"${endLocked?' disabled':''}>
+      <input class="t-time t-end${endLocked?'':' seekable'}" value="${fmtTime(t.end)}"${endLocked?' disabled':` title="${T('seek_tc')}"`}>
       ${canLock
         ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_end'):T('link_end')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
         : `<span class="t-lock-spacer"></span>`}
@@ -470,15 +532,23 @@ function buildEditRow(t,i){
   });
   row.querySelector(".t-artist").addEventListener("input",e=>{
     EDIT[i].artist=e.target.value;});
+  // Clic sur un timecode → place le curseur d'écoute pile dessus (et recadre
+  // la vue zoomée) pour vérifier la coupe, sans empêcher l'édition manuelle.
+  const seekTo=sec=>{const a=$("ed-audio");a.currentTime=Math.max(0,sec);};
+  const si=row.querySelector(".t-start");
+  si.addEventListener("click",()=>seekTo(EDIT[i].start));
   // Début : toujours éditable (référence de la piste).
-  row.querySelector(".t-start").addEventListener("change",e=>{
+  si.addEventListener("change",e=>{
     const v=parseTime(e.target.value);if(v==null)return;
-    EDIT[i].start=v;commitEdit();});
+    EDIT[i].start=v;commitEdit();seekTo(v);});
   // Fin : éditable seulement si déliée ou dernière piste.
   const ei=row.querySelector(".t-end");
-  if(!endLocked)ei.addEventListener("change",e=>{
-    const v=parseTime(e.target.value);if(v==null)return;
-    EDIT[i].endRaw=v;commitEdit();});
+  if(!endLocked){
+    ei.addEventListener("click",()=>seekTo(EDIT[i].end));
+    ei.addEventListener("change",e=>{
+      const v=parseTime(e.target.value);if(v==null)return;
+      EDIT[i].endRaw=v;commitEdit();seekTo(v);});
+  }
   const lock=row.querySelector(".t-lock");
   if(lock)lock.onclick=()=>{EDIT[i].linked=!EDIT[i].linked;commitEdit();};
   row.querySelector(".t-setstart").onclick=()=>setFromPlayhead(i,"start");
@@ -551,6 +621,28 @@ $("btn-add-track2").onclick=()=>{
   EDIT.push({title:"",artist:"",start,end,endRaw:end,linked:false});
   commitEdit();
 };
+
+// Modale de confirmation Oui/Non (pas de confirm() natif — cf. DA du projet).
+function confirmDialog(msg,onYes){
+  const back=document.createElement("div");
+  back.className="cfm-back";
+  back.innerHTML=`
+    <div class="cfm-box" role="dialog" aria-modal="true">
+      <p class="cfm-msg"></p>
+      <div class="cfm-actions">
+        <button class="icon-btn cfm-no"><span class="material-symbols-outlined">close</span> <span></span></button>
+        <button class="primary cfm-yes"><span class="material-symbols-outlined">restart_alt</span> <span></span></button>
+      </div>
+    </div>`;
+  back.querySelector(".cfm-msg").textContent=msg;
+  back.querySelector(".cfm-no span:last-child").textContent=T("dlg_no");
+  back.querySelector(".cfm-yes span:last-child").textContent=T("dlg_yes");
+  const close=()=>back.remove();
+  back.querySelector(".cfm-no").onclick=close;
+  back.addEventListener("click",e=>{if(e.target===back)close();});
+  back.querySelector(".cfm-yes").onclick=()=>{close();onYes();};
+  document.body.appendChild(back);
+}
 
 let _toastTimer=null;
 function toast(msg,err){

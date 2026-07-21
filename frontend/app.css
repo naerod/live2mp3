@@ -430,7 +430,22 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .note.err{color:var(--like)}
 .spin{animation:l2mspin 1s linear infinite}
 @keyframes l2mspin{to{transform:rotate(360deg)}}
-.zoom-controls{display:flex;gap:8px;margin:10px 0}
+.zoom-controls{display:flex;gap:8px;margin:10px 0;align-items:center}
+.zoom-controls .zoom-spacer{flex:1}
+.zoom-range{flex:0 1 260px;max-width:320px;accent-color:var(--accent);cursor:pointer;margin:0}
+.zoom-win-label{font-family:"Google Sans Code",monospace;font-size:13px;color:var(--muted);min-width:44px}
+#btn-reset-cuts{margin-top:0}
+/* Timecode cliquable = point d'écoute */
+.track-row .t-time.seekable{cursor:pointer}
+.track-row .t-time.seekable:hover{border-color:var(--accent)}
+/* Modale de confirmation */
+.cfm-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;
+  align-items:center;justify-content:center;z-index:1000;padding:20px}
+.cfm-box{background:var(--card,var(--bg));border:1px solid var(--border);
+  border-radius:14px;padding:22px;max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.cfm-msg{margin:0 0 18px;line-height:1.5}
+.cfm-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.cfm-actions button{margin-top:0}
 #ed-audio{width:100%;margin:6px 0 14px;display:block}
 @media (max-width:700px){
   .link-row{flex-direction:column}
