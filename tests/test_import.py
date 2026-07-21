@@ -237,7 +237,7 @@ def test_commit_writes_tags_and_cover_into_mp3(client, tmp_path):
     # Les corrections du formulaire priment sur les tags d'origine.
     assert tags["TPE1"].text[0] == "TØP"
     assert tags["TALB"].text[0] == "Clancy"
-    assert tags["TIT2"].text[0] == "Overcompensate"
+    assert tags["TIT2"].text[0] == "01. Overcompensate"
     assert tags["TRCK"].text[0] == "1/3"
     assert tags.getall("APIC")
 

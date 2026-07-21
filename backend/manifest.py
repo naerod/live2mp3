@@ -79,6 +79,22 @@ def project_slug(manifest: dict[str, Any]) -> str:
     return f"{slugify(artist)}-{slugify(str(date))}".strip("-")
 
 
+def numbered_title(n: Any, title: str) -> str:
+    """Titre préfixé du numéro de piste sur 2 chiffres : ``01. Overcompensate``.
+
+    Utilisé **uniquement** pour le tag ID3/metadata (TIT2) — le titre affiché
+    dans l'app reste nu (lu depuis le manifeste). Le numéro dans le titre force
+    l'ordre des pistes sur les lecteurs qui trient alphabétiquement (Spotify
+    local, etc.).
+    """
+    title = title or ""
+    try:
+        nn = int(n)
+    except (TypeError, ValueError):
+        return title
+    return f"{nn:02d}. {title}".rstrip()
+
+
 def download_stem(manifest: dict[str, Any], fallback: str = "") -> str:
     """Base du nom de fichier de téléchargement d'un album :
     ``YYYY-MM-DD_artiste_titre`` (champs vides omis).
