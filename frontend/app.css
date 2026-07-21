@@ -177,13 +177,31 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 /* ============ Page profil ============ */
 .prof-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
 .prof-hero .soc-avatar{width:88px;height:88px;font-size:32px}
-/* Colonne d'actions à droite du profil (suivre + action admin) */
-.prof-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-.role-btn .material-symbols-outlined{font-size:18px}
-.role-btn:hover{border-color:var(--accent)}
-.role-btn.danger{color:var(--down)}
-.role-btn.danger .material-symbols-outlined{color:var(--down)}
-.role-btn.danger:hover{border-color:var(--down)}
+/* Badge de rôle cliquable (admin) : ouvre le sélecteur de rôle */
+.role-badge-btn{display:inline-flex;align-items:center;gap:2px;margin:0;padding:0;
+  border:none;background:none;cursor:pointer;vertical-align:middle;border-radius:999px;
+  transition:opacity .12s}
+.role-badge-btn:hover{opacity:.82}
+.role-badge-btn .role-badge{cursor:pointer}
+.role-caret{font-size:18px;color:var(--muted)}
+/* Sélecteur de rôle (modale) */
+.modal-title{margin:0 0 16px;font-size:17px;text-align:center}
+.role-picker{max-width:440px;text-align:left}
+.role-opts{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.role-opt{display:flex;align-items:center;gap:12px;width:100%;margin:0;text-align:left;
+  padding:12px 14px;border:1px solid var(--border);border-radius:12px;
+  background:var(--bg);color:var(--fg);cursor:pointer;transition:border-color .12s,background .12s}
+.role-opt:hover:not(.current){border-color:var(--accent);background:var(--card)}
+.role-opt.current{opacity:.75;cursor:default}
+.role-opt-ic{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,var(--card))}
+.role-opt-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.role-opt-name{font-size:14.5px;font-weight:600}
+.role-opt-desc{font-size:12px;color:var(--muted)}
+.role-opt-cur{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;flex-shrink:0}
+.role-opt-go{color:var(--muted);flex-shrink:0}
 /* Modale de confirmation */
 .modal-ov{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;
   justify-content:center;padding:20px;background:rgba(0,0,0,.55);

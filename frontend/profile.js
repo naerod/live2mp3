@@ -17,9 +17,13 @@
       grp_festival: "Festivals", grp_venue: "Lieux",
       no_following: "Aucun abonnement.", no_followers: "Aucun abonné.",
       its_you: "C'est vous",
-      promote: "Promouvoir gestionnaire", demote: "Retirer des gestionnaires",
-      confirm_promote: "Attention, êtes-vous sûr de vouloir ajouter cet utilisateur comme gestionnaire ?",
-      confirm_demote: "Attention, êtes-vous sûr de vouloir retirer cet utilisateur des gestionnaires ?",
+      change_role: "Changer le rôle", role_none: "Sans rôle",
+      role_picker_title: "Attribuer un rôle", role_current: "Actuel",
+      r_user: "Utilisateur", r_gestionnaire: "Gestionnaire", r_admin: "Administrateur",
+      rd_user: "Accès de base (téléchargement).",
+      rd_gestionnaire: "Peut importer et gérer les albums.",
+      rd_admin: "Accès complet + gestion des rôles.",
+      confirm_role: "Attention, êtes-vous sûr de vouloir attribuer le rôle « {r} » à cet utilisateur ?",
       yes: "Oui", no: "Non", role_err: "Action impossible. Réessayez.",
       city: "Ville", artist: "Artiste/groupe favori",
       city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
@@ -41,9 +45,13 @@
       grp_festival: "Festivals", grp_venue: "Venues",
       no_following: "Not following anyone yet.", no_followers: "No followers yet.",
       its_you: "That's you",
-      promote: "Promote to manager", demote: "Remove from managers",
-      confirm_promote: "Warning: are you sure you want to add this user as a manager?",
-      confirm_demote: "Warning: are you sure you want to remove this user from managers?",
+      change_role: "Change role", role_none: "No role",
+      role_picker_title: "Assign a role", role_current: "Current",
+      r_user: "Member", r_gestionnaire: "Manager", r_admin: "Administrator",
+      rd_user: "Basic access (downloads).",
+      rd_gestionnaire: "Can import and manage albums.",
+      rd_admin: "Full access + role management.",
+      confirm_role: "Warning: are you sure you want to assign the role “{r}” to this user?",
       yes: "Yes", no: "No", role_err: "Action failed. Please try again.",
       city: "City", artist: "Favourite artist/band",
       sort_by: "Sort", sort_date: "Concert date", sort_new: "Published",
@@ -245,13 +253,69 @@
     };
   }
 
-  // Bouton admin : promouvoir/rétrograder gestionnaire (visible aux admins,
-  // sauf sur soi-même et sur un autre admin).
-  function adminRoleBtn(p) {
-    if (!(ME.is_admin && !DATA.is_self && p.role !== "admin")) return "";
-    const isGest = p.role === "gestionnaire";
-    return `<button class="icon-btn role-btn${isGest ? " danger" : ""}" id="role-btn" data-grant="${isGest ? 0 : 1}">
-      <span class="material-symbols-outlined">${isGest ? "person_remove" : "shield_person"}</span>${isGest ? t("demote") : t("promote")}</button>`;
+  // Rôles gérables et leur icône Material (mêmes que le badge de rôle).
+  const ROLE_ORDER = ["user", "gestionnaire", "admin"];
+  const ROLE_ICON = { user: "person", gestionnaire: "manage_accounts", admin: "shield_person" };
+
+  // Badge de rôle : simple pour tous, cliquable (ouvre le sélecteur) pour un
+  // admin regardant un autre profil que le sien.
+  function roleControl(p) {
+    const badge = L2M.roleBadge(p.role);
+    if (!(ME.is_admin && !DATA.is_self)) return badge;
+    const inner = badge || `<span class="role-badge role-user"><span class="material-symbols-outlined">person</span>${t("role_none")}</span>`;
+    return `<button type="button" class="role-badge-btn" id="role-badge-btn" title="${esc(t("change_role"))}">
+      ${inner}<span class="material-symbols-outlined role-caret">expand_more</span></button>`;
+  }
+
+  // Sélecteur de rôle (modale) : les 3 rôles, l'actuel marqué. Résout le rôle
+  // choisi (différent de l'actuel), ou null si annulé.
+  function openRolePicker(current) {
+    return new Promise((resolve) => {
+      const ov = document.createElement("div");
+      ov.className = "modal-ov";
+      const opt = (r) => {
+        const isCur = r === current;
+        return `<button type="button" class="role-opt${isCur ? " current" : ""}" data-role="${r}"${isCur ? " disabled" : ""}>
+          <span class="role-opt-ic material-symbols-outlined">${ROLE_ICON[r]}</span>
+          <span class="role-opt-txt"><span class="role-opt-name">${t("r_" + r)}</span>
+            <span class="role-opt-desc">${t("rd_" + r)}</span></span>
+          ${isCur ? `<span class="role-opt-cur">${t("role_current")}</span>` : `<span class="material-symbols-outlined role-opt-go">chevron_right</span>`}
+        </button>`;
+      };
+      ov.innerHTML = `<div class="modal-box role-picker" role="dialog" aria-modal="true">
+        <h3 class="modal-title">${t("role_picker_title")}</h3>
+        <div class="role-opts">${ROLE_ORDER.map(opt).join("")}</div>
+        <div class="modal-actions"><button class="icon-btn" data-a="close">${t("cancel")}</button></div>
+      </div>`;
+      const close = (v) => { ov.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+      const onKey = (e) => { if (e.key === "Escape") close(null); };
+      ov.addEventListener("click", (e) => { if (e.target === ov) close(null); });
+      ov.querySelector('[data-a="close"]').onclick = () => close(null);
+      ov.querySelectorAll(".role-opt:not(.current)").forEach((b) =>
+        b.onclick = () => close(b.dataset.role));
+      document.addEventListener("keydown", onKey);
+      document.body.appendChild(ov);
+    });
+  }
+
+  function wireRoleBadge() {
+    const btn = document.getElementById("role-badge-btn");
+    if (!btn) return;
+    btn.onclick = async () => {
+      const chosen = await openRolePicker(DATA.profile.role || "user");
+      if (!chosen) return;
+      const ok = await confirmDialog(t("confirm_role").replace("{r}", t("r_" + chosen)));
+      if (!ok) return;
+      try {
+        const r = await fetch(`/api/social/users/${encodeURIComponent(DATA.profile.username)}/role`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: chosen }),
+        });
+        if (!r.ok) throw new Error();
+        DATA.profile.role = (await r.json()).role;
+        renderProfile();
+      } catch (e) { alert(t("role_err")); }
+    };
   }
 
   // Modale de confirmation Oui/Non (promise<bool>), stylée (pas de confirm() natif).
@@ -277,30 +341,6 @@
     });
   }
 
-  function wireAdminRole() {
-    const btn = document.getElementById("role-btn");
-    if (!btn) return;
-    btn.onclick = async () => {
-      const grant = btn.dataset.grant === "1";
-      const ok = await confirmDialog(t(grant ? "confirm_promote" : "confirm_demote"));
-      if (!ok) return;
-      btn.disabled = true;
-      try {
-        const r = await fetch(`/api/social/users/${encodeURIComponent(DATA.profile.username)}/gestionnaire`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grant }),
-        });
-        if (!r.ok) throw new Error();
-        const res = await r.json();
-        DATA.profile.role = res.role;   // rôle recalculé côté serveur
-        renderProfile();
-      } catch (e) {
-        btn.disabled = false;
-        alert(t("role_err"));
-      }
-    };
-  }
-
   function renderProfile() {
     const p = DATA.profile, c = DATA.counts;
     const since = p.created_at ? new Date(p.created_at).toLocaleDateString(LANG(), { year: "numeric", month: "long" }) : "";
@@ -317,7 +357,7 @@
             ${DATA.is_self ? `<label class="cam" title="${t("change_photo")}"><span class="material-symbols-outlined">photo_camera</span>
               <input type="file" accept="image/*" id="avatar-input" hidden></label>` : ""}</div>
           <div class="prof-id">
-            <h1>${esc(p.display_name)} ${L2M.roleBadge(p.role)}</h1>
+            <h1>${esc(p.display_name)} ${roleControl(p)}</h1>
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}
@@ -326,10 +366,7 @@
               <button type="button" class="prof-stat${activeTab === "followers" ? " active" : ""}" data-go="followers"><b>${c.followers}</b> ${t("followers").toLowerCase()}</button>
             </div>
           </div>
-          ${DATA.is_self ? "" : `<div class="prof-actions">
-            <div class="follow-wrap" id="prof-follow"></div>
-            ${adminRoleBtn(p)}
-          </div>`}
+          ${DATA.is_self ? "" : `<div class="follow-wrap" id="prof-follow"></div>`}
         </div>
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
@@ -385,7 +422,7 @@
       if (slot) L2M.followButton(slot, {
         type: "user", id: p.username, label: p.display_name, state: f,
       });
-      wireAdminRole();
+      wireRoleBadge();
     }
   }
 

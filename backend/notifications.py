@@ -168,20 +168,23 @@ def notify(conn, *, recipient: str, actor: str, ntype: str, pref_key: str,
     return True
 
 
-def notify_role(conn, *, recipient: str, actor: str, granted: bool) -> bool:
+def notify_role(conn, *, recipient: str, actor: str, new_role: str,
+                promoted: bool) -> bool:
     """Notifie une action administrateur sur le rôle (promotion/rétrogradation).
 
     **Non désactivable** : aucune vérification de préférence (contrairement à
     `notify`) — une décision d'admin doit toujours être portée à la connaissance
-    de l'intéressé. `type` = `role_grant` / `role_revoke` ; `reason_type=admin`
-    (badge « Action administrateur » côté front) ; `reason_label` = nom de
-    l'admin. Pas de `slug` : ces notifs pointent vers le profil, pas un album."""
+    de l'intéressé. `type` = `role_grant` (promotion, habillage valorisant) /
+    `role_revoke` (rétrogradation) ; `reason_type=admin` (badge « Action
+    administrateur ») ; `reason_id` porte le nouveau rôle (le front en déduit le
+    libellé) ; `reason_label` = nom de l'admin. Pas de `slug` : pointe vers le
+    profil, pas un album."""
     conn.execute(
         "INSERT INTO notifications(username, type, actor, reason_type, reason_id, "
         "reason_label, slug, title, subtitle, read, created_at) "
         "VALUES(?,?,?,?,?,?,?,?,?,0,?)",
-        (recipient, "role_grant" if granted else "role_revoke", actor, "admin", "",
-         _display_name(conn, actor), "", "", "", _now()),
+        (recipient, "role_grant" if promoted else "role_revoke", actor, "admin",
+         new_role, _display_name(conn, actor), "", "", "", _now()),
     )
     return True
 

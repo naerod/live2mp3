@@ -576,18 +576,25 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
     }
 
 
-class RoleChange(BaseModel):
-    grant: bool
+ROLE_CHOICES = ("user", "gestionnaire", "admin")
 
 
-@router.post("/api/social/users/{username}/gestionnaire")
-def set_gestionnaire_role(username: str, payload: RoleChange,
-                          identity: dict = Depends(require_admin)) -> dict:
-    """Promeut (`grant=True`) ou rétrograde un compte au rôle gestionnaire, en
-    l'ajoutant/retirant du groupe Authentik applicatif. Réservé aux admins.
+class RoleSet(BaseModel):
+    role: str
 
-    Met à jour le rôle en cache (source = groupes Authentik résultants) et notifie
-    l'intéressé (action non désactivable)."""
+
+@router.post("/api/social/users/{username}/role")
+def set_user_role(username: str, payload: RoleSet,
+                  identity: dict = Depends(require_admin)) -> dict:
+    """Attribue un rôle (`user`/`gestionnaire`/`admin`) à un compte en
+    réconciliant ses groupes Authentik. Réservé aux admins.
+
+    Met à jour le rôle en cache (source = groupes Authentik résultants), et
+    notifie l'intéressé si le rôle change réellement (action non désactivable ;
+    habillage valorisant si c'est une promotion)."""
+    role = (payload.role or "").strip()
+    if role not in ROLE_CHOICES:
+        raise HTTPException(422, f"rôle invalide (attendu: {', '.join(ROLE_CHOICES)})")
     username = username.strip()
     if username == identity["username"]:
         raise HTTPException(400, "action impossible sur son propre compte")
@@ -597,13 +604,13 @@ def set_gestionnaire_role(username: str, payload: RoleChange,
         row = conn.execute(
             "SELECT role FROM profiles WHERE username=?", (username,)
         ).fetchone()
-    if row is not None and row["role"] == "admin":
-        raise HTTPException(400, "compte administrateur — non modifiable ici")
+    old_role = row["role"] if row is not None else ""
     try:
-        groups = authentik.set_gestionnaire(username, payload.grant)
+        groups = authentik.set_role(username, role)
     except authentik.AuthentikError:
         raise HTTPException(502, "Authentik indisponible — réessayez")
     new_role = _role_of(groups)
+    changed = new_role != old_role
     with get_conn() as conn:
         _ensure_profile(conn, username)
         # Action explicite d'admin : on écrit le rôle directement (contourne le
@@ -612,10 +619,12 @@ def set_gestionnaire_role(username: str, payload: RoleChange,
             "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
             (new_role, _now(), username),
         )
-        notifications.notify_role(
-            conn, recipient=username, actor=identity["username"], granted=payload.grant)
-    return {"ok": True, "username": username, "role": new_role,
-            "gestionnaire": payload.grant}
+        if changed:
+            promoted = _ROLE_RANK.get(new_role, 0) > _ROLE_RANK.get(old_role, 0)
+            notifications.notify_role(
+                conn, recipient=username, actor=identity["username"],
+                new_role=new_role, promoted=promoted)
+    return {"ok": True, "username": username, "role": new_role, "changed": changed}
 
 
 def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]:

@@ -20,7 +20,18 @@ import requests
 
 AK_URL = os.environ.get("AUTHENTIK_URL", "http://authentik-server:9000").rstrip("/")
 AK_TOKEN = os.environ.get("AUTHENTIK_API_TOKEN", "").strip()
+USER_GROUP = os.environ.get("AUTHENTIK_USER_GROUP", "live2mp3-user")
 GEST_GROUP = os.environ.get("AUTHENTIK_GESTIONNAIRE_GROUP", "live2mp3-gestionnaire")
+ADMIN_GROUP = os.environ.get("AUTHENTIK_ADMIN_GROUP", "authentik Admins")
+
+# Groupes Authentik cibles pour chaque rôle applicatif. `set_role` réconcilie
+# l'appartenance de l'utilisateur à ces groupes (seuls ces trois sont touchés).
+ROLE_GROUPS = {
+    "user": {USER_GROUP},
+    "gestionnaire": {USER_GROUP, GEST_GROUP},
+    "admin": {USER_GROUP, ADMIN_GROUP},
+}
+_MANAGED_GROUPS = {USER_GROUP, GEST_GROUP, ADMIN_GROUP}
 
 _TIMEOUT = 8
 _group_pk_cache: dict[str, str] = {}
@@ -74,14 +85,22 @@ def user_groups(username: str) -> set[str]:
     return {g["name"] for g in _user(username).get("groups_obj", [])}
 
 
-def set_gestionnaire(username: str, grant: bool) -> set[str]:
-    """Ajoute (`grant=True`) ou retire l'utilisateur du groupe gestionnaire.
+def set_role(username: str, role: str) -> set[str]:
+    """Réconcilie l'appartenance aux groupes pour attribuer `role`
+    (`user`/`gestionnaire`/`admin`). Seuls les groupes gérés sont ajoutés/retirés,
+    les autres appartenances de l'utilisateur sont préservées.
 
-    Retourne l'ensemble des groupes résultant, pour recalculer le rôle. Les
-    endpoints `add_user`/`remove_user` sont idempotents (204 même si l'état ne
-    change pas)."""
-    gpk = _group_pk(GEST_GROUP)
+    Retourne l'ensemble des groupes résultant, pour recalculer le rôle effectif.
+    `add_user`/`remove_user` sont idempotents (204 même sans changement)."""
+    if role not in ROLE_GROUPS:
+        raise AuthentikError(f"rôle inconnu: {role!r}")
+    desired = ROLE_GROUPS[role]
     user = _user(username)
-    action = "add_user" if grant else "remove_user"
-    _api("POST", f"/core/groups/{gpk}/{action}/", json={"pk": user["pk"]})
+    current = {g["name"] for g in user.get("groups_obj", [])}
+    for grp in _MANAGED_GROUPS:
+        want, has = grp in desired, grp in current
+        if want and not has:
+            _api("POST", f"/core/groups/{_group_pk(grp)}/add_user/", json={"pk": user["pk"]})
+        elif has and not want:
+            _api("POST", f"/core/groups/{_group_pk(grp)}/remove_user/", json={"pk": user["pk"]})
     return user_groups(username)

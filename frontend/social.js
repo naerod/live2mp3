@@ -31,8 +31,8 @@ const L2M = (function () {
       notif_reply_comment: "a répondu à votre commentaire",
       notif_see_all: "Voir toutes les notifications",
       notif_admin_action: "Action administrateur",
-      notif_role_granted: "Vous êtes désormais gestionnaire 🎉",
-      notif_role_revoked: "Votre rôle de gestionnaire a été retiré",
+      notif_role_now: "Vous êtes désormais",
+      notif_role_now_neutral: "Votre rôle est désormais",
       notif_role_by: "par",
     },
     en: {
@@ -63,8 +63,8 @@ const L2M = (function () {
       notif_reply_comment: "replied to your comment",
       notif_see_all: "See all notifications",
       notif_admin_action: "Administrator action",
-      notif_role_granted: "You are now a manager 🎉",
-      notif_role_revoked: "Your manager role has been removed",
+      notif_role_now: "You are now",
+      notif_role_now_neutral: "Your role is now",
       notif_role_by: "by",
     },
   };
@@ -509,7 +509,10 @@ const L2M = (function () {
     const grant = n.type === "role_grant";
     const href = n.username ? `/u/${encodeURIComponent(n.username)}` : "/";
     const icon = grant ? "workspace_premium" : "remove_moderator";
-    const msg = grant ? t("notif_role_granted") : t("notif_role_revoked");
+    const roleLabel = t("role_" + (n.reason_id || "user"));
+    const msg = grant
+      ? `${t("notif_role_now")} <b>${esc(roleLabel)}</b> 🎉`
+      : `${t("notif_role_now_neutral")} <b>${esc(roleLabel)}</b>`;
     return `<a class="notif-item notif-admin${grant ? " notif-grant" : ""}${n.read ? "" : " unread"}" href="${href}" data-id="${n.id}">
       <span class="notif-ic material-symbols-outlined">${icon}</span>
       <span class="notif-body">

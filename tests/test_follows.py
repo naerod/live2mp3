@@ -128,43 +128,50 @@ def test_user_follow_state_on_profile(client):
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
 
 
-def test_admin_promote_demote_and_notify(client, monkeypatch):
-    from backend import authentik, social
+def test_admin_set_role_and_notify(client, monkeypatch):
+    from backend import authentik
     c = client
     monkeypatch.setattr(authentik, "enabled", lambda: True)
-    # Simule Authentik : add -> user dans le groupe gestionnaire ; remove -> user simple.
-    state = {"g": {"live2mp3-user"}}
-    def fake_set(username, grant):
-        state["g"] = {"live2mp3-user", "live2mp3-gestionnaire"} if grant else {"live2mp3-user"}
-        return state["g"]
-    monkeypatch.setattr(authentik, "set_gestionnaire", fake_set)
+    # Simule Authentik : groupes cibles par rôle.
+    ROLE_G = {"user": {"live2mp3-user"},
+              "gestionnaire": {"live2mp3-user", "live2mp3-gestionnaire"},
+              "admin": {"live2mp3-user", "authentik Admins"}}
+    monkeypatch.setattr(authentik, "set_role", lambda u, role: ROLE_G[role])
 
     c.get("/api/social/me", headers=USER2)          # crée bob (simple user)
-    url = "/api/social/users/bob/gestionnaire"
+    url = "/api/social/users/bob/role"
 
-    # Non-admin refusé.
-    assert c.post(url, json={"grant": True}, headers=USER).status_code == 403
-    assert c.post(url, json={"grant": True}).status_code == 401
+    # Autorisation.
+    assert c.post(url, json={"role": "gestionnaire"}, headers=USER).status_code == 403
+    assert c.post(url, json={"role": "gestionnaire"}).status_code == 401
+    assert c.post(url, json={"role": "banane"}, headers=ADMIN).status_code == 422
 
-    # Admin promeut bob -> gestionnaire + notif non lue de type role_grant.
-    r = c.post(url, json={"grant": True}, headers=ADMIN).json()
-    assert r["role"] == "gestionnaire" and r["gestionnaire"] is True
-    prof = c.get("/api/social/users/bob").json()
-    assert prof["profile"]["role"] == "gestionnaire"
-    notifs = c.get("/api/social/notifications", headers=USER2).json()
-    assert notifs["items"][0]["type"] == "role_grant"
-    assert notifs["items"][0]["username"] == "bob"
-    assert notifs["unread"] >= 1
+    # Promotion gestionnaire -> notif role_grant (nouveau rôle en reason_id).
+    r = c.post(url, json={"role": "gestionnaire"}, headers=ADMIN).json()
+    assert r["role"] == "gestionnaire" and r["changed"] is True
+    assert c.get("/api/social/users/bob").json()["profile"]["role"] == "gestionnaire"
+    n = c.get("/api/social/notifications", headers=USER2).json()["items"][0]
+    assert n["type"] == "role_grant" and n["reason_id"] == "gestionnaire" and n["username"] == "bob"
 
-    # Admin rétrograde bob.
-    r = c.post(url, json={"grant": False}, headers=ADMIN).json()
+    # Promotion admin -> role_grant.
+    r = c.post(url, json={"role": "admin"}, headers=ADMIN).json()
+    assert r["role"] == "admin"
+    assert c.get("/api/social/notifications", headers=USER2).json()["items"][0]["type"] == "role_grant"
+
+    # Rétrogradation -> role_revoke.
+    r = c.post(url, json={"role": "user"}, headers=ADMIN).json()
     assert r["role"] == "user"
-    notifs = c.get("/api/social/notifications", headers=USER2).json()
-    assert notifs["items"][0]["type"] == "role_revoke"
+    assert c.get("/api/social/notifications", headers=USER2).json()["items"][0]["type"] == "role_revoke"
+
+    # Rôle inchangé -> pas de nouvelle notif.
+    before = c.get("/api/social/notifications", headers=USER2).json()["total"]
+    r = c.post(url, json={"role": "user"}, headers=ADMIN).json()
+    assert r["changed"] is False
+    assert c.get("/api/social/notifications", headers=USER2).json()["total"] == before
 
     # Pas sur soi-même.
-    assert c.post("/api/social/users/root/gestionnaire",
-                  json={"grant": True}, headers=ADMIN).status_code == 400
+    assert c.post("/api/social/users/root/role",
+                  json={"role": "gestionnaire"}, headers=ADMIN).status_code == 400
 
 
 def test_effective_role_publisher_floor():
