@@ -22,16 +22,20 @@ AK_URL = os.environ.get("AUTHENTIK_URL", "http://authentik-server:9000").rstrip(
 AK_TOKEN = os.environ.get("AUTHENTIK_API_TOKEN", "").strip()
 USER_GROUP = os.environ.get("AUTHENTIK_USER_GROUP", "live2mp3-user")
 GEST_GROUP = os.environ.get("AUTHENTIK_GESTIONNAIRE_GROUP", "live2mp3-gestionnaire")
-ADMIN_GROUP = os.environ.get("AUTHENTIK_ADMIN_GROUP", "authentik Admins")
+# Admin **applicatif** (groupe propre à l'app, non superuser) : gestionnaire +
+# gestion des rôles. On ne touche JAMAIS au groupe superuser global Authentik.
+APP_ADMIN_GROUP = os.environ.get("AUTHENTIK_APP_ADMIN_GROUP", "live2mp3-admin")
 
 # Groupes Authentik cibles pour chaque rôle applicatif. `set_role` réconcilie
-# l'appartenance de l'utilisateur à ces groupes (seuls ces trois sont touchés).
+# l'appartenance à ces trois groupes uniquement (le reste est préservé).
+# L'admin applicatif reste gestionnaire (accès outil + pas de régression
+# d'accès au forward-auth) et porte en plus le marqueur live2mp3-admin.
 ROLE_GROUPS = {
     "user": {USER_GROUP},
     "gestionnaire": {USER_GROUP, GEST_GROUP},
-    "admin": {USER_GROUP, ADMIN_GROUP},
+    "admin": {USER_GROUP, GEST_GROUP, APP_ADMIN_GROUP},
 }
-_MANAGED_GROUPS = {USER_GROUP, GEST_GROUP, ADMIN_GROUP}
+_MANAGED_GROUPS = {USER_GROUP, GEST_GROUP, APP_ADMIN_GROUP}
 
 _TIMEOUT = 8
 _group_pk_cache: dict[str, str] = {}

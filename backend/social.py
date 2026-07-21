@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from . import authentik, catalogue, notifications, suggest
 from .auth import (
+    GROUP_APP_ADMIN,
     GROUP_GESTIONNAIRE,
     GROUP_USER,
     SUPERUSER_GROUPS,
@@ -61,8 +62,10 @@ _ROLE_RANK = {"": 0, "user": 1, "gestionnaire": 2, "admin": 3}
 
 
 def _role_of(groups: set[str]) -> str:
-    """Rôle canonique (le plus élevé) à partir des groupes Authentik."""
-    if groups & SUPERUSER_GROUPS:
+    """Rôle canonique (le plus élevé) à partir des groupes Authentik. L'admin
+    applicatif (`live2mp3-admin`) et le superuser global comptent tous deux
+    « admin »."""
+    if groups & SUPERUSER_GROUPS or GROUP_APP_ADMIN in groups:
         return "admin"
     if GROUP_GESTIONNAIRE in groups:
         return "gestionnaire"
@@ -303,7 +306,8 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         # sur chaque page) → badge de rôle disponible sur n'importe quel profil.
         role = _touch_role(conn, username, groups)
     is_super = bool(groups & SUPERUSER_GROUPS)
-    is_gest = is_super or GROUP_GESTIONNAIRE in groups
+    is_admin = is_super or GROUP_APP_ADMIN in groups
+    is_gest = is_admin or GROUP_GESTIONNAIRE in groups
     is_user = is_gest or GROUP_USER in groups
     return {
         "authenticated": bool(username) and is_user,
@@ -316,7 +320,9 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "is_moderator": _is_moderator(groups),
         # Droits (mêmes champs que /api/me) : permet au header de n'appeler que
         # cet endpoint, supprimant un aller-retour par navigation.
-        "is_user": is_user, "is_gestionnaire": is_gest, "is_admin": is_super,
+        "is_user": is_user, "is_gestionnaire": is_gest,
+        "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
+        "is_superadmin": is_super,     # superuser Authentik global
         "role": role,
     }
 
@@ -600,6 +606,19 @@ def set_user_role(username: str, payload: RoleSet,
         raise HTTPException(400, "action impossible sur son propre compte")
     if not authentik.enabled():
         raise HTTPException(503, "API Authentik non configurée")
+    caller_super = bool(identity["groups"] & SUPERUSER_GROUPS)
+    # Groupes réels de la cible (source de vérité) pour les garde-fous.
+    try:
+        target_groups = authentik.user_groups(username)
+    except authentik.AuthentikError:
+        raise HTTPException(502, "Authentik indisponible — réessayez")
+    # Un superuser global Authentik ne se gère pas depuis le site.
+    if target_groups & SUPERUSER_GROUPS:
+        raise HTTPException(400, "super-administrateur global (Authentik) — non modifiable ici")
+    # Le rôle admin applicatif (créer/retirer un admin) est réservé au superadmin.
+    target_is_app_admin = GROUP_APP_ADMIN in target_groups
+    if (role == "admin" or target_is_app_admin) and not caller_super:
+        raise HTTPException(403, "seul un super-administrateur peut gérer le rôle administrateur")
     with get_conn() as conn:
         row = conn.execute(
             "SELECT role FROM profiles WHERE username=?", (username,)

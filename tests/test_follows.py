@@ -128,16 +128,28 @@ def test_user_follow_state_on_profile(client):
     assert prof["is_self"] is True and prof["follow"]["followers"] == 1
 
 
-def test_admin_set_role_and_notify(client, monkeypatch):
+APP_ADMIN = {"X-authentik-username": "boss",
+             "X-authentik-groups": "live2mp3-admin|live2mp3-gestionnaire|live2mp3-user"}
+
+
+def _mock_authentik(monkeypatch):
+    """Mock Authentik : état de groupes en mémoire, set_role/user_groups cohérents."""
     from backend import authentik
-    c = client
     monkeypatch.setattr(authentik, "enabled", lambda: True)
-    # Simule Authentik : groupes cibles par rôle.
     ROLE_G = {"user": {"live2mp3-user"},
               "gestionnaire": {"live2mp3-user", "live2mp3-gestionnaire"},
-              "admin": {"live2mp3-user", "authentik Admins"}}
-    monkeypatch.setattr(authentik, "set_role", lambda u, role: ROLE_G[role])
+              "admin": {"live2mp3-user", "live2mp3-gestionnaire", "live2mp3-admin"}}
+    state = {}
+    def fake_set_role(u, role):
+        state[u] = set(ROLE_G[role]); return state[u]
+    monkeypatch.setattr(authentik, "set_role", fake_set_role)
+    monkeypatch.setattr(authentik, "user_groups", lambda u: set(state.get(u, {"live2mp3-user"})))
+    return state
 
+
+def test_admin_set_role_and_notify(client, monkeypatch):
+    c = client
+    _mock_authentik(monkeypatch)
     c.get("/api/social/me", headers=USER2)          # crée bob (simple user)
     url = "/api/social/users/bob/role"
 
@@ -153,7 +165,7 @@ def test_admin_set_role_and_notify(client, monkeypatch):
     n = c.get("/api/social/notifications", headers=USER2).json()["items"][0]
     assert n["type"] == "role_grant" and n["reason_id"] == "gestionnaire" and n["username"] == "bob"
 
-    # Promotion admin -> role_grant.
+    # Promotion admin (applicatif) -> role_grant.
     r = c.post(url, json={"role": "admin"}, headers=ADMIN).json()
     assert r["role"] == "admin"
     assert c.get("/api/social/notifications", headers=USER2).json()["items"][0]["type"] == "role_grant"
@@ -172,6 +184,28 @@ def test_admin_set_role_and_notify(client, monkeypatch):
     # Pas sur soi-même.
     assert c.post("/api/social/users/root/role",
                   json={"role": "gestionnaire"}, headers=ADMIN).status_code == 400
+
+
+def test_app_admin_cannot_manage_admin_tier(client, monkeypatch):
+    c = client
+    state = _mock_authentik(monkeypatch)
+    c.get("/api/social/me", headers=USER2)          # bob
+    url = "/api/social/users/bob/role"
+
+    # Un admin applicatif peut promouvoir user -> gestionnaire.
+    assert c.post(url, json={"role": "gestionnaire"}, headers=APP_ADMIN).json()["role"] == "gestionnaire"
+    # ... mais ne peut PAS créer un admin.
+    assert c.post(url, json={"role": "admin"}, headers=APP_ADMIN).status_code == 403
+    # Un superadmin, si.
+    assert c.post(url, json={"role": "admin"}, headers=ADMIN).json()["role"] == "admin"
+    # bob est désormais admin applicatif : l'admin applicatif ne peut plus le gérer.
+    assert c.post(url, json={"role": "user"}, headers=APP_ADMIN).status_code == 403
+    # Le superadmin peut le rétrograder.
+    assert c.post(url, json={"role": "gestionnaire"}, headers=ADMIN).json()["role"] == "gestionnaire"
+
+    # Un superuser global Authentik n'est pas modifiable depuis le site.
+    state["bob"] = {"authentik Admins"}
+    assert c.post(url, json={"role": "user"}, headers=ADMIN).status_code == 400
 
 
 def test_effective_role_publisher_floor():

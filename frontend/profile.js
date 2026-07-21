@@ -22,7 +22,7 @@
       r_user: "Utilisateur", r_gestionnaire: "Gestionnaire", r_admin: "Administrateur",
       rd_user: "Accès de base (téléchargement).",
       rd_gestionnaire: "Peut importer et gérer les albums.",
-      rd_admin: "Accès complet + gestion des rôles.",
+      rd_admin: "Gestionnaire + gestion des rôles.",
       confirm_role: "Attention, êtes-vous sûr de vouloir attribuer le rôle « {r} » à cet utilisateur ?",
       yes: "Oui", no: "Non", role_err: "Action impossible. Réessayez.",
       city: "Ville", artist: "Artiste/groupe favori",
@@ -50,7 +50,7 @@
       r_user: "Member", r_gestionnaire: "Manager", r_admin: "Administrator",
       rd_user: "Basic access (downloads).",
       rd_gestionnaire: "Can import and manage albums.",
-      rd_admin: "Full access + role management.",
+      rd_admin: "Manager + role management.",
       confirm_role: "Warning: are you sure you want to assign the role “{r}” to this user?",
       yes: "Yes", no: "No", role_err: "Action failed. Please try again.",
       city: "City", artist: "Favourite artist/band",
@@ -254,14 +254,22 @@
   }
 
   // Rôles gérables et leur icône Material (mêmes que le badge de rôle).
-  const ROLE_ORDER = ["user", "gestionnaire", "admin"];
   const ROLE_ICON = { user: "person", gestionnaire: "manage_accounts", admin: "shield_person" };
+  // Rôles proposés dans le sélecteur : le rôle « admin » (applicatif) n'est
+  // gérable que par un super-administrateur.
+  function pickableRoles() {
+    return ME.is_superadmin ? ["user", "gestionnaire", "admin"] : ["user", "gestionnaire"];
+  }
+  // Peut-on gérer le rôle de ce profil ? (gestionnaire des rôles, pas soi-même,
+  // et — sauf superadmin — pas un profil déjà admin.)
+  function canManageRole(p) {
+    return ME.is_admin && !DATA.is_self && (ME.is_superadmin || p.role !== "admin");
+  }
 
-  // Badge de rôle : simple pour tous, cliquable (ouvre le sélecteur) pour un
-  // admin regardant un autre profil que le sien.
+  // Badge de rôle : simple pour tous, cliquable (ouvre le sélecteur) si gérable.
   function roleControl(p) {
     const badge = L2M.roleBadge(p.role);
-    if (!(ME.is_admin && !DATA.is_self)) return badge;
+    if (!canManageRole(p)) return badge;
     const inner = badge || `<span class="role-badge role-user"><span class="material-symbols-outlined">person</span>${t("role_none")}</span>`;
     return `<button type="button" class="role-badge-btn" id="role-badge-btn" title="${esc(t("change_role"))}">
       ${inner}<span class="material-symbols-outlined role-caret">expand_more</span></button>`;
@@ -284,7 +292,7 @@
       };
       ov.innerHTML = `<div class="modal-box role-picker" role="dialog" aria-modal="true">
         <h3 class="modal-title">${t("role_picker_title")}</h3>
-        <div class="role-opts">${ROLE_ORDER.map(opt).join("")}</div>
+        <div class="role-opts">${pickableRoles().map(opt).join("")}</div>
         <div class="modal-actions"><button class="icon-btn" data-a="close">${t("cancel")}</button></div>
       </div>`;
       const close = (v) => { ov.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
