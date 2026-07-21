@@ -13,7 +13,9 @@ def test_id3_tags_complete(synth_project):
     mp3s = sorted((synth_project / "build" / "audio").glob("*.mp3"))
     assert mp3s
     id3 = ID3(str(mp3s[0]))
-    assert id3["TIT2"].text[0] == "Overcompensate"
+    # Le tag titre est préfixé du numéro (« 01. » pour la piste 1) — c'est ce
+    # qui force l'ordre des pistes sur les lecteurs qui trient par titre.
+    assert id3["TIT2"].text[0] == "01. Overcompensate"
     assert id3["TPE1"].text[0] == "Twenty One Pilots"
     assert id3["TALB"].text[0].startswith("The Clancy Tour")
     assert id3["TCON"].text[0] == "Live"
@@ -38,7 +40,7 @@ def test_mp4_metadata(synth_project):
     mp4s = sorted((synth_project / "build" / "video").glob("*.mp4"))
     assert mp4s
     meta = MP4(str(mp4s[0]))
-    assert meta.tags["\xa9nam"][0] == "Overcompensate"
+    assert meta.tags["\xa9nam"][0] == "01. Overcompensate"
     assert meta.tags["\xa9ART"][0] == "Twenty One Pilots"
     assert meta.tags["\xa9gen"][0] == "Live"
 

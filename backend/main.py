@@ -529,9 +529,10 @@ def download_track(slug: str, n: int,
     f = _track_file(project_dir, n, title)
     if not f:
         raise HTTPException(404, "piste introuvable")
-    # Nom de téléchargement propre (les fichiers source ont des noms parasites :
-    # « [SPOTDOWNLOADER.COM]… », préfixes numériques incohérents…).
-    dl_name = f"{title}.mp3" if title else f.name
+    # Nom de téléchargement propre et numéroté (« 11. Heavy Dirty Soul.mp3 »)
+    # pour l'ordre ; les fichiers source ont des noms parasites.
+    from .manifest import numbered_title, sanitize_filename
+    dl_name = f"{sanitize_filename(numbered_title(n, title))}.mp3" if title else f.name
     return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
 
 
