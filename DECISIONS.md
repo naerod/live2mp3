@@ -48,3 +48,17 @@ pas d'exposition") : l'app est désormais **publique** sur `live2mp3.naerod.com`
   en-têtes `X-authentik-groups` (non spoofables, posés par nginx depuis la
   sous-requête d'auth ; neutralisés sur les routes publiques).
 - Ajout d'un site futur = 1 application/provider Authentik + ~5 lignes nginx.
+
+## Slug d'album : identifiant stable + correction manuelle
+- Le slug (`artiste-date`) est fixé **une fois** à la création et sert d'ID :
+  dossier projet + clé des tables sociales (favoris, commentaires, pochettes,
+  pochettes par piste, notifications, annonces).
+- **Pas de renommage automatique** à chaque édition d'info : une URL doit rester
+  stable (liens partagés, favoris, référencement). Renommer casse ces liens.
+- À la place : action **manuelle** « Corriger l'URL » (page de gestion) qui
+  renomme le dossier, migre les 6 tables et pose un **alias → redirection 301**
+  de l'ancienne URL (table `slug_aliases`, chaînes compressées). Réservée au
+  gestionnaire. Cf. `backend/slugrename.py`.
+- Le nom de fichier des **téléchargements** (`AAAA-MM-JJ_artiste_titre_type.zip`)
+  est, lui, calculé à la volée depuis le manifeste → suit les infos sans toucher
+  au slug. Cf. `manifest.download_stem`.

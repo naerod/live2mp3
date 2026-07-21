@@ -115,6 +115,16 @@ CREATE TABLE IF NOT EXISTS post_announcements (
     announced_at TEXT NOT NULL
 );
 
+-- Anciens slugs d'un album renommé → slug canonique actuel. Sert à rediriger
+-- (301) les URLs déjà partagées après une correction d'URL. Une chaîne de
+-- renommages est compressée (tous les anciens pointent vers le slug final).
+CREATE TABLE IF NOT EXISTS slug_aliases (
+    old_slug   TEXT PRIMARY KEY,
+    new_slug   TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_slug_aliases_new ON slug_aliases(new_slug);
+
 CREATE TABLE IF NOT EXISTS comments (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     slug       TEXT NOT NULL,

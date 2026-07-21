@@ -136,6 +136,11 @@
     font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:99}
   .toast.show{opacity:1}
   .toast.err{background:#e57373;color:#fff}
+  .cfm-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  .cfm-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;max-width:440px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+  .cfm-msg{margin:0 0 18px;line-height:1.5;white-space:pre-line}
+  .cfm-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+  .cfm-actions button{margin:0}
   input[type="file"]{display:none}
   #save-all{background:var(--accent);color:#0d0f13;font-weight:600;border:none}
   #save-all:hover{background:var(--accent);border-color:var(--accent)}
@@ -186,6 +191,7 @@
 <main>
   <div class="page-nav">
     <button class="icon-btn" onclick="location.href='/album/'+SLUG"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+    <button class="icon-btn hidden" id="fix-url"><span class="material-symbols-outlined">link</span><span id="t-fix-url">Corriger l'URL</span></button>
     <button class="icon-btn" id="save-all"><span class="material-symbols-outlined save-btn-icon">save</span><span id="t-save-all">Enregistrer</span></button>
   </div>
   <div class="layout">
@@ -315,6 +321,10 @@ const TT={
       f_venue:"Lieu",f_city:"Ville",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
+      fix_url:"Corriger l'URL",
+      fix_url_hint:u=>`Adapter l'URL aux infos actuelles : ${u}`,
+      fix_url_confirm:u=>`Changer l'URL de l'album en ${u} ?\n\nL'ancienne adresse redirigera automatiquement. Les favoris, commentaires et pochettes sont conservés.`,
+      fix_url_done:"URL corrigée ✓",fix_dlg_yes:"Oui, corriger",fix_dlg_no:"Annuler",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
       date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",cal_clear:"Effacer",cal_today:"Aujourd'hui",
@@ -333,6 +343,10 @@ const TT={
       f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
+      fix_url:"Fix the URL",
+      fix_url_hint:u=>`Match the URL to the current info: ${u}`,
+      fix_url_confirm:u=>`Change this album's URL to ${u}?\n\nThe old address will redirect automatically. Favorites, comments and covers are kept.`,
+      fix_url_done:"URL fixed ✓",fix_dlg_yes:"Yes, fix it",fix_dlg_no:"Cancel",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
       date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",cal_clear:"Clear",cal_today:"Today",
@@ -354,6 +368,7 @@ function applyLang(){
   refreshPublishBtn();
   document.getElementById("lang-label").textContent=L().toUpperCase();
   document.getElementById("t-back").textContent=t.back;
+  document.getElementById("t-fix-url").textContent=t.fix_url;
   document.getElementById("t-save-all").textContent=t.save_all;
   document.getElementById("t-meta").textContent=t.meta;
   document.getElementById("t-meta-legend").textContent=t.meta_legend;
@@ -883,7 +898,69 @@ async function load(){
   if(PER_TRACK)await loadTrackCovers();
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
   _bindTcvEvents();
+  refreshUrlBtn();
 }
+
+// ── Corriger l'URL (slug) ────────────────────────────────────────────────────
+// N'apparaît que si l'URL actuelle peut être améliorée d'après les infos de
+// l'album (ex. un slug « …-untitled » alors que la date est désormais connue).
+async function refreshUrlBtn(){
+  const btn=document.getElementById("fix-url");
+  if(!btn)return;
+  try{
+    const p=await(await fetch(`/api/albums/${SLUG}/url-preview`)).json();
+    if(p.changed&&p.target){
+      btn.dataset.target=p.target;
+      btn.title=TT[L()].fix_url_hint("/album/"+p.target);
+      btn.classList.remove("hidden");
+    }else{btn.classList.add("hidden");}
+  }catch(e){btn.classList.add("hidden");}
+}
+
+// Petite modale de confirmation (pas de confirm() natif — cf. DA du projet).
+function confirmBox(msg){
+  return new Promise(res=>{
+    const t=TT[L()];
+    const back=document.createElement("div");
+    back.className="cfm-back";
+    back.innerHTML=`<div class="cfm-box" role="dialog" aria-modal="true">
+      <p class="cfm-msg"></p>
+      <div class="cfm-actions">
+        <button class="icon-btn cfm-no"></button>
+        <button class="icon-btn cfm-yes" style="background:var(--accent);color:#0d0f13;font-weight:600;border:none"></button>
+      </div></div>`;
+    back.querySelector(".cfm-msg").textContent=msg;
+    back.querySelector(".cfm-no").textContent=t.fix_dlg_no;
+    back.querySelector(".cfm-yes").textContent=t.fix_dlg_yes;
+    const done=v=>{back.remove();res(v);};
+    back.querySelector(".cfm-no").onclick=()=>done(false);
+    back.querySelector(".cfm-yes").onclick=()=>done(true);
+    back.addEventListener("click",e=>{if(e.target===back)done(false);});
+    document.body.appendChild(back);
+  });
+}
+
+document.getElementById("fix-url").onclick=async()=>{
+  const btn=document.getElementById("fix-url");
+  const target=btn.dataset.target;
+  if(!target)return;
+  const t=TT[L()];
+  if(!await confirmBox(t.fix_url_confirm("/album/"+target)))return;
+  btn.disabled=true;
+  try{
+    const r=await fetch(`/api/albums/${SLUG}/rename-url`,{method:"POST"});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d.ok)throw new Error(d.detail||"error");
+    if(d.changed){
+      toast(t.fix_url_done);
+      // Le slug de la page a changé → on recharge sur la nouvelle URL de gestion.
+      setTimeout(()=>{location.href=`/app/album/${d.slug}`;},600);
+    }else{
+      btn.classList.add("hidden");btn.disabled=false;
+    }
+  }catch(e){toast("✗",true);btn.disabled=false;}
+};
+
 applyLang();load();
 </script>
   <!-- Cover viewer modal -->

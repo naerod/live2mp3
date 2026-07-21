@@ -47,6 +47,7 @@ from .auth import (
 from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
+from . import slugrename
 from .pipeline import boundaries, download, preanalyze
 from .covers import (
     MEDIA_TYPES,
@@ -728,6 +729,36 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     return {"ok": True, "mp3_tagged": tagged}
 
 
+@app.get("/api/albums/{slug}/url-preview")
+def album_url_preview(slug: str,
+                      identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Slug canonique que donnerait « Corriger l'URL », sans rien modifier.
+    Permet au front d'afficher/désactiver le bouton selon qu'il y a un gain."""
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    base = slugrename.clean_slug(m.data.get("album", {}))
+    target = slugrename.unique_slug(base, slug) if base else ""
+    return {"slug": slug, "target": target,
+            "changed": bool(target) and target != slug,
+            "reason": "" if base else "no_metadata"}
+
+
+@app.post("/api/albums/{slug}/rename-url")
+def album_rename_url(slug: str,
+                     identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Corrige l'URL de l'album vers son slug canonique (artiste-date).
+    Renomme le dossier, migre les données sociales, pose une redirection 301."""
+    try:
+        res = slugrename.rename_album(slug)
+    except FileNotFoundError:
+        raise HTTPException(404, "album introuvable")
+    except Exception as exc:  # pragma: no cover - défensif
+        raise HTTPException(500, f"échec du renommage : {exc}")
+    return {"ok": True, **res}
+
+
 @app.put("/api/albums/{slug}/tracks")
 def update_tracks(slug: str, payload: TracksEditIn,
                   identity: dict = Depends(require_gestionnaire)) -> dict:
@@ -893,7 +924,14 @@ def patch_track_meta(
     return {"ok": True, "track": track}
 
 @app.get("/album/{slug}", response_class=HTMLResponse)
-def album_detail_page(slug: str) -> HTMLResponse:
+def album_detail_page(slug: str):
+    # Ancien slug (album renommé) → redirection permanente vers l'URL actuelle,
+    # pour ne pas casser les liens déjà partagés.
+    if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
+        canon = slugrename.canonical_slug(slug)
+        if canon != slug:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/album/{canon}", status_code=301)
     page = FRONTEND / "album_detail.html"
     if page.exists():
         return HTMLResponse(page.read_text(encoding="utf-8"))
@@ -909,7 +947,12 @@ def tool() -> HTMLResponse:
 
 @app.get("/app/album/{slug}", response_class=HTMLResponse)
 def album_admin_page(slug: str,
-                     identity: dict = Depends(require_gestionnaire)) -> HTMLResponse:
+                     identity: dict = Depends(require_gestionnaire)):
+    if not (PROJECTS_DIR / slug / "manifest.yaml").exists():
+        canon = slugrename.canonical_slug(slug)
+        if canon != slug:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=f"/app/album/{canon}", status_code=301)
     page = FRONTEND / "album.html"
     if page.exists():
         return HTMLResponse(page.read_text(encoding="utf-8"))
