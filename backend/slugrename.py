@@ -21,8 +21,14 @@ import shutil
 import sqlite3
 from datetime import datetime, timezone
 
+from . import db
 from .db import get_conn
 from .manifest import PROJECTS_DIR, Manifest, slugify
+
+_ALIAS_DDL = (
+    "CREATE TABLE IF NOT EXISTS slug_aliases ("
+    "old_slug TEXT PRIMARY KEY, new_slug TEXT NOT NULL, created_at TEXT NOT NULL)"
+)
 
 # Colonnes `slug` à réécrire (toutes de simples UPDATE ; les *_likes cascadent
 # via leur FK cover_id/comment_id, donc rien à faire de ce côté).
@@ -94,9 +100,36 @@ def canonical_slug(slug: str) -> str:
         return slug
 
 
-def _migrate_db(conn: sqlite3.Connection, old: str, new: str) -> None:
+def _social_db_paths() -> list[Path]:
+    """Toutes les bases sociales à migrer.
+
+    Le dossier `projects/` est partagé entre environnements (bind-mount) mais
+    chaque env a SA base sous `.l2m-social/<env>/`. Un renommage touche le
+    dossier partagé : il faut donc réécrire le slug dans **toutes** les bases,
+    sinon l'autre env garde des lignes sociales orphelines. On inclut la base
+    de l'env courant (chemin éventuellement surchargé par `L2M_DATA_DIR`).
+    """
+    paths = {db.DB_PATH.resolve()} if db.DB_PATH.exists() else set()
+    root = PROJECTS_DIR / ".l2m-social"
+    if root.exists():
+        for p in root.glob("*/live2mp3.db"):
+            paths.add(p.resolve())
+    return sorted(paths)
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+
+
+def _migrate_one(conn: sqlite3.Connection, old: str, new: str) -> None:
+    conn.execute(_ALIAS_DDL)
+    # Ne touche que les tables présentes : les bases d'env peuvent différer
+    # légèrement (drift de schéma / migration non encore jouée).
     for table, col in _SLUG_COLUMNS:
-        conn.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old))
+        if _table_exists(conn, table):
+            conn.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old))
     # Compression de chaîne : les alias qui pointaient vers `old` pointent
     # désormais vers `new`, puis on enregistre `old → new`.
     conn.execute("UPDATE slug_aliases SET new_slug=? WHERE new_slug=?", (new, old))
@@ -107,6 +140,20 @@ def _migrate_db(conn: sqlite3.Connection, old: str, new: str) -> None:
     )
     # Un ancien alias identique au nouveau slug n'a plus de sens (auto-référence).
     conn.execute("DELETE FROM slug_aliases WHERE old_slug=new_slug")
+
+
+def _migrate_all_dbs(old: str, new: str) -> None:
+    for path in _social_db_paths():
+        conn = sqlite3.connect(str(path), timeout=10.0)
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            _migrate_one(conn, old, new)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 def rename_album(old_slug: str) -> dict:
@@ -128,12 +175,11 @@ def rename_album(old_slug: str) -> dict:
         return {"changed": False, "slug": old_slug, "reason": "already_clean"}
 
     dst = PROJECTS_DIR / target
-    # 1) Dossier d'abord : si ça échoue, on n'a rien touché en base.
+    # 1) Dossier d'abord : si ça échoue (droits…), on n'a rien touché en base.
     shutil.move(str(src), str(dst))
-    # 2) Base : en cas d'échec, on remet le dossier en place (rollback best-effort).
+    # 2) Bases (tous les env) : en cas d'échec, on remet le dossier en place.
     try:
-        with get_conn() as conn:
-            _migrate_db(conn, old_slug, target)
+        _migrate_all_dbs(old_slug, target)
     except Exception:
         shutil.move(str(dst), str(src))
         raise

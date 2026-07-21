@@ -97,6 +97,37 @@ def test_preview_and_rename_migrates_everything(client):
     assert again["changed"] is False and again["reason"] == "already_clean"
 
 
+def test_rename_migrates_sibling_env_db(client):
+    """Dossier partagé prod/preprod : une base d'un AUTRE env (sous
+    .l2m-social/<env>/) doit aussi voir son slug réécrit."""
+    import sqlite3
+    from backend import db
+    c, projects = client
+    old = _make_album(c, artist="A", date="")
+    c.put(f"/api/albums/{old}/meta", headers=GEST, json={
+        "artist": "A", "title": "T", "date": "2019-03-03", "venue": "",
+        "festival": "", "city": "", "city_id": "", "artist_id": "",
+        "festival_id": "", "guests": [], "source_url": "", "source_label": ""})
+    # Base « preprod » sœur, avec une ligne référençant l'ancien slug.
+    sib_dir = projects / ".l2m-social" / "preprod"
+    sib_dir.mkdir(parents=True)
+    sib = sib_dir / "live2mp3.db"
+    conn = sqlite3.connect(str(sib))
+    conn.executescript(db.SCHEMA)
+    conn.execute("INSERT INTO favorites(username, slug, created_at) VALUES(?,?,?)",
+                 ("bob", old, "2026-01-01T00:00:00+00:00"))
+    conn.commit(); conn.close()
+
+    new = c.post(f"/api/albums/{old}/rename-url", headers=GEST).json()["slug"]
+
+    conn = sqlite3.connect(str(sib))
+    assert conn.execute("SELECT COUNT(*) FROM favorites WHERE slug=?", (old,)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM favorites WHERE slug=?", (new,)).fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM slug_aliases WHERE old_slug=? AND new_slug=?",
+                        (old, new)).fetchone()[0] == 1
+    conn.close()
+
+
 def test_rename_chain_compresses_aliases(client):
     c, projects = client
     old = _make_album(c, artist="A", date="")          # a-untitled
