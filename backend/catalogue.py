@@ -17,6 +17,22 @@ def _has_files(d: Path, ext: str) -> bool:
     return d.exists() and any(d.glob(f"*.{ext}"))
 
 
+def _cover_slugs() -> set[str]:
+    """Slugs ayant au moins une pochette en base (système social).
+
+    Même logique que _traycard_slugs : requête unique pour éviter le N+1.
+    En cas d'erreur, on retombe sur le manifest — la vitrine reste lisible.
+    """
+    try:
+        with get_conn() as conn:
+            return {
+                r["slug"]
+                for r in conn.execute("SELECT DISTINCT slug FROM covers")
+            }
+    except Exception:
+        return set()
+
+
 def _traycard_slugs() -> set[str]:
     """Slugs dont la pochette *gagnante* porte une tray card.
 
@@ -52,6 +68,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
         return albums
+    cover_slugs = _cover_slugs()
     tray_slugs = _traycard_slugs()
     for pdir in sorted(PROJECTS_DIR.iterdir()):
         manifest = pdir / "manifest.yaml"
@@ -70,7 +87,11 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         if not (has_mp3 or has_mp4):
             continue
         cover_rel = album.get("cover")
-        has_cover = bool(cover_rel and (pdir / cover_rel).exists())
+        # Priorité à la DB sociale ; fallback sur le manifest pour les covers
+        # legacy ou uploadées directement (hors système social).
+        has_cover = (pdir.name in cover_slugs) or bool(
+            cover_rel and (pdir / cover_rel).exists()
+        )
         has_traycard = pdir.name in tray_slugs
         meta = m.data.get("meta", {})
         albums.append({

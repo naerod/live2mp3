@@ -29,7 +29,7 @@ from mutagen.id3 import ID3, ID3NoHeaderError
 from .albumfiles import MIME_EXT, _file_track_n
 from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
-from .manifest import PROJECTS_DIR
+from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
 from .social import (
     _album_exists,
@@ -407,6 +407,62 @@ def delete_traycard(cover_id: int, identity: dict = Depends(require_user)) -> di
         payload = _list_payload(conn, row["slug"], identity.get("username"))
     _on_covers_changed(row["slug"])
     return {"ok": True, **payload}
+
+
+@router.delete("/api/albums/{slug}/cover")
+def delete_manifest_cover(slug: str, identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Supprime la pochette de manifeste (album.cover) — gestionnaires uniquement.
+
+    Appelé quand l'utilisateur supprime une cover virtuelle id=0, c'est-à-dire
+    une pochette qui n'est enregistrée qu'en YAML (ancienne couche, avant la
+    collection sociale), pas en base de données.
+    """
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    if not mpath.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(mpath)
+    cover_rel = m.data.get("album", {}).get("cover")
+    if cover_rel:
+        (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
+        m.data.get("album", {}).pop("cover", None)
+        m.save()
+    with get_conn() as conn:
+        payload = _list_payload(conn, slug, identity.get("username"))
+    return {"ok": True, **payload}
+
+
+@router.delete("/api/albums/{slug}/cover/auto")
+def delete_album_cover_auto(slug: str, identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Supprime la pochette courante de l'album, quelle que soit sa source.
+
+    Depuis la page de gestion (album.html), un gestionnaire veut retirer la
+    pochette affichée. On cherche dans l'ordre : pochette gagnante en DB (même
+    source que /cover/{slug}), puis cover de manifeste. Les deux sont nettoyées
+    pour garantir la cohérence partout (accueil, profil, carousel).
+    """
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    if not mpath.exists():
+        raise HTTPException(404, "album introuvable")
+
+    # 1. Supprimer toutes les covers en DB + leurs fichiers
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM covers WHERE slug=?", (slug,)).fetchall()
+        for row in rows:
+            cover_file(slug, row["file_key"], row["cover_ext"]).unlink(missing_ok=True)
+            if row["traycard_ext"]:
+                traycard_file(slug, row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
+        if rows:
+            conn.execute("DELETE FROM covers WHERE slug=?", (slug,))
+
+    # 2. Nettoyer le manifest
+    m = Manifest.load(mpath)
+    cover_rel = m.data.get("album", {}).get("cover")
+    if cover_rel:
+        (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
+        m.data.get("album", {}).pop("cover", None)
+        m.save()
+
+    return {"ok": True, "has_cover": False}
 
 
 @router.delete("/api/social/covers/{cover_id}")
