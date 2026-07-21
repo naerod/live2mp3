@@ -115,11 +115,10 @@
       const attr = it.type === "artist" ? ` data-artist-id="${esc(it.id)}"` : "";
       media = `<span class="fr-ic"${attr}><span class="material-symbols-outlined">${FOLLOW_ICON[it.type] || "tag"}</span></span>`;
     }
-    const role = isUser && it.role ? " " + L2M.roleBadge(it.role) : "";
     return `<div class="follow-row">
       <a class="fr-main" href="${href}">
         ${media}
-        <span class="fr-txt"><span class="fr-name">${esc(it.label)}${role}</span></span>
+        <span class="fr-txt"><span class="fr-name">${esc(it.label)}</span></span>
       </a>
       <div class="follow-wrap fr-act" data-type="${esc(it.type)}" data-id="${esc(it.id)}"
            data-label="${esc(it.label)}" data-following="${it.viewer_following ? 1 : 0}"
