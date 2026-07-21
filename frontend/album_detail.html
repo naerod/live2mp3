@@ -35,7 +35,11 @@
   .al-meta-item{display:inline-flex;align-items:center;gap:5px}
   .al-meta-item .material-symbols-outlined{font-size:16px;color:var(--muted)}
   .al-meta-item.muted-placeholder{opacity:.45;font-style:italic}
-  .al-poster{margin-top:2px}
+  .al-poster{margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .al-import-manner{color:var(--muted);font-size:12px}
+  /* Crédit « Pochette automatique » — même emplacement/allure que « Pochette par X ». */
+  .cr-auto{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+  .cr-auto .material-symbols-outlined{font-size:18px;color:var(--accent)}
   .source-row{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12px;flex-wrap:wrap}
   .source-row .material-symbols-outlined{font-size:14px;flex-shrink:0}
   .source-link{color:var(--accent);text-decoration:none;word-break:break-all}
@@ -330,6 +334,7 @@ const T={
       festival:"Tournée/festival",
       like:"J'aime",liked:"Aimé",login_to_like:"Connectez-vous pour aimer",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,profile:"Mon profil",
+      import_auto:"(automatiquement)",import_manual:"(manuellement)",cover_auto_badge:"Pochette automatique",
       cv_by:"Pochette par",cv_prev:"Précédent",cv_next:"Suivant",
       cv_cover:"Pochette",cv_see_tray:"Voir la tray card",cv_see_cover:"Voir la pochette",
       cv_add:"Proposer une pochette",cv_none:"Aucune pochette pour cet album.",
@@ -359,6 +364,7 @@ const T={
       festival:"Tour/festival",
       like:"Like",liked:"Liked",login_to_like:"Log in to like",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,profile:"My profile",
+      import_auto:"(automatically)",import_manual:"(manually)",cover_auto_badge:"Automatic cover",
       cv_by:"Cover by",cv_prev:"Previous",cv_next:"Next",
       cv_cover:"Cover",cv_see_tray:"View tray card",cv_see_cover:"View cover",
       cv_add:"Submit a cover",cv_none:"No cover for this album yet.",
@@ -419,6 +425,7 @@ async function loadContent(){
   try{const r=await fetch(`/api/catalogue/${slug}`);if(!r.ok)throw 0;d=await r.json();}
   catch(e){showNotFound();return;}
   if(!d||!d.album){showNotFound();return;}
+  COVER_AUTO=!!d.cover_auto;   // pochette = miniature d'import auto (crédit dédié)
 
   document.title=`live2mp3 — ${d.album.title||slug}`;
 
@@ -489,9 +496,9 @@ function renderAlbum(d){
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
     if(d.has_cover)links+=dlSplit('image',t('cover'),`/download/${slug}/cover`,`/download/${slug}/cover/pdf`);
     if(d.has_traycard)links+=dlSplit('description',t('traycard'),`/download/${slug}/traycard`,`/download/${slug}/traycard/pdf`);
-    if(links)dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl">${links}</div></div>`;
+    if(links)dlHtml=`<div class="al-dl">${links}</div>`;
   }else{
-    dlHtml=`<div class="al-dl-wrap"><div class="al-dl-title">${t('downloads')}</div><div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div></div>`;
+    dlHtml=`<div class="al-dl"><span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span><a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/album/${slug}" style="margin:0;height:32px;font-size:12.5px;padding:0 12px"><span class="material-symbols-outlined">login</span> ${t('login')}</a></div>`;
   }
 
   const srcUrl=d.source_url||'';
@@ -507,28 +514,37 @@ function renderAlbum(d){
   const posterHtml=posterFor(d.imported_by);
   const dateStr=a.date||t('date_unknown');
   const venueStr=a.venue||t('venue_unknown');
+  // Noms cliquables vers les pages auto d'entités (ids exacts fournis par l'API).
+  const ents=d.entities||[];
+  const entOf=(type,label)=>ents.find(e=>e.type===type&&e.label===label);
+  const entLink=(type,label,text)=>{const e=entOf(type,label);
+    return e?`<a class="entity-link" href="/${type}/${encodeURIComponent(e.id)}">${L2M.esc(text)}</a>`:L2M.esc(text);};
+  const gGuests=(a.guests||[]).filter(g=>g&&g.id);
+  const guestsHtml=gGuests.length?`<div class="al-guests"><span class="material-symbols-outlined">group</span>${
+    gGuests.map(g=>`<a class="entity-link" href="/artist/${encodeURIComponent(g.id)}">${L2M.esc(g.name||g.label)}</a>`).join(', ')}</div>`:'';
 
   document.getElementById('content').innerHTML=`
     <div class="al-layout">
       <div class="al-cover-col" id="cover-col"></div>
       <div class="al-info">
-        ${a.artist?`<div class="al-artist">${L2M.esc(a.artist)}</div>`:''}
+        ${a.artist?`<div class="al-artist">${entLink('artist',a.artist,a.artist)}</div>`:''}
         <h1 class="al-title">${L2M.esc(a.title||slug)}${d.published===false?` <span class="unpub-chip"><span class="material-symbols-outlined">visibility_off</span>${t('unpublished')}</span>`:''}</h1>
         <div class="al-meta">
           <span class="al-meta-item${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</span>
-          <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${L2M.esc(venueStr)}</span>
-          ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${L2M.esc(a.festival)}</span>`:''}
+          <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink('venue',a.venue,venueStr):L2M.esc(venueStr)}</span>
+          ${a.festival?`<span class="al-meta-item"><span class="material-symbols-outlined">festival</span>${entLink('festival',a.festival,a.festival)}</span>`:''}
         </div>
-        ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:''}
+        ${guestsHtml}
+        ${posterHtml?`<div class="al-poster">${posterHtml}<span class="al-import-manner">${d.import_source==='url'?t('import_auto'):t('import_manual')}</span></div>`:''}
         ${sourceHtml}
         ${tags?`<div class="tags">${tags}</div>`:''}
         <div class="al-social">
           <button id="like-btn" class="soc-btn is-like"><span class="material-symbols-outlined">favorite</span><span id="like-count">—</span></button>
           <button id="comment-btn" class="soc-btn is-comment" onclick="scrollToComments()"><span class="material-symbols-outlined">chat_bubble</span><span id="comment-count">—</span></button>
         </div>
-        ${dlHtml}
       </div>
     </div>
+    ${dlHtml?`<div class="sec sec-dl"><h3>${t('downloads')}</h3>${dlHtml}</div>`:''}
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
@@ -613,7 +629,7 @@ async function initSocialActions(){
 // face, suivie de sa tray card quand elle en a une. La tray card reste ainsi
 // une colonne de sa cover (jamais une entrée indépendante), et les flèches
 // parcourent aussi bien les faces d'une pochette que les pochettes entre elles.
-let COVERS=[], SLIDES=[], IDX=0;
+let COVERS=[], SLIDES=[], IDX=0, COVER_AUTO=false;
 
 function buildSlides(){
   SLIDES=[];
@@ -650,7 +666,13 @@ const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
 function footerHtml(c,kind){
   if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
-  if(!c.id)return `<div class="cr-footer"></div>`;
+  // Pochette auto (miniature d'import) : pas d'entrée covers → créditée
+  // « Pochette automatique », au même emplacement que « Pochette par X ».
+  if(!c.id){
+    if(COVER_AUTO&&kind==='cover')
+      return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
+    return `<div class="cr-footer"></div>`;
+  }
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
   return `<div class="cr-footer">${poster}</div>`;

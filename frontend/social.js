@@ -17,6 +17,23 @@ const L2M = (function () {
       view_profile: "Voir le profil", language: "Langue", logout: "Déconnexion",
       theme_dark: "Mode sombre", theme_light: "Mode clair", back: "Retour",
       published_by: "Publié par",
+      follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
+      login_follow: "Connectez-vous pour suivre",
+      notify_on: "Notifications activées", notify_off: "Notifications coupées",
+      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      followers: "abonnés", posts: "posts",
+      notifications: "Notifications", settings: "Paramètres",
+      notif_empty: "Aucune notification pour l'instant.",
+      notif_new: "Nouveau post de", notif_mark_all: "Tout marquer comme lu",
+      notif_like_post: "a aimé votre publication",
+      notif_like_comment: "a aimé votre commentaire",
+      notif_comment_post: "a commenté votre publication",
+      notif_reply_comment: "a répondu à votre commentaire",
+      notif_see_all: "Voir toutes les notifications",
+      notif_admin_action: "Action administrateur",
+      notif_role_now: "Vous êtes désormais",
+      notif_role_now_neutral: "Votre rôle est désormais",
+      notif_role_by: "par",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -32,6 +49,23 @@ const L2M = (function () {
       view_profile: "View profile", language: "Language", logout: "Log out",
       theme_dark: "Dark mode", theme_light: "Light mode", back: "Back",
       published_by: "Published by",
+      follow: "Follow", following: "Following", unfollow: "Unfollow",
+      login_follow: "Log in to follow",
+      notify_on: "Notifications on", notify_off: "Notifications off",
+      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      followers: "followers", posts: "posts",
+      notifications: "Notifications", settings: "Settings",
+      notif_empty: "No notifications yet.",
+      notif_new: "New post from", notif_mark_all: "Mark all as read",
+      notif_like_post: "liked your post",
+      notif_like_comment: "liked your comment",
+      notif_comment_post: "commented on your post",
+      notif_reply_comment: "replied to your comment",
+      notif_see_all: "See all notifications",
+      notif_admin_action: "Administrator action",
+      notif_role_now: "You are now",
+      notif_role_now_neutral: "Your role is now",
+      notif_role_by: "by",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -131,9 +165,41 @@ const L2M = (function () {
     });
   }
 
+  /* ---------------- Navigation instantanée (pré-rendu spéculatif) ----------------
+     Chrome/Edge pré-rendent la page cible d'un lien interne au survol (eagerness
+     « moderate ») : le clic affiche une page déjà prête, le coût réseau (tunnel
+     Cloudflare) est donc payé AVANT le clic → ressenti instantané. Exclut les
+     API, téléchargements, déconnexion et le flux d'auth. Sans effet sur
+     Firefox/Safari (navigation normale, aucune régression). */
+  function installSpeculationRules() {
+    try {
+      if (document.getElementById("l2m-speculation")) return;
+      if (!HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
+      const s = document.createElement("script");
+      s.type = "speculationrules";
+      s.id = "l2m-speculation";
+      s.textContent = JSON.stringify({
+        prerender: [{
+          source: "document",
+          eagerness: "moderate",
+          where: { and: [
+            { href_matches: "/*" },
+            { not: { href_matches: "/api/*" } },
+            { not: { href_matches: "/download/*" } },
+            { not: { href_matches: "/outpost*" } },
+            { not: { selector_matches: "[download]" } },
+            { not: { selector_matches: "[data-noprerender]" } },
+          ] },
+        }],
+      });
+      document.head.appendChild(s);
+    } catch (e) { /* non supporté : navigation classique */ }
+  }
+
   /* ---------------- Header unifié ---------------- */
   async function initHeader(opts) {
     opts = opts || {};
+    installSpeculationRules();
     const header = document.querySelector("header");
     if (!header) return {};
     header.innerHTML = `
@@ -143,6 +209,7 @@ const L2M = (function () {
         <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label"></span></button>
         <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined"></span></button>
         <a id="login" class="icon-btn" style="display:none"><span class="material-symbols-outlined">login</span><span data-hk="login"></span></a>
+        <div id="notif-bell" class="notif-bell" style="display:none"></div>
         <div id="usermenu" class="usermenu" style="display:none"></div>
       </div>`;
 
@@ -196,8 +263,16 @@ const L2M = (function () {
 
     refreshHeaderTexts();
 
-    let meData = { authenticated: false, is_gestionnaire: false };
-    try { meData = await fetch("/api/me").then(r => r.json()); } catch (e) {}
+    // Un seul appel d'identité pour tout le header (droits + profil) : /api/me
+    // et /api/social/me renvoyaient des infos redondantes, on ne garde que le
+    // second (mêmes champs de droits désormais), ce qui retire un aller-retour
+    // réseau — coûteux via le tunnel Cloudflare — à chaque navigation.
+    let sm = { authenticated: false };
+    try { sm = await me(); } catch (e) {}
+    const meData = {
+      authenticated: !!sm.authenticated, username: sm.username,
+      is_user: !!sm.is_user, is_gestionnaire: !!sm.is_gestionnaire, is_admin: !!sm.is_admin,
+    };
 
     // Le bouton est visible par tous : la fenêtre de choix explique le rôle
     // requis aux visiteurs et aux utilisateurs simples.
@@ -210,10 +285,11 @@ const L2M = (function () {
     const um = document.getElementById("usermenu");
     if (meData.authenticated) {
       ["login", "lang", "theme"].forEach(id => document.getElementById(id).style.display = "none");
+      const bell = document.getElementById("notif-bell");
+      if (bell) { bell.style.display = ""; notifBell(bell); }
       um.style.display = "";
-      const sm = await me();
       const extraItems = opts.extraItems ? (typeof opts.extraItems === "function" ? opts.extraItems(meData) : opts.extraItems) : [];
-      userMenu(um, { username: sm.username || meData.username, display_name: sm.display_name, avatar: sm.avatar },
+      userMenu(um, { username: sm.username, display_name: sm.display_name, avatar: sm.avatar },
         { extraItems, onChange: k => {
           if (k === "lang") { refreshHeaderTexts(); if (opts.onLangChange) opts.onLangChange(getLang()); }
           if (opts.onMenuChange) opts.onMenuChange(k);
@@ -240,6 +316,8 @@ const L2M = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
+        <a class="um-item" href="/notifications"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
+        <a class="um-item" href="/settings"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
         ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
@@ -251,6 +329,7 @@ const L2M = (function () {
     function refresh() {
       const dark = getTheme() === "dark";
       set("profile", t("view_profile")); set("lang", t("language")); set("langval", getLang().toUpperCase());
+      set("notifications", t("notifications")); set("settings", t("settings"));
       set("logout", t("logout")); set("themeic", dark ? "light_mode" : "dark_mode");
       set("theme", dark ? t("theme_light") : t("theme_dark"));
     }
@@ -325,6 +404,184 @@ const L2M = (function () {
         liked = r.liked; count = r.likes; paint();
       } catch (e) { /* silencieux */ } finally { el.disabled = false; }
     };
+  }
+
+  /* ---------------- Bouton de suivi + cloche (façon X / YouTube) ----------------
+     followButton(el, {type, id, label, state, onChange})
+     - `state` (optionnel) : {following, notify, followers} déjà connu de la page,
+       sinon récupéré via /api/social/follow-state ;
+     - le bouton bascule Suivre → Suivi (+/✓) ; une fois suivi, une cloche
+       apparaît (notifications on/off) — activer la cloche implique de suivre.
+     - `onChange(state)` rappelé après chaque changement (compteur d'abonnés…). */
+  async function followButton(el, opts) {
+    const { type, id } = opts;
+    const label = opts.label || "";
+    const meData = await me();
+    let st = opts.state;
+    if (!st) {
+      try {
+        st = await api("GET", `/api/social/follow-state?target_type=${encodeURIComponent(type)}&target_id=${encodeURIComponent(id)}`);
+      } catch (e) { st = { following: false, notify: false, followers: 0 }; }
+    }
+    const body = () => ({ target_type: type, target_id: id, target_label: label });
+
+    function paint() {
+      const bell = st.following ? `
+        <button class="bell-btn${st.notify ? " on" : ""}" data-act="bell"
+                title="${esc(st.notify ? t("notify_on") : t("notify_off"))}"
+                aria-pressed="${st.notify}">
+          <span class="material-symbols-outlined">${st.notify ? "notifications_active" : "notifications_off"}</span>
+        </button>` : "";
+      el.innerHTML = `
+        <button class="follow-btn${st.following ? " following" : ""}" data-act="follow"
+                title="${esc(st.following ? t("unfollow") : (meData.authenticated ? t("follow") : t("login_follow")))}">
+          <span class="material-symbols-outlined">${st.following ? "check" : "add"}</span>
+          <span class="follow-lbl">${st.following ? t("following") : t("follow")}</span>
+        </button>${bell}`;
+      wire();
+    }
+    function wire() {
+      const fb = el.querySelector('[data-act="follow"]');
+      const bb = el.querySelector('[data-act="bell"]');
+      fb.onclick = async () => {
+        if (!meData.authenticated) { location.href = loginUrl(); return; }
+        fb.disabled = true;
+        try { st = await api("POST", "/api/social/follow", body()); }
+        catch (e) { if (e.status === 401) return (location.href = loginUrl()); }
+        paint(); if (opts.onChange) opts.onChange(st);
+      };
+      if (bb) bb.onclick = async () => {
+        bb.disabled = true;
+        try { st = await api("PATCH", "/api/social/follow/notify", { ...body(), notify: !st.notify }); }
+        catch (e) { bb.disabled = false; return; }
+        paint(); if (opts.onChange) opts.onChange(st);
+      };
+    }
+    paint();
+    return { get: () => st };
+  }
+
+  // Badge de rôle (utilisateur / gestionnaire / admin) — affiché sur les profils.
+  function roleBadge(role) {
+    if (!role) return "";
+    const icon = role === "admin" ? "shield_person"
+      : role === "gestionnaire" ? "manage_accounts" : "person";
+    return `<span class="role-badge role-${role}"><span class="material-symbols-outlined">${icon}</span>${t("role_" + role)}</span>`;
+  }
+
+  const entityHref = (type, id) => `/${type}/${encodeURIComponent(id)}`;
+
+  /* ---------------- Notifications (cloche header + centre) ---------------- */
+  const NOTIF_ICON = { artist: "artist", festival: "festival", venue: "location_on", user: "person" };
+  // Icône par type d'interaction (like / commentaire) — prime sur reason_type.
+  const NOTIF_TYPE_ICON = { like_post: "favorite", like_comment: "favorite",
+                            comment_post: "chat_bubble", reply_comment: "reply" };
+  // Ligne « raison » selon le type : nouveau post d'une entité suivie, ou
+  // interaction d'un utilisateur (nom porté par reason_label).
+  function notifReason(n) {
+    const who = `<b>${esc(n.reason_label)}</b>`;
+    switch (n.type) {
+      case "like_post": return `${who} ${t("notif_like_post")}`;
+      case "like_comment": return `${who} ${t("notif_like_comment")}`;
+      case "comment_post": return `${who} ${t("notif_comment_post")}`;
+      case "reply_comment": return `${who} ${t("notif_reply_comment")}`;
+      default: return `${t("notif_new")} ${who}`;
+    }
+  }
+  // Rendu d'une notification (réutilisé par la cloche et la page centre).
+  function notifItem(n) {
+    if (n.type === "role_grant" || n.type === "role_revoke") return notifRoleItem(n);
+    const icon = NOTIF_TYPE_ICON[n.type] || NOTIF_ICON[n.reason_type] || "notifications";
+    return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
+      <span class="notif-ic material-symbols-outlined">${icon}</span>
+      <span class="notif-body">
+        <span class="notif-reason">${notifReason(n)}</span>
+        <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
+  // Notification d'action administrateur (promotion / rétrogradation gestionnaire).
+  // Non désactivable ; la promotion a un habillage « valorisant » (couleur dorée).
+  function notifRoleItem(n) {
+    const grant = n.type === "role_grant";
+    const href = n.username ? `/u/${encodeURIComponent(n.username)}` : "/";
+    const icon = grant ? "workspace_premium" : "remove_moderator";
+    const roleLabel = t("role_" + (n.reason_id || "user"));
+    const msg = grant
+      ? `${t("notif_role_now")} <b>${esc(roleLabel)}</b> 🎉`
+      : `${t("notif_role_now_neutral")} <b>${esc(roleLabel)}</b>`;
+    return `<a class="notif-item notif-admin${grant ? " notif-grant" : ""}${n.read ? "" : " unread"}" href="${href}" data-id="${n.id}">
+      <span class="notif-ic material-symbols-outlined">${icon}</span>
+      <span class="notif-body">
+        <span class="notif-admin-tag"><span class="material-symbols-outlined">shield_person</span>${t("notif_admin_action")}</span>
+        <span class="notif-reason">${msg}</span>
+        <span class="notif-post">${t("notif_role_by")} <b>${esc(n.reason_label)}</b></span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
+  // Cloche dans le header : compteur de non-lus + menu déroulant des récentes.
+  async function notifBell(mountEl) {
+    let unread = 0, open = false;
+    mountEl.innerHTML = `
+      <button class="nb-trigger icon-btn icon-only" aria-haspopup="true" aria-label="${esc(t("notifications"))}" title="${esc(t("notifications"))}">
+        <span class="material-symbols-outlined">notifications</span>
+      </button>
+      <div class="nb-pop" role="menu" hidden></div>`;
+    const trigger = mountEl.querySelector(".nb-trigger");
+    const pop = mountEl.querySelector(".nb-pop");
+
+    function paintBadge() {
+      mountEl.querySelector(".nb-badge")?.remove();
+      if (unread > 0) trigger.insertAdjacentHTML("beforeend",
+        `<span class="nb-badge">${unread > 99 ? "99+" : unread}</span>`);
+    }
+    async function refreshCount() {
+      try { unread = (await api("GET", "/api/social/notifications/count")).unread; }
+      catch (e) { unread = 0; }
+      paintBadge();
+    }
+    async function loadPop() {
+      pop.innerHTML = `
+        <div class="nb-head"><b>${t("notifications")}</b>
+          <button class="nb-markall">${t("notif_mark_all")}</button></div>
+        <div class="nb-list"><div class="soc-empty">…</div></div>
+        <a class="nb-all" href="/notifications">${t("notif_see_all")}</a>`;
+      let d = { items: [] };
+      try { d = await api("GET", "/api/social/notifications?limit=8"); } catch (e) {}
+      const list = pop.querySelector(".nb-list");
+      list.innerHTML = d.items.length ? d.items.map(notifItem).join("")
+        : `<div class="soc-empty">${t("notif_empty")}</div>`;
+      pop.querySelector(".nb-markall").onclick = async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        try { unread = (await api("POST", "/api/social/notifications/read", { all: true })).unread; }
+        catch (e) {}
+        paintBadge();
+        list.querySelectorAll(".notif-item").forEach(el => {
+          el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
+        });
+      };
+      list.querySelectorAll(".notif-item").forEach(el => {
+        el.addEventListener("click", () => {
+          api("POST", "/api/social/notifications/read", { ids: [parseInt(el.dataset.id, 10)] }).catch(() => {});
+        });
+      });
+    }
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      open = !open; mountEl.classList.toggle("open", open); pop.hidden = !open;
+      if (open) loadPop();
+    };
+    document.addEventListener("click", (e) => {
+      if (!mountEl.contains(e.target)) { open = false; mountEl.classList.remove("open"); pop.hidden = true; }
+    });
+    await refreshCount();
+    return { refresh: refreshCount };
   }
 
   /* ---------------- Widget commentaires ---------------- */
@@ -578,7 +835,12 @@ const L2M = (function () {
      → { get() → {id,label}, clear() } */
   function autocomplete(el, opts) {
     const { endpoint, placeholder = "", icon = "", onPick } = opts;
-    let picked = opts.value && opts.value.id ? { ...opts.value } : { id: "", label: "" };
+    // `allowFree` : autorise une valeur saisie qui ne figure pas dans la liste
+    // (id vide, libellé = texte tapé). Sert aux festivals, dont la liste
+    // s'auto-construit — un festival inédit se crée en texte libre.
+    const allowFree = !!opts.allowFree;
+    let picked = opts.value && (opts.value.id || (allowFree && opts.value.label))
+      ? { ...opts.value } : { id: "", label: "" };
     let items = [], active = -1, seq = 0, timer = null;
 
     el.classList.add("ac");
@@ -601,7 +863,15 @@ const L2M = (function () {
     function commit(entry) {
       picked = entry ? { id: entry.id, label: entry.label } : { id: "", label: "" };
       input.value = picked.label;
-      clearBtn.style.display = picked.id ? "flex" : "none";
+      clearBtn.style.display = (picked.id || picked.label) ? "flex" : "none";
+      close();
+      if (onPick) onPick(picked);
+    }
+    // Valeur libre (allowFree) : conserve le texte tapé, id vide.
+    function commitFree() {
+      const v = input.value.trim();
+      picked = { id: "", label: v };
+      clearBtn.style.display = v ? "flex" : "none";
       close();
       if (onPick) onPick(picked);
     }
@@ -632,14 +902,20 @@ const L2M = (function () {
     }
 
     input.addEventListener("input", () => {
-      if (picked.id && input.value !== picked.label) commit(null);
+      // Canonique : éditer une valeur choisie l'annule. Libre : on ne touche pas
+      // au texte tapé (il devient la valeur au blur).
+      if (picked.id && input.value !== picked.label && !allowFree) commit(null);
       const q = input.value.trim();
       clearTimeout(timer);
       if (q.length < 2) { items = []; return close(); }
       timer = setTimeout(() => search(q), 250);
     });
     input.addEventListener("keydown", (e) => {
-      if (list.hidden || !items.length) return;
+      if (list.hidden || !items.length) {
+        // Entrée sur un champ libre sans liste ouverte = valider le texte tapé.
+        if (e.key === "Enter" && allowFree) { e.preventDefault(); commitFree(); }
+        return;
+      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
@@ -647,16 +923,37 @@ const L2M = (function () {
       } else if (e.key === "Enter") { e.preventDefault(); commit(items[active]); }
       else if (e.key === "Escape") close();
     });
-    // Texte libre non validé = pas de valeur : on restaure l'état canonique.
-    input.addEventListener("blur", () => setTimeout(() => { input.value = picked.label; close(); }, 120));
+    // Sans allowFree : texte non validé = pas de valeur, on restaure l'état
+    // canonique. Avec allowFree : on garde le texte tapé comme valeur libre.
+    input.addEventListener("blur", () => setTimeout(() => {
+      if (allowFree) {
+        const v = input.value.trim();
+        if (v !== picked.label) commitFree(); else close();
+      } else { input.value = picked.label; close(); }
+    }, 120));
     clearBtn.onclick = () => { commit(null); input.focus(); };
 
-    return { get: () => ({ ...picked }), clear: () => commit(null) };
+    // get() réconcilie avec la saisie en cours : cliquer « Enregistrer » sans
+    // quitter le champ ne laisse pas le temps au blur (setTimeout 120 ms) de
+    // committer. Pour un champ libre, le texte tapé fait foi ; s'il diffère de
+    // la valeur choisie, c'est une valeur libre (id perdu). Sans allowFree, la
+    // saisie non validée n'a pas de valeur : on renvoie l'état canonique.
+    return {
+      get: () => {
+        if (allowFree) {
+          const v = input.value.trim();
+          if (v !== picked.label) picked = { id: "", label: v };
+        }
+        return { ...picked };
+      },
+      clear: () => commit(null),
+    };
   }
 
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
-    likeButton, comments, userMenu, autocomplete, LANG,
+    likeButton, followButton, roleBadge, entityHref, comments, userMenu,
+    notifBell, notifItem, autocomplete, LANG,
     getTheme, applyTheme, getLang, applyLang, initHeader,
   };
 })();

@@ -18,6 +18,9 @@ services:
       REDIS_URL: redis://live2mp3${ENV_SUFFIX}-redis:6379/0
       APP_ENV: ${APP_ENV:-prod}
       GIT_COMMIT: ${GIT_COMMIT:-}
+      # Promotion/rétrogradation gestionnaire via l'API Authentik (groupe app).
+      AUTHENTIK_URL: ${AUTHENTIK_URL:-http://authentik-server:9000}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
     volumes:
       # Stockage des albums : bind-mount hôte, partagé prod/preprod (voir DEPLOY.md).
       # `:?` = échec bruyant si absent du .env, plutôt qu'un repli silencieux

@@ -50,26 +50,63 @@ def _sanitize_filename(title: str) -> str:
     return _manifest.sanitize_filename(title)
 
 
+def _norm_title(s: str) -> str:
+    """Normalise pour comparer titres et noms de fichiers (minuscules, sans
+    ponctuation, espaces compactés)."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def map_files_to_tracks(audio_dir: Path, tracks: list) -> list[tuple[int, dict, Path | None]]:
+    """Associe chaque piste du manifest à son fichier MP3.
+
+    Priorité au **titre** (présent dans quasiment tous les noms de fichiers,
+    quel que soit leur préfixe : `02.`, `[SPOTDOWNLOADER.COM]`, artiste…), avec
+    repli sur le préfixe numérique pour les albums rendus par le pipeline. Un
+    fichier n'est associé qu'une fois. Retourne [(position 1-indexée, piste,
+    fichier|None), …] dans l'ordre du manifest.
+    """
+    files = sorted(audio_dir.glob("*.mp3")) if audio_dir.exists() else []
+    used: set[Path] = set()
+    result: list[list] = []
+    # Passe 1 : appariement par titre.
+    for i, t in enumerate(tracks):
+        nt = _norm_title(t.get("title", ""))
+        chosen = None
+        if nt:
+            for f in files:
+                if f not in used and nt in _norm_title(f.stem):
+                    chosen = f
+                    used.add(f)
+                    break
+        result.append([i + 1, t, chosen])
+    # Passe 2 : repli sur le préfixe numérique pour les pistes non appariées.
+    for row in result:
+        if row[2] is not None:
+            continue
+        n = int(row[1].get("n", -1))
+        for f in files:
+            if f not in used and _file_track_n(f.stem) == n:
+                row[2] = f
+                used.add(f)
+                break
+    return [(pos, t, f) for pos, t, f in result]
+
+
 def _rename_audio_files(slug: str, m: Manifest) -> int:
     """Renomme les MP3 au format '01. Titre.mp3' en suivant l'ordre du manifest."""
     audio_dir = _projects_dir() / slug / "build" / "audio"
     if not audio_dir.exists():
         return 0
-    rename_map: dict[int, tuple[int, str]] = {}
-    for i, t in enumerate(m.tracks):
-        safe = _sanitize_filename(t.get("title", "") or f"Track {t['n']}")
-        rename_map[int(t["n"])] = (i + 1, safe)
     # Passe 1 : renommer vers un nom temporaire pour éviter les collisions
     pending: dict[Path, Path] = {}
-    for mp3_path in list(audio_dir.glob("*.mp3")):
-        file_n = _file_track_n(mp3_path.stem)
-        if file_n is None or file_n not in rename_map:
+    for new_pos, t, mp3_path in map_files_to_tracks(audio_dir, m.tracks):
+        if mp3_path is None:
             continue
-        new_pos, safe_title = rename_map[file_n]
+        safe_title = _sanitize_filename(t.get("title", "") or f"Track {t.get('n')}")
         new_name = f"{new_pos:02d}. {safe_title}.mp3"
         if mp3_path.name == new_name:
             continue
-        tmp_path = mp3_path.parent / f"._tmp_{file_n}_{mp3_path.name}"
+        tmp_path = mp3_path.parent / f"._tmp_{new_pos}_{mp3_path.name}"
         mp3_path.rename(tmp_path)
         pending[tmp_path] = mp3_path.parent / new_name
     # Passe 2 : renommer vers le nom final
@@ -116,16 +153,11 @@ def _write_track_tags(slug: str, m: Manifest) -> int:
     audio_dir = _projects_dir() / slug / "build" / "audio"
     if not audio_dir.exists():
         return 0
-    # n d'origine (celui du nom de fichier) → (position dans le manifest, titre),
-    # même convention que l'édition de pistes : le tracknumber suit l'ordre affiché.
-    pos_by_n = {int(t["n"]): (i + 1, t.get("title", "")) for i, t in enumerate(m.tracks)}
     total = len(m.tracks)
     tagged = 0
-    for mp3_path in sorted(audio_dir.glob("*.mp3")):
-        file_n = _file_track_n(mp3_path.stem)
-        if file_n is None or file_n not in pos_by_n:
+    for pos, t, mp3_path in map_files_to_tracks(audio_dir, m.tracks):
+        if mp3_path is None:
             continue
-        pos, title = pos_by_n[file_n]
         try:
             try:
                 tags = EasyID3(str(mp3_path))
@@ -133,7 +165,7 @@ def _write_track_tags(slug: str, m: Manifest) -> int:
                 tags = EasyID3()
                 tags.save(str(mp3_path))
                 tags = EasyID3(str(mp3_path))
-            tags["title"] = [title]
+            tags["title"] = [t.get("title", "")]
             tags["tracknumber"] = [f"{pos}/{total}"]
             tags.save()
             tagged += 1

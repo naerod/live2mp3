@@ -28,18 +28,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import re
-
-from mutagen.mp3 import MP3
-from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, APIC, ID3NoHeaderError
-from . import catalogue, jobs, linktool, llm
+from . import catalogue, entities, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
-    _file_track_n,
     _rename_audio_files,
     _sanitize_filename,
     _write_album_cover,
     _write_album_tags,
+    _write_track_tags,
 )
 from .auth import (
     GROUP_GESTIONNAIRE,
@@ -63,6 +59,9 @@ from .covers import (
 )
 from .printable import cover_pdf, traycard_pdf
 from .social import router as social_router
+from .follows import router as follows_router
+from . import notifications
+from .notifications import router as notifications_router
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -72,8 +71,29 @@ FRONTEND = BASE / "frontend"
 
 app = FastAPI(title="live2mp3", docs_url="/api/docs")
 
+
+@app.middleware("http")
+async def _static_revalidate(request, call_next):
+    """Force la revalidation des assets statiques (JS/CSS).
+
+    Servis sans `Cache-Control`, les navigateurs les mettaient en cache
+    heuristique → un déploiement ne se propageait pas (JS périmé, ex. la refonte
+    des réglages de notifications). `no-cache` = le navigateur revalide via
+    l'ETag à chaque chargement : 304 si inchangé (quasi gratuit), 200 avec la
+    nouvelle version sinon. Plus aucun asset figé après un déploiement.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Système social (profils, favoris, commentaires) — routes /api/social, /u, /avatar.
 app.include_router(social_router)
+# Suivi + pages auto d'entités — routes /api/social/follow*, /artist, /festival, /venue.
+app.include_router(follows_router)
+# Notifications in-app + préférences — routes /api/social/notif*, /notifications, /settings.
+app.include_router(notifications_router)
 app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
@@ -86,6 +106,11 @@ app.include_router(linktool.router)
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
+    try:
+        notifications.ensure_seeded()
+    except Exception:
+        pass
 
 # --- État de progression en mémoire (par slug) ----------------------------
 _progress_bus: dict[str, "queue.Queue[dict]"] = {}
@@ -160,12 +185,22 @@ class SetlistIn(BaseModel):
     tracks: list[SetlistTrackIn]
 
 
+class GuestIn(BaseModel):
+    id: str
+    name: str
+
+
 class AlbumMetaIn(BaseModel):
     artist: str
+    artist_id: str = ""            # id Deezer canonique (liste déroulante)
     title: str
     date: str | None = None
     venue: str | None = None
+    city: str | None = None        # ville (optionnelle) — ≠ venue (lieu précis)
+    city_id: str = ""              # id canonique OSM (dérivé de la liste)
     festival: str | None = None
+    festival_id: str = ""          # slug canonique (dérivé si absent)
+    guests: list[GuestIn] = []     # artistes invités canoniques (id Deezer)
     source_url: str = ""
     source_label: str = ""
 
@@ -274,14 +309,32 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
     return RedirectResponse(url="/", status_code=302)
 
 
-def _track_file(project_dir: Path, n: int) -> Path | None:
-    """Retrouve le MP3 d'une piste (préfixe numéro : '01_…' ou '01 - …')."""
+def _norm_title(s: str) -> str:
+    """Normalise pour comparer titres et noms de fichiers : minuscules, sans
+    ponctuation ni casse, espaces compactés."""
+    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+
+
+def _track_file(project_dir: Path, n: int, title: str = "") -> Path | None:
+    """Retrouve le MP3 d'une piste.
+
+    Priorité au **titre** : les fichiers le portent quasi toujours, quel que
+    soit leur préfixe (`02.`, `[SPOTDOWNLOADER.COM]`, artiste…), et ce préfixe
+    numérique ne correspond pas forcément au `n` du manifest (imports externes).
+    Le matching par numéro de piste ne sert plus que de secours pour les albums
+    rendus par le pipeline dont le fichier n'embarque pas le titre.
+    """
     src = project_dir / "build" / "audio"
     if not src.exists():
         return None
-    import re
+    files = sorted(src.glob("*.mp3"))
+    nt = _norm_title(title)
+    if nt:
+        for f in files:
+            if nt in _norm_title(f.stem):
+                return f
     pat = re.compile(rf"^0*{int(n)}(?=\D)")
-    for f in sorted(src.glob("*.mp3")):
+    for f in files:
         if pat.match(f.name):
             return f
     return None
@@ -323,13 +376,28 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         tracks.append({
             "n": t.get("n"),
             "title": t.get("title"),
-            "dl": _track_file(project_dir, t.get("n")) is not None,
+            "dl": _track_file(project_dir, t.get("n"), t.get("title", "")) is not None,
         })
     meta = m.data.get("meta", {})
     src = m.data.get("source", {})
+    # Pochette « automatique » = miniature récupérée par l'import auto (outil de
+    # lien). Distinguée des pochettes faites main : celles-ci sont soit des
+    # `legacy_cover` (import historique), soit un téléversement `artwork/cover.ext`,
+    # et leur album n'a pas `import_source == "url"`. On exige donc l'import auto
+    # ET une pochette issue du dossier covers/ qui ne soit pas la legacy.
+    _cover_rel = str(m.data.get("album", {}).get("cover", "") or "")
+    _cover_name = _cover_rel.rsplit("/", 1)[-1]
+    cover_auto = (
+        meta.get("import_source") == "url"
+        and _cover_rel.startswith("artwork/covers/")
+        and not _cover_name.startswith("legacy_cover")
+    )
     return {
         "slug": slug,
         "album": m.data.get("album", {}),
+        # Entités canoniques liées (artiste, festival, lieu) : ids exacts pour
+        # rendre les noms cliquables vers leurs pages auto.
+        "entities": entities.album_entities(m.data.get("album", {})),
         "labels": cat.get("labels", []),
         "has_cover": cat.get("has_cover", False),
         "has_traycard": cat.get("has_traycard", False),
@@ -338,6 +406,10 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "tracks": tracks,
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
+        # Provenance affichée sur la fiche : "url" = import auto par l'outil de
+        # lien, sinon album créé/renseigné manuellement.
+        "import_source": meta.get("import_source", "") or "",
+        "cover_auto": cover_auto,
         "source_url": src.get("url", "") or "",
         # Attribution setlist.fm — obligatoire partout où la donnée est affichée.
         "setlistfm_url": meta.get("setlistfm_url", "") or "",
@@ -450,12 +522,16 @@ def _zip_media(project_dir: Path, kind: str) -> Path:
 @app.get("/download/{slug}/track/{n}")
 def download_track(slug: str, n: int,
                    identity: dict = Depends(require_user)) -> FileResponse:
-    _ensure_album_visible(slug, identity)
+    m = _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
-    f = _track_file(project_dir, n)
+    title = next((t.get("title", "") for t in m.tracks if t.get("n") == n), "")
+    f = _track_file(project_dir, n, title)
     if not f:
         raise HTTPException(404, "piste introuvable")
-    return FileResponse(f, filename=f.name, media_type="audio/mpeg")
+    # Nom de téléchargement propre (les fichiers source ont des noms parasites :
+    # « [SPOTDOWNLOADER.COM]… », préfixes numériques incohérents…).
+    dl_name = f"{title}.mp3" if title else f.name
+    return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
 
 
 @app.get("/download/{slug}/cover")
@@ -579,10 +655,16 @@ def album_detail(slug: str,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     album = m.data.get("album", {})
+    src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
     return {
         "slug": slug,
         "album": album,
+        # Source affichée/éditée sur la fiche. Stockée sous `source` (pas sous
+        # `album`) : l'import y met aussi master_mkv, thumbnail… on n'expose que
+        # les deux champs saisissables, sinon le formulaire les perd au save.
+        "source_url": src.get("url", "") or "",
+        "source_label": src.get("label", "") or "",
         "labels": list(album.get("labels", []) or []),
         "derived_labels": [l for l in cat.get("labels", []) if l in DERIVED_LABELS],
         "all_labels": catalogue.all_labels(),
@@ -609,6 +691,34 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     alb["date"] = payload.date or ""
     alb["venue"] = payload.venue or ""
     alb["festival"] = payload.festival or ""
+    # Ville (optionnelle). Nettoyée si vide pour garder le manifest lisible.
+    if payload.city and payload.city.strip():
+        alb["city"] = payload.city.strip()
+        if payload.city_id.strip():
+            alb["city_id"] = payload.city_id.strip()
+        else:
+            alb.pop("city_id", None)
+    else:
+        alb.pop("city", None)
+        alb.pop("city_id", None)
+
+    # Champs canoniques (liens de suivi / pages auto). Nettoyés s'ils sont vides
+    # pour garder le manifest lisible.
+    if payload.artist_id.strip():
+        alb["artist_id"] = payload.artist_id.strip()
+    else:
+        alb.pop("artist_id", None)
+    if payload.festival:
+        alb["festival_id"] = payload.festival_id.strip() or entities.festival_slug(payload.festival)
+    else:
+        alb.pop("festival_id", None)
+    guests = [{"id": g.id.strip(), "name": g.name.strip()}
+              for g in payload.guests if g.id.strip() and g.name.strip()]
+    if guests:
+        alb["guests"] = guests
+    else:
+        alb.pop("guests", None)
+
     src = m.data.setdefault("source", {})
     src["url"] = payload.source_url
     src["label"] = payload.source_label
@@ -634,32 +744,9 @@ def update_tracks(slug: str, payload: TracksEditIn,
     m.data["tracks"] = new_tracks
     m.save()
 
-    # Écriture des tags ID3 dans les fichiers MP3
-    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
-    tagged = 0
-    if audio_dir.exists():
-        total = len(new_tracks)
-        # n original → (nouvelle position, titre)
-        pos_by_n = {t["n"]: (i + 1, t["title"]) for i, t in enumerate(new_tracks)}
-        for mp3_path in sorted(audio_dir.glob("*.mp3")):
-            file_n = _file_track_n(mp3_path.stem)
-            if file_n is None or file_n not in pos_by_n:
-                continue
-            new_pos, title = pos_by_n[file_n]
-            try:
-                try:
-                    tags = EasyID3(str(mp3_path))
-                except ID3NoHeaderError:
-                    tags = EasyID3()
-                    tags.save(str(mp3_path))
-                    tags = EasyID3(str(mp3_path))
-                tags["tracknumber"] = [f"{new_pos}/{total}"]
-                tags["title"] = [title]
-                tags.save()
-                tagged += 1
-            except Exception:
-                pass
-    # aussi rafraîchir TALB/TPE1/TDRC sur tous les fichiers
+    # Tags ID3 par piste (titre + numéro), mapping fichier↔piste par titre
+    # (robuste aux noms de fichiers hétérogènes), puis tags communs à l'album.
+    tagged = _write_track_tags(slug, m)
     tagged += _write_album_tags(slug, m)
     renamed = _rename_audio_files(slug, m)
     return {"ok": True, "tracks": len(new_tracks), "mp3_tagged": tagged, "renamed": renamed}
@@ -740,7 +827,14 @@ def set_published(slug: str, payload: PublishIn,
     m = Manifest.load(path)
     m.data["published"] = payload.published
     m.save(path)
-    return {"ok": True, "published": payload.published}
+    # Publication → annonce aux abonnés (fan-out idempotent : une fois par env).
+    notified = 0
+    if payload.published:
+        try:
+            notified = notifications.announce_post(slug)
+        except Exception:
+            notified = 0
+    return {"ok": True, "published": payload.published, "notified": notified}
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------

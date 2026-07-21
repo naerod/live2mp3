@@ -41,12 +41,61 @@
     color:var(--muted);margin:0 0 12px}
   .sec{background:var(--card);border:1px solid var(--border);border-radius:14px;
     padding:16px 18px;margin-bottom:14px}
+  /* Repère « écrit dans les métadonnées ID3 des pistes MP3 ». */
+  .fg-head{display:flex;align-items:center;gap:5px}
+  .meta-badge{font-size:14px;color:var(--accent);cursor:help;
+    font-variation-settings:'FILL' 1,'opsz' 20}
+  .meta-legend{display:flex;align-items:center;gap:6px;color:var(--muted);
+    font-size:11px;margin:2px 0 12px}
+  .meta-legend .material-symbols-outlined{font-size:15px;color:var(--accent);
+    font-variation-settings:'FILL' 1}
+  /* Champ date : saisie manuelle + bouton calendrier (impose AAAA-MM-JJ). */
+  .date-field{position:relative;display:flex;align-items:center}
+  .date-field #e-date{flex:1;padding-right:38px;width:100%}
+  .date-cal-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);
+    width:30px;height:30px;margin:0;padding:0;border:none;background:transparent;
+    color:var(--muted);border-radius:8px;display:flex;align-items:center;
+    justify-content:center;cursor:pointer}
+  .date-cal-btn:hover{color:var(--accent);background:var(--bg)}
+  .date-cal-btn .material-symbols-outlined{font-size:19px}
+  /* Calendrier personnalisé (aux couleurs du site, dark/light automatique). */
+  .cal-pop{position:absolute;top:calc(100% + 6px);right:0;z-index:60;width:min(290px,88vw);
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    box-shadow:0 14px 34px rgba(0,0,0,.38);padding:12px;color:var(--fg)}
+  .cal-pop[hidden]{display:none}
+  .cal-head{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .cal-nav-row{display:flex;align-items:center;justify-content:space-between}
+  .cal-year{font-weight:700;font-size:15px}
+  .cal-month{font-weight:600;font-size:13.5px;text-transform:capitalize;color:var(--muted)}
+  .cal-nav{width:30px;height:30px;border:none;background:transparent;color:var(--muted);
+    border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0;padding:0}
+  .cal-nav:hover{background:var(--bg);color:var(--fg)}
+  .cal-nav .material-symbols-outlined{font-size:20px}
+  .cal-wd{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px}
+  .cal-wd span{text-align:center;font-size:11px;color:var(--muted);padding:2px 0;text-transform:capitalize}
+  .cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .cal-day{height:32px;border:none;background:transparent;color:var(--fg);border-radius:8px;
+    cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0;padding:0}
+  .cal-day.empty{visibility:hidden;pointer-events:none}
+  .cal-day:hover{background:var(--bg)}
+  .cal-day.today{box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+  .cal-day.sel{background:var(--accent);color:#fff;font-weight:600}
+  .cal-day.sel:hover{background:var(--accent)}
+  .cal-foot{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+  .cal-act{border:none;background:transparent;color:var(--accent);font-size:13px;cursor:pointer;margin:0;padding:4px 8px;border-radius:7px}
+  .cal-act:hover{background:var(--bg)}
+  .date-field #e-date.date-invalid{border-color:#e5484d}
+  .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
+  .date-hint.show{display:block}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
   .fg{display:flex;flex-direction:column;gap:4px}
   .fg label{font-size:11.5px;color:var(--muted);font-weight:500}
   .fg input,.fg select{margin:0;font-size:13px;padding:7px 10px}
+  .fg .ac-field input{padding-left:36px;padding-right:34px}
+  /* Drapeaux de pays (case Ville) : rectangle lisible, pas le cercle des avatars. */
+  #e-city .ac-list li img{border-radius:3px;object-fit:contain;background:var(--border);width:26px;height:20px}
   .tracks-list{list-style:none;padding:0;margin:0 0 10px}
   .tracks-list li{display:flex;align-items:center;gap:8px;padding:4px 0;
     border-bottom:1px solid var(--border)}
@@ -178,12 +227,42 @@
       <!-- Infos album -->
       <div class="sec">
         <h2 id="t-meta">Informations</h2>
+        <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-meta-legend"></span></p>
         <div class="field-grid">
-          <div class="fg full"><label id="t-f-title">Titre</label><input id="e-title" type="text"></div>
-          <div class="fg"><label id="t-f-artist">Artiste</label><input id="e-artist" type="text"></div>
-          <div class="fg"><label id="t-f-date">Date</label><input id="e-date" type="text" placeholder="2026-03-04"></div>
+          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-title" type="text"></div>
+          <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
+          <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
+            <div class="date-field">
+              <input id="e-date" type="text" placeholder="AAAA-MM-JJ" inputmode="numeric" autocomplete="off">
+              <button type="button" class="date-cal-btn" id="date-cal-btn"><span class="material-symbols-outlined">calendar_month</span></button>
+              <div class="cal-pop" id="cal-pop" hidden>
+                <div class="cal-head">
+                  <div class="cal-nav-row">
+                    <button type="button" class="cal-nav" data-y="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <span class="cal-year" id="cal-year"></span>
+                    <button type="button" class="cal-nav" data-y="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                  </div>
+                  <div class="cal-nav-row">
+                    <button type="button" class="cal-nav" data-m="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <span class="cal-month" id="cal-month"></span>
+                    <button type="button" class="cal-nav" data-m="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                  </div>
+                </div>
+                <div class="cal-wd" id="cal-wd"></div>
+                <div class="cal-days" id="cal-days"></div>
+                <div class="cal-foot">
+                  <button type="button" class="cal-act" id="cal-clear"></button>
+                  <button type="button" class="cal-act" id="cal-today"></button>
+                </div>
+              </div>
+            </div>
+            <div class="date-hint" id="date-hint"></div></div>
+          <div class="fg full"><label id="t-f-guests">Artistes invités</label>
+            <div class="guest-list" id="guest-list"></div>
+            <div id="e-guest-add"></div></div>
           <div class="fg"><label id="t-f-venue">Lieu</label><input id="e-venue" type="text"></div>
-          <div class="fg"><label id="t-f-festival">Festival</label><input id="e-festival" type="text"></div>
+          <div class="fg"><label id="t-f-city">Ville</label><div id="e-city"></div></div>
+          <div class="fg full"><label id="t-f-festival">Festival</label><div id="e-festival"></div></div>
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
         </div>
@@ -196,6 +275,7 @@
       <!-- Pistes -->
       <div class="sec">
         <h2 id="t-tracks-h">Pistes</h2>
+        <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-tracks-legend"></span></p>
         <ul class="tracks-list" id="tracks-list"></ul>
         <div class="add-track-row">
           <input id="new-track" type="text" placeholder="Nouveau titre…">
@@ -232,9 +312,15 @@ L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();
 
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
-      f_venue:"Lieu",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_venue:"Lieu",f_city:"Ville",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
       saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
+      meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
+      date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",cal_clear:"Effacer",cal_today:"Aujourd'hui",
+      date_invalid:"Date non reconnue — essayez « AAAA-MM-JJ » (ou « juin 2024 », « 03/06/2024 »…) ou le calendrier.",
+      meta_legend:"Les champs marqués d'un tag sont écrits dans les métadonnées ID3 des pistes MP3 à l'enregistrement.",
+      tracks_legend:"Les titres de pistes sont écrits dans les métadonnées ID3 (titre + numéro de piste) des MP3.",
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
@@ -244,9 +330,15 @@ const TT={
       status_pub:"Visible dans la vitrine",
       status_draft:"Dépublié — visible uniquement des gestionnaires"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
-      f_venue:"Venue",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
       saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
+      meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
+      date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",cal_clear:"Clear",cal_today:"Today",
+      date_invalid:"Date not recognised — try “YYYY-MM-DD” (or “June 2024”, “06/03/2024”…) or the calendar.",
+      meta_legend:"Fields marked with a tag are written to the MP3 tracks' ID3 metadata on save.",
+      tracks_legend:"Track titles are written to the MP3 ID3 metadata (title + track number).",
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
@@ -264,11 +356,25 @@ function applyLang(){
   document.getElementById("t-back").textContent=t.back;
   document.getElementById("t-save-all").textContent=t.save_all;
   document.getElementById("t-meta").textContent=t.meta;
+  document.getElementById("t-meta-legend").textContent=t.meta_legend;
+  document.getElementById("t-tracks-legend").textContent=t.tracks_legend;
+  document.querySelectorAll(".meta-badge").forEach(b=>b.title=t.meta_badge_title);
+  document.getElementById("e-date").placeholder=t.date_ph;
+  document.getElementById("date-cal-btn").title=t.date_cal;
+  document.getElementById("date-cal-btn").setAttribute("aria-label",t.date_cal);
+  document.getElementById("date-hint").textContent=t.date_invalid;
+  document.getElementById("cal-clear").textContent=t.cal_clear;
+  document.getElementById("cal-today").textContent=t.cal_today;
   document.getElementById("t-f-title").textContent=t.f_title;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-date").textContent=t.f_date;
+  document.getElementById("t-f-guests").textContent=t.f_guests;
   document.getElementById("t-f-venue").textContent=t.f_venue;
+  document.getElementById("t-f-city").textContent=t.f_city;
   document.getElementById("t-f-festival").textContent=t.f_festival;
+  // Placeholders des autocompletes (mis à jour au changement de langue).
+  const acPh=(id,ph)=>{const i=document.querySelector(`#${id} input`);if(i)i.placeholder=ph;};
+  acPh("e-artist",t.artist_ph);acPh("e-city",t.city_ph);acPh("e-festival",t.festival_ph);acPh("e-guest-add",t.guests_ph);
   document.getElementById("t-f-src-label").textContent=t.f_src_label;
   document.getElementById("t-f-src-url").textContent=t.f_src_url;
   document.getElementById("t-tracks-h").textContent=t.tracks_h;
@@ -308,6 +414,13 @@ function refreshPublishBtn(){
   }
 }
 let DATA=null,labels=[],tracks=[],PENDING_COVER_DELETE=false;
+// Autocompletes canoniques (artiste principal + festival) et invités (id Deezer).
+let artistAC=null,cityAC=null,festivalAC=null,guests=[];
+function renderGuests(){
+  const box=document.getElementById("guest-list");
+  box.innerHTML=guests.map((g,i)=>`<span class="guest-chip">${L2M.esc(g.name||g.label)}<button type="button" data-i="${i}" title="×"><span class="material-symbols-outlined">close</span></button></span>`).join("");
+  box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{guests.splice(+b.dataset.i,1);renderGuests();});
+}
 
 function toast(msg,err=false){
   const el=document.getElementById("toast");el.textContent=msg;
@@ -444,27 +557,143 @@ function addLabel(){
   if(v&&!labels.map(x=>x.toLowerCase()).includes(v.toLowerCase())){labels.push(v);renderChips();}inp.value="";}
 document.getElementById("add-label").onclick=addLabel;
 document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
+// Date : saisie manuelle libre, reformulée automatiquement vers un format ISO
+// partiel (AAAA, AAAA-MM ou AAAA-MM-JJ). Le bouton calendrier ouvre un sélecteur
+// personnalisé (aux couleurs du site). Une saisie non interprétable est refusée.
+const _DATE_MONTHS={
+  janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12,
+  january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,
+  janv:1,fevr:2,avr:4,juil:7,sept:9,oct:10,nov:11,dec:12,jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8};
+// Reformule une date libre en ISO partiel. "" pour vide, null si illisible.
+function normalizeDate(raw){
+  const strip=s=>s.normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const pad=n=>String(n).padStart(2,"0");
+  const iso=(y,m,d)=>{
+    if(m!=null&&(m<1||m>12))return null;
+    if(d!=null&&(d<1||d>31))return null;
+    let s=String(y).padStart(4,"0");
+    if(m!=null)s+="-"+pad(m);
+    if(d!=null)s+="-"+pad(d);
+    return s;
+  };
+  let v=strip((raw||"").trim().toLowerCase()).replace(/\s+/g," ");
+  if(!v)return "";
+  // 1) Mois en toutes lettres (fr/en) : "[jj] mois aaaa" / "mois [jj] aaaa".
+  for(const mt of Object.keys(_DATE_MONTHS).sort((a,b)=>b.length-a.length)){
+    if(new RegExp("(?:^|[^a-z])"+mt+"(?:[^a-z]|$)").test(v)){
+      const year=(v.match(/\b(\d{4})\b/)||[])[1];
+      if(!year)continue;
+      const nums=(v.match(/\b\d{1,2}\b/g)||[]);
+      return iso(parseInt(year,10),_DATE_MONTHS[mt],nums.length?parseInt(nums[0],10):null);
+    }
+  }
+  // 2) Numérique, séparateurs - / . espace.
+  const parts=v.split(/[-\/.\s]+/).filter(Boolean);
+  if(parts.length&&parts.every(p=>/^\d+$/.test(p))){
+    const P=parts.map(x=>parseInt(x,10));
+    if(parts.length===1&&parts[0].length===4)return iso(P[0]);
+    if(parts.length===2){
+      if(parts[0].length===4)return iso(P[0],P[1]);
+      if(parts[1].length===4)return iso(P[1],P[0]);
+    }
+    if(parts.length===3){
+      if(parts[0].length===4)return iso(P[0],P[1],P[2]);
+      if(parts[2].length===4)return iso(P[2],P[1],P[0]);   // jj/mm/aaaa (fr)
+    }
+  }
+  return null;
+}
+// Reformule en place ; marque invalide seulement si vraiment illisible.
+function validateDate(){
+  const txt=document.getElementById("e-date"),hint=document.getElementById("date-hint");
+  const norm=normalizeDate(txt.value);
+  if(norm===null){
+    txt.classList.add("date-invalid");hint.classList.add("show");return false;
+  }
+  if(norm!==txt.value.trim())txt.value=norm;   // reformulation visible
+  txt.classList.remove("date-invalid");hint.classList.remove("show");return true;
+}
+(function initDatePicker(){
+  const txt=document.getElementById("e-date");
+  const btn=document.getElementById("date-cal-btn");
+  const pop=document.getElementById("cal-pop");
+  const yearEl=document.getElementById("cal-year");
+  const monthEl=document.getElementById("cal-month");
+  const wdEl=document.getElementById("cal-wd");
+  const daysEl=document.getElementById("cal-days");
+  const today=new Date();
+  let view=new Date();   // mois affiché
+  const pad=n=>String(n).padStart(2,"0");
+  const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const lang=()=>localStorage.getItem("l2m-lang")||"fr";
+  function parseSel(){ const m=txt.value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+  function render(){
+    const y=view.getFullYear(),mo=view.getMonth(),sel=parseSel();
+    yearEl.textContent=y;
+    monthEl.textContent=new Intl.DateTimeFormat(lang(),{month:"long"}).format(view);
+    // En-tête jours (lundi en premier) via Intl — le 1er janv. 2024 est un lundi.
+    wdEl.innerHTML=Array.from({length:7},(_,i)=>
+      `<span>${new Intl.DateTimeFormat(lang(),{weekday:"short"}).format(new Date(2024,0,1+i))}</span>`).join("");
+    const startDow=(new Date(y,mo,1).getDay()+6)%7;   // lundi=0
+    const nDays=new Date(y,mo+1,0).getDate();
+    let h="";
+    for(let i=0;i<startDow;i++)h+=`<span class="cal-day empty"></span>`;
+    for(let d=1;d<=nDays;d++){
+      const isToday=today.getFullYear()===y&&today.getMonth()===mo&&today.getDate()===d;
+      const isSel=sel&&sel.getFullYear()===y&&sel.getMonth()===mo&&sel.getDate()===d;
+      h+=`<button type="button" class="cal-day${isSel?" sel":""}${isToday?" today":""}" data-d="${d}">${d}</button>`;
+    }
+    daysEl.innerHTML=h;
+    daysEl.querySelectorAll(".cal-day[data-d]").forEach(b=>b.onclick=()=>{
+      txt.value=ymd(new Date(y,mo,+b.dataset.d));validateDate();close();
+    });
+  }
+  function open(){ const s=parseSel();view=s?new Date(s.getFullYear(),s.getMonth(),1):new Date(today.getFullYear(),today.getMonth(),1);render();pop.hidden=false;
+    document.addEventListener("mousedown",onDoc,true);document.addEventListener("keydown",onKey); }
+  function close(){ pop.hidden=true;document.removeEventListener("mousedown",onDoc,true);document.removeEventListener("keydown",onKey); }
+  function onDoc(e){ if(!pop.contains(e.target)&&!btn.contains(e.target))close(); }
+  function onKey(e){ if(e.key==="Escape")close(); }
+  btn.onclick=e=>{ e.stopPropagation();pop.hidden?open():close(); };
+  pop.querySelectorAll(".cal-nav").forEach(b=>b.onclick=()=>{
+    if(b.dataset.y)view=new Date(view.getFullYear()+ +b.dataset.y,view.getMonth(),1);
+    else view=new Date(view.getFullYear(),view.getMonth()+ +b.dataset.m,1);
+    render();
+  });
+  document.getElementById("cal-today").onclick=()=>{ txt.value=ymd(today);validateDate();close(); };
+  document.getElementById("cal-clear").onclick=()=>{ txt.value="";validateDate();close(); };
+  txt.addEventListener("blur",validateDate);
+  txt.addEventListener("input",()=>{ if(txt.classList.contains("date-invalid"))validateDate(); });
+})();
+
 // Save all
 document.getElementById("save-all").onclick=async()=>{
-  const p={artist:document.getElementById("e-artist").value.trim(),
+  const aPick=artistAC?artistAC.get():{id:"",label:""};
+  const cPick=cityAC?cityAC.get():{id:"",label:""};
+  const fPick=festivalAC?festivalAC.get():{id:"",label:""};
+  const p={artist:(aPick.label||"").trim(),artist_id:aPick.id||"",
     title:document.getElementById("e-title").value.trim(),
     date:document.getElementById("e-date").value.trim(),
     venue:document.getElementById("e-venue").value.trim(),
-    festival:document.getElementById("e-festival").value.trim(),
+    city:(cPick.label||"").trim(),city_id:cPick.id||"",
+    festival:(fPick.label||"").trim(),festival_id:fPick.id||"",
+    guests:guests.map(g=>({id:String(g.id),name:g.name})),
     source_url:document.getElementById("e-src-url").value.trim(),
     source_label:document.getElementById("e-src-label").value.trim()};
   if(!p.artist||!p.title){toast("Artiste et titre requis",true);return;}
+  if(!validateDate()){toast(TT[L()].date_invalid,true);document.getElementById("e-date").focus();return;}
+  p.date=document.getElementById("e-date").value.trim();   // date reformulée par validateDate()
   savingStart("save-all");
   if(PENDING_COVER_DELETE){
     const rDel=await fetch(`/api/albums/${SLUG}/cover/auto`,{method:"DELETE"});
     if(rDel.ok){DATA.has_cover=false;PENDING_COVER_DELETE=false;}
     else{savingError("save-all");toast("Erreur suppression pochette ("+rDel.status+")",true);return;}
   }
-  const [rMeta,rTracks,rLabels]=await Promise.all([
-    fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)}),
-    fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})  }),
-    fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})})
-  ]);
+  // Sérialisé (et non Promise.all) : les trois endpoints rechargent et
+  // réécrivent le même manifest.yaml ; en parallèle, le dernier write écrase les
+  // autres (perte de champs, ex. la date). On enchaîne donc les écritures.
+  const rMeta=await fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+  const rTracks=await fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})});
+  const rLabels=await fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})});
   if(rMeta.ok) document.title=`live2mp3 — ${p.title}`;
   if(rLabels.ok){const d=await rLabels.json();labels=d.labels;renderChips();}
   if(rMeta.ok&&rTracks.ok&&rLabels.ok){showSaved("save-all");}
@@ -619,10 +848,30 @@ async function load(){
   const a=DATA.album||{};
   document.title=`live2mp3 — ${a.title||SLUG}`;
   document.getElementById("e-title").value=a.title||"";
-  document.getElementById("e-artist").value=a.artist||"";
   document.getElementById("e-date").value=a.date||"";
   document.getElementById("e-venue").value=a.venue||"";
-  document.getElementById("e-festival").value=a.festival||"";
+  const tt=TT[L()];
+  // Artiste principal : autocomplete Deezer, texte libre autorisé (un artiste
+  // absent de Deezer reste enregistrable, simplement non lié à une page).
+  artistAC=L2M.autocomplete(document.getElementById("e-artist"),{
+    endpoint:"/api/social/suggest/artists",icon:"music_note",allowFree:true,
+    placeholder:tt.artist_ph,value:{id:a.artist_id||"",label:a.artist||""}});
+  // Ville (optionnelle) : villes du monde via OSM, drapeau du pays en vignette.
+  // Texte libre autorisé — une ville absente de la source reste enregistrable.
+  cityAC=L2M.autocomplete(document.getElementById("e-city"),{
+    endpoint:"/api/social/suggest/world-cities",icon:"location_on",allowFree:true,
+    placeholder:tt.city_ph,value:{id:a.city_id||"",label:a.city||""}});
+  // Festival : liste auto-construite + création en texte libre.
+  festivalAC=L2M.autocomplete(document.getElementById("e-festival"),{
+    endpoint:"/api/social/suggest/festivals",icon:"festival",allowFree:true,
+    placeholder:tt.festival_ph,value:{id:a.festival_id||"",label:a.festival||""}});
+  // Invités : canonique seulement (un id est requis pour lier la page artiste).
+  guests=(a.guests||[]).map(g=>({id:String(g.id),name:g.name||g.label}));
+  renderGuests();
+  let guestAC;
+  guestAC=L2M.autocomplete(document.getElementById("e-guest-add"),{
+    endpoint:"/api/social/suggest/artists",icon:"person_add",placeholder:tt.guests_ph,
+    onPick:(p)=>{if(p&&p.id){if(!guests.some(g=>g.id===p.id)){guests.push({id:p.id,name:p.label});renderGuests();}setTimeout(()=>guestAC.clear(),0);}}});
   document.getElementById("e-src-url").value=DATA.source_url||"";
   document.getElementById("e-src-label").value=DATA.source_label||"";
   labels=(DATA.labels||[]).slice();

@@ -24,11 +24,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
-from . import catalogue, suggest
+from . import authentik, catalogue, notifications, suggest
 from .auth import (
+    GROUP_APP_ADMIN,
     GROUP_GESTIONNAIRE,
+    GROUP_USER,
     SUPERUSER_GROUPS,
     current_identity,
+    require_admin,
     require_user,
 )
 from .db import AVATARS_DIR, get_conn
@@ -53,6 +56,45 @@ def _now() -> str:
 
 def _is_moderator(groups: set[str]) -> bool:
     return bool(groups & SUPERUSER_GROUPS) or GROUP_GESTIONNAIRE in groups
+
+
+_ROLE_RANK = {"": 0, "user": 1, "gestionnaire": 2, "admin": 3}
+
+
+def _role_of(groups: set[str]) -> str:
+    """Rôle canonique (le plus élevé) à partir des groupes Authentik. L'admin
+    applicatif (`live2mp3-admin`) et le superuser global comptent tous deux
+    « admin »."""
+    if groups & SUPERUSER_GROUPS or GROUP_APP_ADMIN in groups:
+        return "admin"
+    if GROUP_GESTIONNAIRE in groups:
+        return "gestionnaire"
+    if GROUP_USER in groups:
+        return "user"
+    return ""
+
+
+def _touch_role(conn: sqlite3.Connection, username: str, groups: set[str]) -> str:
+    """Met à jour le rôle en cache **de façon monotone** (jamais de rétrogradation
+    automatique). Retourne le rôle effectif (le plus élevé confirmé).
+
+    Sur la preprod, l'outpost Authentik ne transmet pas toujours le groupe
+    superuser (« authentik Admins ») dans les en-têtes du forward-auth : sans
+    garde-fou, un admin qui recharge une page était rétrogradé en gestionnaire
+    dès que ce groupe manquait. On ne conserve donc que la promotion ; une vraie
+    rétrogradation se fait par une remise à zéro explicite du champ `role`."""
+    role = _role_of(groups)
+    row = conn.execute("SELECT role FROM profiles WHERE username=?", (username,)).fetchone()
+    cached = row["role"] if row is not None else ""
+    if not role:
+        return cached
+    if row is not None and _ROLE_RANK.get(role, 0) > _ROLE_RANK.get(cached, 0):
+        conn.execute(
+            "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+            (role, _now(), username),
+        )
+        return role
+    return cached or role
 
 
 def _safe_username(username: str) -> str:
@@ -257,17 +299,31 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     username = identity.get("username")
     if not username:
         return {"authenticated": False}
+    groups = identity.get("groups", set())
     with get_conn() as conn:
         row = _ensure_profile(conn, username)
+        # Capture le rôle à chaque passage authentifié (le header init l'appelle
+        # sur chaque page) → badge de rôle disponible sur n'importe quel profil.
+        role = _touch_role(conn, username, groups)
+    is_super = bool(groups & SUPERUSER_GROUPS)
+    is_admin = is_super or GROUP_APP_ADMIN in groups
+    is_gest = is_admin or GROUP_GESTIONNAIRE in groups
+    is_user = is_gest or GROUP_USER in groups
     return {
-        "authenticated": True,
+        "authenticated": bool(username) and is_user,
         "username": username,
         "display_name": row["display_name"],
         "bio": row["bio"],
         "avatar": bool(row["avatar_ext"]),
         "city_id": row["city_id"], "city": row["city_label"],
         "artist_id": row["artist_id"], "artist": row["artist_label"],
-        "is_moderator": _is_moderator(identity.get("groups", set())),
+        "is_moderator": _is_moderator(groups),
+        # Droits (mêmes champs que /api/me) : permet au header de n'appeler que
+        # cet endpoint, supprimant un aller-retour par navigation.
+        "is_user": is_user, "is_gestionnaire": is_gest,
+        "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
+        "is_superadmin": is_super,     # superuser Authentik global
+        "role": role,
     }
 
 
@@ -280,6 +336,122 @@ def batch_profiles(u: str = "", identity: dict = Depends(current_identity)) -> d
         users = set(list(users)[:100])
     with get_conn() as conn:
         return _profiles_map(conn, users)
+
+
+def _publisher_usernames() -> set[str]:
+    """Auteurs d'au moins un album (publié ou brouillon).
+
+    Importer/publier un album exige les droits **gestionnaire** (contrôlé à
+    l'écriture) : la présence dans `imported_by` est donc un plancher de rôle
+    fiable, indépendant de la capture Authentik au `/me`. Permet d'afficher le
+    badge « Gestionnaire » sur le profil de quelqu'un qui ne s'est pas reconnecté
+    depuis la mise en place de la capture de rôle."""
+    return {
+        a.get("imported_by")
+        for a in catalogue.list_albums(include_drafts=True)
+        if a.get("imported_by")
+    }
+
+
+def _effective_role(cached: str, username: str, publishers: set[str]) -> str:
+    """Rôle affichable : cache autoritaire s'il existe, sinon plancher déduit."""
+    if cached:
+        return cached
+    if username in publishers:
+        return "gestionnaire"
+    return ""
+
+
+def _roles_map(conn: sqlite3.Connection, usernames: set[str]) -> dict[str, str]:
+    if not usernames:
+        return {}
+    qs = ",".join("?" * len(usernames))
+    return {
+        r["username"]: (r["role"] or "")
+        for r in conn.execute(
+            f"SELECT username, role FROM profiles WHERE username IN ({qs})",
+            tuple(usernames),
+        ).fetchall()
+    }
+
+
+def _viewer_follow_set(conn: sqlite3.Connection, viewer: str | None) -> dict[tuple, bool]:
+    """(target_type, target_id) -> notify, pour l'état des boutons du visiteur."""
+    if not viewer:
+        return {}
+    return {
+        (r["target_type"], r["target_id"]): bool(r["notify"])
+        for r in conn.execute(
+            "SELECT target_type, target_id, notify FROM follows WHERE username=?",
+            (viewer,),
+        ).fetchall()
+    }
+
+
+def _follow_lists(conn: sqlite3.Connection, owner: str, viewer: str | None,
+                  publishers: set[str] | None = None) -> tuple:
+    """Abonnements (groupés par type) et abonnés d'un profil.
+
+    Chaque item porte l'état de suivi *du visiteur* (`viewer_following` /
+    `viewer_notify`) pour que le bouton Suivre/Suivi + cloche reflète la relation
+    de celui qui regarde — permet de gérer ses propres abonnements depuis la
+    liste (façon « faire du tri »).
+    """
+    vset = _viewer_follow_set(conn, viewer)
+    if publishers is None:
+        publishers = _publisher_usernames()
+
+    # --- Abonnements de `owner`, groupés par type ---
+    rows = conn.execute(
+        "SELECT target_type, target_id, target_label, created_at FROM follows "
+        "WHERE username=? ORDER BY created_at DESC",
+        (owner,),
+    ).fetchall()
+    following: dict[str, list] = {"artist": [], "user": [], "festival": [], "venue": []}
+    followed_users = {r["target_id"] for r in rows if r["target_type"] == "user"}
+    uprofs = _profiles_map(conn, followed_users)
+    uroles = _roles_map(conn, followed_users)
+    for r in rows:
+        tt, tid = r["target_type"], r["target_id"]
+        item = {
+            "type": tt,
+            "id": tid,
+            "label": r["target_label"] or tid,
+            "viewer_following": (tt, tid) in vset,
+            "viewer_notify": vset.get((tt, tid), False),
+        }
+        if tt == "user":
+            p = uprofs.get(tid, {})
+            item["label"] = p.get("display_name") or tid
+            item["avatar"] = p.get("avatar", False)
+            item["role"] = _effective_role(uroles.get(tid, ""), tid, publishers)
+        following.setdefault(tt, []).append(item)
+
+    # --- Abonnés de `owner` (uniquement des utilisateurs) ---
+    frows = conn.execute(
+        "SELECT username, created_at FROM follows "
+        "WHERE target_type='user' AND target_id=? ORDER BY created_at DESC",
+        (owner,),
+    ).fetchall()
+    fusers = {r["username"] for r in frows}
+    fprofs = _profiles_map(conn, fusers)
+    froles = _roles_map(conn, fusers)
+    followers = []
+    for r in frows:
+        u = r["username"]
+        p = fprofs.get(u, {})
+        followers.append({
+            "type": "user",
+            "id": u,
+            "label": p.get("display_name") or u,
+            "avatar": p.get("avatar", False),
+            "role": _effective_role(froles.get(u, ""), u, publishers),
+            "viewer_following": ("user", u) in vset,
+            "viewer_notify": vset.get(("user", u), False),
+        })
+
+    following_total = sum(len(v) for v in following.values())
+    return following, followers, following_total
 
 
 @router.get("/api/social/users/{username}")
@@ -300,6 +472,13 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         if not has_activity:
             has_activity = conn.execute(
                 "SELECT 1 FROM favorites WHERE username=? LIMIT 1", (username,)
+            ).fetchone() is not None
+        # Suit quelqu'un, ou est suivi : le profil existe (au moins pour ses listes).
+        if not has_activity:
+            has_activity = conn.execute(
+                "SELECT 1 FROM follows WHERE username=? "
+                "OR (target_type='user' AND target_id=?) LIMIT 1",
+                (username, username),
             ).fetchone() is not None
 
         cat_all = _catalogue_map(include_drafts=is_self)
@@ -341,6 +520,37 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
                 "is_reply": r["parent_id"] is not None,
             })
 
+        # État de suivi de ce profil par le visiteur (bouton Suivre/cloche).
+        followers = conn.execute(
+            "SELECT COUNT(*) AS n FROM follows WHERE target_type='user' AND target_id=?",
+            (username,),
+        ).fetchone()["n"]
+        following = notify = False
+        if viewer and not is_self:
+            frow = conn.execute(
+                "SELECT notify FROM follows WHERE username=? AND target_type='user' "
+                "AND target_id=?",
+                (viewer, username),
+            ).fetchone()
+            if frow is not None:
+                following = True
+                notify = bool(frow["notify"])
+
+        # Rôle affichable : cache autoritaire, sinon plancher « gestionnaire »
+        # déduit d'une publication (voir _publisher_usernames). Persisté si le
+        # profil existe, pour que toutes les vues (listes incluses) concordent.
+        publishers = _publisher_usernames()
+        role = _effective_role((row["role"] if row else ""), username, publishers)
+        if role and row is not None and row["role"] != role:
+            conn.execute(
+                "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+                (role, _now(), username),
+            )
+
+        # Abonnements (groupés par type) + abonnés de ce profil.
+        followed, followers_list, following_total = _follow_lists(
+            conn, username, viewer, publishers)
+
     prof = {
         "username": username,
         "display_name": (row["display_name"] if row else username),
@@ -350,6 +560,7 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
         "city": (row["city_label"] if row else ""),
         "artist_id": (row["artist_id"] if row else ""),
         "artist": (row["artist_label"] if row else ""),
+        "role": role,
         "created_at": (row["created_at"] if row else ""),
     }
     return {
@@ -359,11 +570,80 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
             "publications": len(publications),
             "comments": len(comments),
             "likes": len(likes),
+            "following": following_total,
+            "followers": followers,
         },
+        "follow": {"followers": followers, "following": following, "notify": notify},
         "publications": publications,
         "comments": comments,
         "likes": likes,
+        "following_list": followed,
+        "followers_list": followers_list,
     }
+
+
+ROLE_CHOICES = ("user", "gestionnaire", "admin")
+
+
+class RoleSet(BaseModel):
+    role: str
+
+
+@router.post("/api/social/users/{username}/role")
+def set_user_role(username: str, payload: RoleSet,
+                  identity: dict = Depends(require_admin)) -> dict:
+    """Attribue un rôle (`user`/`gestionnaire`/`admin`) à un compte en
+    réconciliant ses groupes Authentik. Réservé aux admins.
+
+    Met à jour le rôle en cache (source = groupes Authentik résultants), et
+    notifie l'intéressé si le rôle change réellement (action non désactivable ;
+    habillage valorisant si c'est une promotion)."""
+    role = (payload.role or "").strip()
+    if role not in ROLE_CHOICES:
+        raise HTTPException(422, f"rôle invalide (attendu: {', '.join(ROLE_CHOICES)})")
+    username = username.strip()
+    if username == identity["username"]:
+        raise HTTPException(400, "action impossible sur son propre compte")
+    if not authentik.enabled():
+        raise HTTPException(503, "API Authentik non configurée")
+    caller_super = bool(identity["groups"] & SUPERUSER_GROUPS)
+    # Groupes réels de la cible (source de vérité) pour les garde-fous.
+    try:
+        target_groups = authentik.user_groups(username)
+    except authentik.AuthentikError:
+        raise HTTPException(502, "Authentik indisponible — réessayez")
+    # Un superuser global Authentik ne se gère pas depuis le site.
+    if target_groups & SUPERUSER_GROUPS:
+        raise HTTPException(400, "super-administrateur global (Authentik) — non modifiable ici")
+    # Le rôle admin applicatif (créer/retirer un admin) est réservé au superadmin.
+    target_is_app_admin = GROUP_APP_ADMIN in target_groups
+    if (role == "admin" or target_is_app_admin) and not caller_super:
+        raise HTTPException(403, "seul un super-administrateur peut gérer le rôle administrateur")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT role FROM profiles WHERE username=?", (username,)
+        ).fetchone()
+    old_role = row["role"] if row is not None else ""
+    try:
+        groups = authentik.set_role(username, role)
+    except authentik.AuthentikError:
+        raise HTTPException(502, "Authentik indisponible — réessayez")
+    new_role = _role_of(groups)
+    changed = new_role != old_role
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        # Action explicite d'admin : on écrit le rôle directement (contourne le
+        # cache monotone, seule voie de rétrogradation assumée).
+        conn.execute(
+            "UPDATE profiles SET role=?, updated_at=? WHERE username=?",
+            (new_role, _now(), username),
+        )
+        if changed:
+            promoted = _ROLE_RANK.get(new_role, 0) > _ROLE_RANK.get(old_role, 0)
+            notifications.notify_role(
+                conn, recipient=username, actor=identity["username"],
+                new_role=new_role, promoted=promoted)
+    return {"ok": True, "username": username, "role": new_role, "changed": changed}
 
 
 def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]:
@@ -421,6 +701,13 @@ def suggest_cities(q: str = "", identity: dict = Depends(current_identity)) -> l
 @router.get("/api/social/suggest/artists")
 def suggest_artists(q: str = "", identity: dict = Depends(current_identity)) -> list[dict]:
     return suggest.search_artists(q)
+
+
+@router.get("/api/social/suggest/world-cities")
+def suggest_world_cities(q: str = "", identity: dict = Depends(current_identity)) -> list[dict]:
+    """Villes du monde entier (case « City » d'un album), drapeau du pays en
+    vignette. Distinct de /cities (communes françaises du profil)."""
+    return suggest.search_world_cities(q)
 
 
 @router.post("/api/social/profile/avatar")
@@ -540,6 +827,11 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
                 "INSERT INTO favorites(username, slug, created_at) VALUES(?,?,?)",
                 (username, slug, _now()),
             )
+            # Notifie l'auteur du post (« X a aimé votre publication »).
+            pub, title, artist = notifications.album_publisher_title(slug)
+            notifications.notify(conn, recipient=pub, actor=username,
+                                 ntype="like_post", pref_key="like:post",
+                                 slug=slug, title=title, subtitle=artist)
         return _album_social(conn, slug, username)
 
 
@@ -677,6 +969,18 @@ def create_comment(slug: str, payload: CommentIn,
         )
         new_id = cur.lastrowid
         row = conn.execute("SELECT * FROM comments WHERE id=?", (new_id,)).fetchone()
+        # Notifications : commentaire racine → auteur du post ; réponse →
+        # auteur du commentaire parent.
+        pub, title, _ = notifications.album_publisher_title(slug)
+        snippet = body[:80]
+        if parent_id is None:
+            notifications.notify(conn, recipient=pub, actor=username,
+                                 ntype="comment_post", pref_key="comment:post",
+                                 slug=slug, title=title, subtitle=snippet)
+        elif reply_to:
+            notifications.notify(conn, recipient=reply_to, actor=username,
+                                 ntype="reply_comment", pref_key="comment:reply",
+                                 slug=slug, title=title, subtitle=snippet)
         profiles = _profiles_map(conn, {username})
     return _comment_dict(row, profiles, {new_id: {"likes": 0, "liked": False, "likers": []}})
 
@@ -726,7 +1030,7 @@ def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dic
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id, deleted FROM comments WHERE id=?", (comment_id,)
+            "SELECT id, deleted, username, slug FROM comments WHERE id=?", (comment_id,)
         ).fetchone()
         if not row or row["deleted"]:
             raise HTTPException(404, "commentaire introuvable")
@@ -744,6 +1048,11 @@ def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dic
                 "INSERT INTO comment_likes(comment_id, username, created_at) VALUES(?,?,?)",
                 (comment_id, username, _now()),
             )
+            # Notifie l'auteur du commentaire (« X a aimé votre commentaire »).
+            _, ctitle, _ = notifications.album_publisher_title(row["slug"])
+            notifications.notify(conn, recipient=row["username"], actor=username,
+                                 ntype="like_comment", pref_key="like:comment",
+                                 slug=row["slug"], title=ctitle)
         ld = _comment_likes(conn, [comment_id], username)[comment_id]
     return {"ok": True, "id": comment_id, **ld}
 
