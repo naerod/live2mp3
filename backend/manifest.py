@@ -79,6 +79,27 @@ def project_slug(manifest: dict[str, Any]) -> str:
     return f"{slugify(artist)}-{slugify(str(date))}".strip("-")
 
 
+def download_stem(manifest: dict[str, Any], fallback: str = "") -> str:
+    """Base du nom de fichier de téléchargement d'un album :
+    ``YYYY-MM-DD_artiste_titre`` (champs vides omis).
+
+    Calculé à la volée depuis le manifeste → le nom suit automatiquement toute
+    modification des infos de l'album (date, artiste, titre) depuis le site.
+    Repli sur `fallback` (le slug) si aucune métadonnée exploitable.
+    """
+    album = manifest.get("album", {})
+    date = str(album.get("date", "") or "").strip()
+    parts: list[str] = []
+    # Date : conservée telle quelle si elle est bien au format ISO AAAA-MM-JJ.
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        parts.append(date)
+    for field in ("artist", "title"):
+        s = slugify(str(album.get(field, "") or ""))
+        if s and s != "untitled":
+            parts.append(s)
+    return "_".join(parts) or slugify(fallback) or "album"
+
+
 @dataclass
 class Manifest:
     """Wrapper autour du dict manifest avec accès disque."""

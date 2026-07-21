@@ -46,7 +46,7 @@ from .auth import (
 )
 from .db import get_conn, init_db
 from .import_album import router as import_router
-from .manifest import PROJECTS_DIR, Manifest, new_manifest
+from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from .pipeline import boundaries, download, preanalyze
 from .covers import (
     MEDIA_TYPES,
@@ -541,7 +541,7 @@ def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileRes
     cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
     if not cover or not cover.exists():
         raise HTTPException(404, "pas de pochette")
-    return FileResponse(cover, filename=f"{slug}-cover{cover.suffix}")
+    return FileResponse(cover, filename=f"{download_stem(m.data, slug)}_cover{cover.suffix}")
 
 
 def _album_traycard(slug: str) -> tuple[Path, str]:
@@ -564,9 +564,9 @@ def _album_traycard(slug: str) -> tuple[Path, str]:
 
 @app.get("/download/{slug}/traycard")
 def download_traycard(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    _ensure_album_visible(slug, identity)
+    m = _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
-    return FileResponse(tc, filename=f"{slug}-traycard{ext}",
+    return FileResponse(tc, filename=f"{download_stem(m.data, slug)}_traycard{ext}",
                         media_type=MEDIA_TYPES.get(ext, "application/pdf"))
 
 
@@ -621,17 +621,17 @@ def download_cover_printable(slug: str,
         raise HTTPException(404, "pas de pochette")
     data = cover_pdf(cover)
     return _Response(data, media_type="application/pdf",
-                     headers={"Content-Disposition": f'attachment; filename="{slug}-cover_print.pdf"'})
+                     headers={"Content-Disposition": f'attachment; filename="{download_stem(m.data, slug)}_cover_print.pdf"'})
 
 
 @app.get("/download/{slug}/traycard/pdf")
 def download_traycard_printable(slug: str,
                                 identity: dict = Depends(require_user)) -> _Response:
-    _ensure_album_visible(slug, identity)
+    m = _ensure_album_visible(slug, identity)
     tc, ext = _album_traycard(slug)
     data = traycard_pdf(tc)
     return _Response(data, media_type="application/pdf",
-                     headers={"Content-Disposition": f'attachment; filename="{slug}-traycard_print.pdf"'})
+                     headers={"Content-Disposition": f'attachment; filename="{download_stem(m.data, slug)}_traycard_print.pdf"'})
 
 
 @app.get("/download/{slug}/{kind}")
@@ -639,10 +639,11 @@ def download_media(slug: str, kind: str,
                    identity: dict = Depends(require_user)) -> FileResponse:
     if kind not in ("mp3", "mp4"):
         raise HTTPException(400, "type invalide (mp3|mp4)")
-    _ensure_album_visible(slug, identity)
+    m = _ensure_album_visible(slug, identity)
     project_dir = PROJECTS_DIR / slug
     zip_path = _zip_media(project_dir, kind)
-    return FileResponse(zip_path, filename=f"{slug}-{kind}.zip",
+    stem = download_stem(m.data, slug)
+    return FileResponse(zip_path, filename=f"{stem}_{kind}.zip",
                         media_type="application/zip")
 
 
@@ -1316,7 +1317,10 @@ def download_bundle(slug: str,
     path = PROJECTS_DIR / slug / "build" / "bundle.zip"
     if not path.exists():
         raise HTTPException(404, "bundle non généré")
-    return FileResponse(path, filename=f"{slug}.zip",
+    manifest_path = PROJECTS_DIR / slug / "manifest.yaml"
+    stem = download_stem(Manifest.load(manifest_path).data, slug) \
+        if manifest_path.exists() else slug
+    return FileResponse(path, filename=f"{stem}.zip",
                         media_type="application/zip")
 
 
