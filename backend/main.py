@@ -18,7 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+import os
+import tempfile
+
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from starlette.background import BackgroundTask
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -222,11 +226,6 @@ class PublishIn(BaseModel):
 class BulkPublishIn(BaseModel):
     slugs: list[str]
     published: bool
-
-
-class BulkDownloadIn(BaseModel):
-    slugs: list[str]
-    kind: str = "mp3"
 
 
 class PerTrackCoversIn(BaseModel):
@@ -659,21 +658,26 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
-@app.post("/download/bulk")
-def download_bulk(payload: BulkDownloadIn,
-                  identity: dict = Depends(require_user)) -> StreamingResponse:
+@app.get("/download/bulk")
+def download_bulk(kind: str = "mp3",
+                  slugs: list[str] = Query(default=[]),
+                  identity: dict = Depends(require_user)) -> FileResponse:
     """Un seul ZIP regroupant plusieurs albums, un sous-dossier par album.
+
+    En **GET** (et non POST) pour que le front déclenche un téléchargement natif
+    du navigateur (barre de progression, pas de blob 100 % en mémoire, pas de
+    bufferisation Cloudflare d'une réponse fetch). Le zip est écrit sur disque
+    puis servi avec un Content-Length, puis supprimé après envoi.
 
     On réutilise le zip par album (déjà mis en cache par `_zip_media`) et on le
     stocke tel quel (ZIP_STORED : pas de recompression de médias déjà zippés).
     Les albums invisibles pour le lecteur (dépubliés, non gestionnaire) ou sans
     média du type demandé sont ignorés silencieusement — on ne révèle rien.
     """
-    kind = payload.kind
     if kind not in ("mp3", "mp4"):
         raise HTTPException(400, "type invalide (mp3|mp4)")
     # Dédoublonnage en gardant l'ordre de sélection.
-    slugs = list(dict.fromkeys(payload.slugs))
+    slugs = list(dict.fromkeys(slugs))
     if not slugs:
         raise HTTPException(400, "aucun album sélectionné")
 
@@ -690,18 +694,15 @@ def download_bulk(payload: BulkDownloadIn,
     if not entries:
         raise HTTPException(404, f"aucun album téléchargeable ({kind})")
 
-    def _stream():
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
-            for src, arc in entries:
-                z.write(src, arc)
-        buf.seek(0)
-        yield from buf
+    fd, tmp = tempfile.mkstemp(prefix="l2m_bulk_", suffix=".zip")
+    os.close(fd)
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for src, arc in entries:
+            z.write(src, arc)
 
     name = f"live2mp3_selection_{kind}_{len(entries)}.zip"
-    return StreamingResponse(
-        _stream(), media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return FileResponse(tmp, media_type="application/zip", filename=name,
+                        background=BackgroundTask(os.remove, tmp))
 
 
 # --- Gestion d'album (niveau gestionnaire) --------------------------------

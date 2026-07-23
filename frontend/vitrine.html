@@ -305,6 +305,7 @@
     .bulkbar .bb-actions{width:100%;justify-content:center;flex-wrap:wrap;gap:6px}
     .bulkbar .bb-sep{display:none}
     .bulkbar button{height:38px;flex:1 1 auto;min-width:132px;justify-content:center}
+    .bulkbar button.bb-icon{flex:0 0 auto;min-width:44px;width:44px}
   }
 
   /* ── Sélection multiple ──────────────────────────────────────────────── */
@@ -341,6 +342,8 @@
   .bulkbar button:disabled{opacity:.45;cursor:default}
   .bulkbar button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
   .bulkbar button.danger:hover:not(:disabled){border-color:var(--like);color:var(--like)}
+  .bulkbar button.bb-icon{padding:0;width:36px;gap:0}
+  .bulkbar button.bb-icon .material-symbols-outlined{font-size:19px}
   .bulkbar .bb-sep{width:1px;align-self:stretch;background:var(--border)}
   .bulkbar .material-symbols-outlined{font-size:17px;line-height:1}
 </style>
@@ -836,29 +839,24 @@ function updateBulkBar(){
     html+=`<button class="danger" ${dis} onclick="bulkPublish(false)"><span class="material-symbols-outlined">visibility_off</span>${t.sel_unpublish}</button>`;
   }
   html+=`<span class="bb-sep"></span>`;
-  html+=`<button onclick="exitSelectMode()"><span class="material-symbols-outlined">close</span>${t.sel_done}</button>`;
+  html+=`<button class="bb-icon" title="${t.sel_done}" aria-label="${t.sel_done}" onclick="exitSelectMode()"><span class="material-symbols-outlined">close</span></button>`;
   document.getElementById("bb-actions").innerHTML=html;
 }
-async function bulkDownload(kind){
+function bulkDownload(kind){
   const t=T[L()];
   if(!picked.size)return;
   if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  // Téléchargement natif du navigateur : lien GET direct (le navigateur streame
+  // et affiche sa propre barre de progression). Le clic synchrone conserve le
+  // « geste utilisateur » et évite de bufferiser tout le zip en mémoire.
+  const qs=new URLSearchParams();
+  qs.set("kind",kind);
+  [...picked].forEach(s=>qs.append("slugs",s));
+  const a=document.createElement("a");
+  a.href=`/download/bulk?${qs.toString()}`;
+  a.rel="noopener";
+  document.body.appendChild(a);a.click();a.remove();
   selToast(t.sel_preparing);
-  try{
-    const r=await fetch("/download/bulk",{method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({slugs:[...picked],kind})});
-    if(r.status===404){selToast(t.sel_dl_empty,true);return;}
-    if(!r.ok)throw new Error(r.status);
-    const blob=await r.blob();
-    const cd=r.headers.get("Content-Disposition")||"";
-    const m=cd.match(/filename="?([^"]+)"?/);
-    const name=m?m[1]:`live2mp3_selection_${kind}.zip`;
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a");a.href=url;a.download=name;
-    document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),4000);
-  }catch(e){selToast(t.sel_err,true);}
 }
 async function bulkPublish(published){
   const t=T[L()];

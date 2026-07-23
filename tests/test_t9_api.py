@@ -304,17 +304,17 @@ def test_bulk_download_auth_and_zip(client):
         for line in resp.iter_lines():
             if line.startswith("data:") and json.loads(line[5:].strip())["status"] == "complete":
                 break
-    # anonyme interdit
-    assert c.post("/download/bulk", json={"slugs": [s1], "kind": "mp3"}).status_code == 401
+    # anonyme interdit (GET : téléchargement natif du navigateur)
+    assert c.get("/download/bulk", params={"slugs": [s1], "kind": "mp3"}).status_code == 401
     # user : zip regroupant uniquement l'album qui a du média
-    r = c.post("/download/bulk", json={"slugs": [s1, s2], "kind": "mp3"}, headers=USER)
+    r = c.get("/download/bulk", params={"slugs": [s1, s2], "kind": "mp3"}, headers=USER)
     assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
     with _zip.ZipFile(_io.BytesIO(r.content)) as z:
         names = z.namelist()
     assert len(names) == 1 and names[0].endswith("_mp3.zip")
     # sélection sans média téléchargeable -> 404
-    assert c.post("/download/bulk", json={"slugs": [s2], "kind": "mp3"},
-                  headers=USER).status_code == 404
+    assert c.get("/download/bulk", params={"slugs": [s2], "kind": "mp3"},
+                 headers=USER).status_code == 404
     # kind invalide -> 400
-    assert c.post("/download/bulk", json={"slugs": [s1], "kind": "flac"},
-                  headers=USER).status_code == 400
+    assert c.get("/download/bulk", params={"slugs": [s1], "kind": "flac"},
+                 headers=USER).status_code == 400
