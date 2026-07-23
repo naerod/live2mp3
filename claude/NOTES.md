@@ -1,5 +1,120 @@
 # Notes
 
+2026-07-21 (suite 2) : **Rôle admin applicatif `live2mp3-admin`** (preprod v1.8.33).
+- Le rôle « Administrateur » du site n'est plus le superuser global Authentik.
+  Nouveau groupe **`live2mp3-admin`** (pk `18fa33c5-…`, non-superuser) =
+  gestionnaire + gestion des rôles, sans droits sur le reste de l'infra SSO.
+- `authentik.set_role` : admin = {live2mp3-user, live2mp3-gestionnaire,
+  live2mp3-admin} — **jamais** `authentik Admins`. Vérifié E2E sur test-user.
+- Hiérarchie : superuser global (`authentik Admins`, ex: naerod) ⊃ admin appli
+  (`live2mp3-admin`) ⊃ gestionnaire ⊃ user. `_role_of` : super OU app-admin →
+  "admin". `is_superadmin` exposé dans /me & /api/social/me.
+- Garde-fous endpoint : créer/retirer un admin applicatif = **réservé au
+  superadmin** ; un superuser global n'est **pas modifiable** depuis le site.
+  Sélecteur front : 3 rôles pour un superadmin, 2 (user/gestionnaire) pour un
+  admin applicatif ; badge non cliquable sur un admin si on n'est pas superadmin.
+- 190 tests (+1 test app-admin vs superadmin).
+
+2026-07-21 (suite) : **Gestion du rôle via le badge (sélecteur 3 rôles)**
+(preprod v1.8.32).
+- Le badge de rôle du profil est cliquable pour les admins (chevron) → modale
+  sélecteur des 3 rôles (Utilisateur/Gestionnaire/Administrateur), l'actuel
+  marqué « Actuel ». Choix → confirmation « êtes-vous sûr… ». Bouton séparé
+  supprimé.
+- Backend généralisé : `POST /api/social/users/{u}/role {role}` (remplace
+  `/gestionnaire {grant}`). `authentik.set_role` réconcilie l'appartenance aux
+  groupes `live2mp3-user` / `live2mp3-gestionnaire` / `authentik Admins` (les
+  autres groupes de l'user sont préservés — vérifié : catchr-users/_preprod
+  intacts). Notif uniquement si le rôle change ; sens promotion/rétrogradation
+  déduit du rang (habillage doré si promotion) ; nouveau rôle dans `reason_id`.
+- ⚠️ Le rôle **Administrateur** = ajout au groupe superuser `authentik Admins`
+  (droits Authentik complets, pas seulement l'app). Assumé (demande explicite).
+- Vérifié : 189 tests, E2E réel Authentik sur `test-user` (user↔gestionnaire),
+  contrôles visuels (badge cliquable, sélecteur, modale).
+
+2026-07-21 : **Promotion/rétrogradation gestionnaire depuis le site**
+(preprod v1.8.31).
+- **API Authentik câblée** (`backend/authentik.py`) : add_user/remove_user sur le
+  groupe `live2mp3-gestionnaire`. Config `AUTHENTIK_URL`
+  (`http://authentik-server:9000`) + `AUTHENTIK_API_TOKEN` injectés dans le
+  conteneur (docker-compose `environment` + valeur dans `/opt/apps/*/.env`,
+  copiée depuis `/root/.env` sur CT110). Token = `claude-api-token` (60 car.).
+  ⚠️ **Backlog** : mettre ce token dans Bitwarden (encore uniquement `/root/.env`).
+- **Endpoint** `POST /api/social/users/{u}/gestionnaire {grant}` — `require_admin`
+  (autorisation sur groupes **live**, jamais le cache). Refuse soi-même + autre
+  admin. Recalcule le rôle depuis les groupes Authentik résultants, écrit le
+  cache (contourne le cache monotone = voie de rétrogradation assumée), notifie.
+- **Notif non désactivable** (`notify_role`, type `role_grant`/`role_revoke`,
+  reason_type=admin) — pas dans la page de préférences. Front : badge « Action
+  administrateur » ; promotion en habillage **doré valorisant** (icône trophée,
+  contour or, 🎉) ; rétrogradation neutre. Lien vers le profil (`_notif_dict`
+  expose `username`).
+- Front profil : bouton Promouvoir/Retirer (admins, hors self/admin), **modale
+  de confirmation Oui/Non** stylée (pas de `confirm()` natif).
+- Vérifié : 189 tests (+1 E2E mocké), **E2E réel contre Authentik** sur
+  `test-user` (promote→groupe ajouté+notif, demote→retiré, état restauré),
+  contrôles visuels Chromium (notifs dorée/neutre, bouton, modale).
+
+2026-07-20 (suite 3) : **Fiabilisation des badges de rôle** (preprod v1.8.29).
+- Symptôme : gestionnaires (nathan, louis) sans badge ; admin (naerod)
+  rétrogradé en gestionnaire au rechargement.
+- **Plancher gestionnaire** (`_effective_role` + `_publisher_usernames`) :
+  publier un album exige les droits gestionnaire → `imported_by` est un plancher
+  de rôle fiable, affiché même si la personne ne s'est pas reconnectée depuis la
+  capture `/me`. Appliqué au profil (persisté) et aux listes abonnés/abonnements.
+- **Cache de rôle monotone** (`_touch_role` + `_ROLE_RANK`) : sur preprod
+  l'outpost Authentik ne transmet pas toujours le groupe superuser
+  « authentik Admins » → l'admin était rétrogradé. On ne garde que les
+  promotions ; rétrogradation réelle = reset explicite du champ `role`.
+  naerod restauré en `admin` en base.
+- ⚠️ **Reste (backlog)** : câbler l'API Authentik pour résoudre le rôle de
+  n'importe qui (y compris simples membres jamais vus) sans dépendre de la
+  capture `/me` ni du plancher publications. `AUTHENTIK_API_TOKEN` présent dans
+  `.env` mais **vide** + non injecté dans le conteneur + pas d'`AUTHENTIK_URL` →
+  API renvoie 403. Nécessite de créer un vrai token de service Authentik.
+
+2026-07-20 (suite 2) : **Photos d'artistes dans les listes d'abonnements**
+(preprod v1.8.21).
+- Les lignes artiste montraient une icône générique. Endpoint batch
+  `GET /api/social/artist-pics?ids=...` (photos Deezer best-effort via le cache
+  `suggest`, borne 60 ids) + hydratation lazy côté client (`hydrateArtistPics`
+  dans `profile.js`) : l'icône de repli reste si pas de photo / source KO.
+  CSS `.fr-ic.has-pic` + `.fr-ic img`. Vérifié E2E (URLs Deezer réelles) +
+  rendu Chromium (Coldplay/U2 en vignette). Test `test_artist_pics_batch`.
+
+2026-07-20 (suite) : **Groupes d'abonnements pliables** (preprod v1.8.20).
+- Onglet Abonnements : chaque groupe (Artistes / Utilisateurs / Festivals /
+  Lieux) a un en-tête cliquable + chevron ; état plié persisté par type dans
+  `localStorage` (`l2m-prof-collapsed`). `wireFollowGroups()` dans `profile.js`,
+  CSS `.follow-grp.collapsed .follow-list{display:none}` + rotation chevron.
+- **Suivi festivals/lieux : déjà fonctionnel** (pas de dev backend). Le bouton
+  Suivre + cloche est monté par `entity.js` sur `/festival/{slug}` et
+  `/venue/{slug}` ; `FOLLOW_TYPES` inclut festival+venue ; ces pages sont
+  atteignables via les liens cliquables festival/lieu de la fiche album.
+  Vérifié E2E (POST follow festival OK, rendu Chromium de la page Glastonbury
+  avec bouton Suivre).
+
+2026-07-20 : **Listes Abonnements / Abonnés sur les profils** (preprod v1.8.18).
+- `GET /api/social/users/{username}` expose `following_list` (abonnements de la
+  personne, **groupés par type** : `artist` / `user` / `festival` / `venue`) et
+  `followers_list` (ses abonnés — uniquement des utilisateurs). `counts.following`
+  / `counts.followers` ajoutés. Helper `_follow_lists()` dans `social.py`.
+- **État du visiteur par ligne** : chaque item porte `viewer_following` /
+  `viewer_notify` → le bouton Suivre/Suivi + la cloche reflètent la relation de
+  *celui qui regarde*, ce qui permet de gérer ses propres abonnements (tri +
+  cloches individuelles) directement depuis la liste, y compris sur son profil.
+- `has_activity` inclut désormais `follows` : un user qu'on suit ou qui suit
+  quelqu'un « existe » (profil accessible même sans publication/commentaire).
+- Front `profile.js` : 2 nouveaux onglets (Abonnements / Abonnés), rendu des
+  lignes (avatar pour user + badge rôle, icône Material pour artiste/festival/
+  lieu), montage de `L2M.followButton` par ligne, i18n FR/EN, pas de bouton sur
+  sa propre ligne (« C'est vous »). CSS `.follow-grp` / `.follow-row` / `.fr-*`.
+- Vérifié : 185 tests verts (+1 `test_profile_following_and_followers_lists`),
+  smoke API dans le conteneur preprod, contrôle visuel Chromium (onglets
+  Abonnements + Abonnés, thèmes sombre **et** clair) via harnais stub statique.
+- Reste possible : pagination des listes si volumétrie, retrait auto de la ligne
+  au dé-suivi (aujourd'hui le bouton repasse à « Suivre » sans enlever la ligne).
+
 2026-07-19 (suivi — Phase 2) : **Notifications in-app** (preprod v1.8.6).
 - `backend/notifications.py` : fan-out à la **publication** d'un album
   (`set_published` → `announce_post`). Destinataires = abonnés des entités
@@ -502,3 +617,28 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
   Outil/Importer non retraduits au changement de langue ; redondance
   « Importé par nathan 🅝 nathan » sur les fiches ; badge version absent hors
   vitrine ; profil inconnu répond HTTP 200.
+
+2026-07-23: Actions groupées vitrine — préprod v1.10.6.
+- **Sélection multiple** : bouton « Sélectionner » (chip toolbar) → mode
+  sélection (body.select-mode). Case à cocher overlay sur chaque carte, clic
+  n'importe où sur la carte coche/décoche, liens internes neutralisés
+  (pointer-events). État = `picked` (Set de slugs) — NE PAS confondre avec
+  `selected` (déjà pris par les filtres étiquettes).
+- **Barre d'actions flottante** (#bulkbar) : compteur + Tout sélectionner/
+  désélectionner (sur le visible filtré) + Télécharger MP3/MP4 (tous users
+  connectés) + Publier/Dépublier (gestionnaires, via meDisplay → respecte
+  « Voir en tant que ») + Terminer.
+- Backend :
+  - `POST /download/bulk` {slugs,kind} (require_user) : un ZIP regroupant le
+    zip par album (ZIP_STORED, réutilise `_zip_media` en cache, pas de
+    recompression). Albums invisibles/sans média ignorés silencieusement.
+    404 si rien de téléchargeable, 400 kind≠mp3|mp4. Streamé.
+  - `PATCH /api/albums/bulk-published` {slugs,published} (require_gestionnaire) :
+    idempotent (skip si déjà dans l'état), notifie les abonnés pour chaque
+    album nouvellement publié, remonte `updated/count/notified/missing`.
+- i18n FR/EN complet (clés sel_*). Toast local (#sel-toast, pas de helper L2M).
+- Tests : test_bulk_published_permissions_and_idempotency +
+  test_bulk_download_auth_and_zip. Suite 195 passed / 1 skipped.
+- Idées d'autres actions en masse proposées à l'utilisateur (non implémentées) :
+  suppression groupée, étiquetage/désétiquetage en masse, ré-attribution
+  artiste/lieu, export pochettes PDF groupé, régénération covers.
