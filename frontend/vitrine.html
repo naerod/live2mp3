@@ -333,7 +333,8 @@
   .bulkbar.show{display:flex}
   .bulkbar .bb-count{font-weight:700;font-size:14px;white-space:nowrap}
   .bulkbar .bb-actions{display:flex;align-items:center;gap:8px}
-  .bulkbar button{display:inline-flex;align-items:center;gap:5px;height:36px;
+  .bulkbar button{display:inline-flex;align-items:center;justify-content:center;
+    gap:5px;height:36px;line-height:1;white-space:nowrap;
     padding:0 12px;border-radius:10px;border:1px solid var(--border);
     background:var(--bg);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer}
   .bulkbar button:hover:not(:disabled){border-color:var(--accent)}
@@ -488,7 +489,7 @@ const T={
       sel_start:"Sélectionner",sel_done:"Terminer",
       sel_all:"Tout sélectionner",sel_none:"Tout désélectionner",
       sel_count:n=>`${n} sélectionné${n>1?"s":""}`,
-      sel_dl_mp3:"Télécharger MP3",sel_dl_mp4:"Télécharger MP4",
+      sel_dl_mp3:"Télécharger",sel_dl_mp4:"Télécharger MP4",
       sel_publish:"Publier",sel_unpublish:"Dépublier",
       sel_preparing:"Préparation du téléchargement…",
       sel_dl_empty:"Aucun média téléchargeable dans la sélection.",
@@ -533,7 +534,7 @@ const T={
       sel_start:"Select",sel_done:"Done",
       sel_all:"Select all",sel_none:"Deselect all",
       sel_count:n=>`${n} selected`,
-      sel_dl_mp3:"Download MP3",sel_dl_mp4:"Download MP4",
+      sel_dl_mp3:"Download",sel_dl_mp4:"Download MP4",
       sel_publish:"Publish",sel_unpublish:"Unpublish",
       sel_preparing:"Preparing download…",
       sel_dl_empty:"No downloadable media in the selection.",
@@ -829,7 +830,6 @@ function updateBulkBar(){
   let html=`<button onclick="selectAllVisible()"><span class="material-symbols-outlined">${allIn?"deselect":"select_all"}</span>${allIn?t.sel_none:t.sel_all}</button>`;
   html+=`<span class="bb-sep"></span>`;
   html+=`<button class="primary" ${dis} onclick="bulkDownload('mp3')"><span class="material-symbols-outlined">download</span>${t.sel_dl_mp3}</button>`;
-  html+=`<button ${dis} onclick="bulkDownload('mp4')"><span class="material-symbols-outlined">movie</span>${t.sel_dl_mp4}</button>`;
   if(md.is_gestionnaire){
     html+=`<span class="bb-sep"></span>`;
     html+=`<button ${dis} onclick="bulkPublish(true)"><span class="material-symbols-outlined">visibility</span>${t.sel_publish}</button>`;
