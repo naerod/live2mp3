@@ -300,9 +300,11 @@
     /* Sous-menu "Voir en tant que…" : accordéon sous l'entrée (pas de place à gauche) */
     .um-viewas-pop{position:static;min-width:0;box-shadow:none;border:none;
       border-left:2px solid var(--border);border-radius:0;margin-left:16px;padding:0}
-    .bulkbar{left:10px;right:10px;transform:none;bottom:10px;flex-wrap:wrap;
-      justify-content:center;padding:10px 12px}
-    .bulkbar .bb-actions{width:100%;justify-content:center}
+    .bulkbar{left:8px;right:8px;transform:none;bottom:8px;flex-wrap:wrap;gap:8px;
+      justify-content:center;padding:9px 10px;max-height:60vh;overflow-y:auto}
+    .bulkbar .bb-actions{width:100%;justify-content:center;flex-wrap:wrap;gap:6px}
+    .bulkbar .bb-sep{display:none}
+    .bulkbar button{height:38px;flex:1 1 auto;min-width:132px;justify-content:center}
   }
 
   /* ── Sélection multiple ──────────────────────────────────────────────── */
