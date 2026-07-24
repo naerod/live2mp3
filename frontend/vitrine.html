@@ -300,7 +300,52 @@
     /* Sous-menu "Voir en tant que…" : accordéon sous l'entrée (pas de place à gauche) */
     .um-viewas-pop{position:static;min-width:0;box-shadow:none;border:none;
       border-left:2px solid var(--border);border-radius:0;margin-left:16px;padding:0}
+    .bulkbar{left:8px;right:8px;transform:none;bottom:8px;flex-wrap:wrap;gap:8px;
+      justify-content:center;padding:9px 10px;max-height:60vh;overflow-y:auto}
+    .bulkbar .bb-actions{width:100%;justify-content:center;flex-wrap:wrap;gap:6px}
+    .bulkbar .bb-sep{display:none}
+    .bulkbar button{height:38px;flex:1 1 auto;min-width:132px;justify-content:center}
+    .bulkbar button.bb-icon{flex:0 0 auto;min-width:44px;width:44px}
   }
+
+  /* ── Sélection multiple ──────────────────────────────────────────────── */
+  .chip.selecting{background:var(--accent);color:#fff;border-color:var(--accent)}
+  /* En mode sélection la carte entière devient cliquable pour cocher : on
+     neutralise les liens internes (gear, téléchargement, entités). */
+  body.select-mode .album{cursor:pointer}
+  body.select-mode .album .gear,
+  body.select-mode .album .btns a,
+  body.select-mode .album .al-social,
+  body.select-mode .album .al-artist a,
+  body.select-mode .album .al-line a,
+  body.select-mode .album .al-poster{pointer-events:none}
+  .album .pick{position:absolute;top:8px;left:8px;z-index:4;width:26px;height:26px;
+    border-radius:8px;border:2px solid var(--border);background:rgba(10,10,10,.75);
+    display:none;align-items:center;justify-content:center;color:transparent;
+    backdrop-filter:blur(2px);transition:.12s}
+  body.select-mode .album .pick{display:flex}
+  .album .pick .material-symbols-outlined{font-size:18px;line-height:1}
+  .album.picked{outline:2px solid var(--accent);outline-offset:2px}
+  .album.picked .pick{background:var(--accent);border-color:var(--accent);color:#fff}
+  .bulkbar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;
+    display:none;align-items:center;gap:14px;padding:10px 16px;border-radius:14px;
+    background:var(--card);border:1px solid var(--border);
+    box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .bulkbar.show{display:flex}
+  .bulkbar .bb-count{font-weight:700;font-size:14px;white-space:nowrap}
+  .bulkbar .bb-actions{display:flex;align-items:center;gap:8px}
+  .bulkbar button{display:inline-flex;align-items:center;justify-content:center;
+    gap:5px;height:36px;margin:0;line-height:1;white-space:nowrap;
+    padding:0 12px;border-radius:10px;border:1px solid var(--border);
+    background:var(--bg);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer}
+  .bulkbar button:hover:not(:disabled){border-color:var(--accent)}
+  .bulkbar button:disabled{opacity:.45;cursor:default}
+  .bulkbar button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .bulkbar button.danger:hover:not(:disabled){border-color:var(--like);color:var(--like)}
+  .bulkbar button.bb-icon{padding:0;width:36px;gap:0}
+  .bulkbar button.bb-icon .material-symbols-outlined{font-size:19px}
+  .bulkbar .bb-sep{width:1px;align-self:stretch;background:var(--border)}
+  .bulkbar .material-symbols-outlined{font-size:17px;line-height:1}
 </style>
 </head>
 <body>
@@ -336,6 +381,7 @@
     </div>
     <div class="toolbar-row">
       <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
+      <button class="chip" id="select-btn"><span class="material-symbols-outlined">check_box</span><span id="t-select">Sélectionner</span></button>
       <div id="active-filters" style="display:contents"></div>
       <span class="count" id="count"></span>
     </div>
@@ -363,6 +409,12 @@
   </div>
   <div class="foot" id="foot"></div>
 </main>
+
+<!-- Barre d'actions en masse (mode sélection) -->
+<div id="bulkbar" class="bulkbar" role="toolbar" aria-label="Actions groupées">
+  <span class="bb-count" id="bb-count"></span>
+  <div class="bb-actions" id="bb-actions"></div>
+</div>
 
 <!-- Import d'album (gestionnaires) -->
 <div id="import-overlay" class="overlay hidden">
@@ -399,7 +451,8 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   refreshViewAsLabels();
   // La modale d'import est reconstruite dans la langue courante si elle est ouverte.
   if(IMP.step)renderImport();
-  if(ALBUMS.length)buildFilters();render();updateCount();}
+  if(ALBUMS.length)buildFilters();render();updateCount();
+  if(selectMode)updateBulkBar();}
 
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
@@ -435,7 +488,18 @@ const T={
       imp_back:"Retour",imp_cancel:"Annuler",imp_do:"Importer",
       imp_req:"Artiste et titre de l'album sont obligatoires.",
       imp_done:n=>`Album importé — ${n} piste${n>1?"s":""}.`,
-      imp_see:"Voir l'album"},
+      imp_see:"Voir l'album",
+      sel_start:"Sélectionner",sel_done:"Terminer",
+      sel_all:"Tout sélectionner",sel_none:"Tout désélectionner",
+      sel_count:n=>`${n} sélectionné${n>1?"s":""}`,
+      sel_dl_mp3:"Télécharger",sel_dl_mp4:"Télécharger MP4",
+      sel_publish:"Publier",sel_unpublish:"Dépublier",
+      sel_preparing:"Préparation du téléchargement…",
+      sel_dl_empty:"Aucun média téléchargeable dans la sélection.",
+      sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
+      sel_pub_noop:"Rien à changer (déjà dans cet état).",
+      sel_login:"Connectez-vous pour télécharger.",
+      sel_err:"Échec de l'action groupée."},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
@@ -469,7 +533,18 @@ const T={
       imp_back:"Back",imp_cancel:"Cancel",imp_do:"Import",
       imp_req:"Artist and album title are required.",
       imp_done:n=>`Album imported — ${n} track${n>1?"s":""}.`,
-      imp_see:"View album"}
+      imp_see:"View album",
+      sel_start:"Select",sel_done:"Done",
+      sel_all:"Select all",sel_none:"Deselect all",
+      sel_count:n=>`${n} selected`,
+      sel_dl_mp3:"Download",sel_dl_mp4:"Download MP4",
+      sel_publish:"Publish",sel_unpublish:"Unpublish",
+      sel_preparing:"Preparing download…",
+      sel_dl_empty:"No downloadable media in the selection.",
+      sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
+      sel_pub_noop:"Nothing to change (already in that state).",
+      sel_login:"Log in to download.",
+      sel_err:"Bulk action failed."}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
@@ -510,9 +585,12 @@ function setViewAs(mode){
   });
   applyViewToHeader();
   render();
+  if(selectMode)updateBulkBar();
 }
 let currentSort="date_import";
 let filterArtist="", filterYear="";
+// Sélection multiple (actions groupées). `picked` = slugs cochés.
+let selectMode=false, picked=new Set();
 
 // ── Cover générique SVG ───────────────────────────────────────────────────
 const GENERIC_COVER=`<div class="cover-generic">
@@ -600,7 +678,9 @@ function albumCard(a){
     ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${L()==="fr"?"Brouillon":"Draft"}</span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
-  return `<div class="album${a.published===false?" unpublished":""}" data-slug="${a.slug}">
+  const pick=`<div class="pick" aria-hidden="true"><span class="material-symbols-outlined">check</span></div>`;
+  return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}">
+    ${pick}
     ${gear}
     ${draftBadge}
     ${newBadge}
@@ -702,6 +782,99 @@ function render(){
   patchSocialCounts();
 }
 
+// ── Sélection multiple & actions groupées ──────────────────────────────────
+function selToast(msg,err){
+  let el=document.getElementById("sel-toast");
+  if(!el){el=document.createElement("div");el.id="sel-toast";
+    el.style.cssText="position:fixed;left:50%;bottom:80px;transform:translateX(-50%);"+
+      "z-index:80;padding:11px 18px;border-radius:12px;font-size:13.5px;font-weight:600;"+
+      "background:var(--card);border:1px solid var(--border);box-shadow:0 8px 24px rgba(0,0,0,.35);"+
+      "max-width:88vw;text-align:center;opacity:0;transition:opacity .2s";
+    document.body.appendChild(el);}
+  el.style.color=err?"var(--like)":"var(--fg)";
+  el.textContent=msg;el.style.opacity="1";
+  clearTimeout(el._t);el._t=setTimeout(()=>{el.style.opacity="0";},2600);
+}
+function toggleSelectMode(){selectMode?exitSelectMode():enterSelectMode();}
+function enterSelectMode(){
+  selectMode=true;document.body.classList.add("select-mode");
+  document.getElementById("select-btn").classList.add("selecting");
+  updateBulkBar();
+}
+function exitSelectMode(){
+  selectMode=false;picked.clear();
+  document.body.classList.remove("select-mode");
+  document.getElementById("select-btn").classList.remove("selecting");
+  document.getElementById("bulkbar").classList.remove("show");
+  render();
+}
+function togglePick(slug){
+  if(picked.has(slug))picked.delete(slug);else picked.add(slug);
+  const card=document.querySelector(`.album[data-slug="${CSS.escape(slug)}"]`);
+  if(card)card.classList.toggle("picked",picked.has(slug));
+  updateBulkBar();
+}
+function visibleSlugs(){return ALBUMS.filter(matches).map(a=>a.slug);}
+function selectAllVisible(){
+  const vis=visibleSlugs();
+  const allIn=vis.every(s=>picked.has(s));
+  if(allIn)vis.forEach(s=>picked.delete(s));else vis.forEach(s=>picked.add(s));
+  render();updateBulkBar();
+}
+function updateBulkBar(){
+  const t=T[L()],bar=document.getElementById("bulkbar");
+  if(!selectMode){bar.classList.remove("show");return;}
+  bar.classList.add("show");
+  const n=picked.size;
+  document.getElementById("bb-count").textContent=t.sel_count(n);
+  const md=meDisplay();
+  const vis=visibleSlugs(),allIn=vis.length&&vis.every(s=>picked.has(s));
+  const dis=n?"":"disabled";
+  let html=`<button onclick="selectAllVisible()"><span class="material-symbols-outlined">${allIn?"deselect":"select_all"}</span>${allIn?t.sel_none:t.sel_all}</button>`;
+  html+=`<span class="bb-sep"></span>`;
+  html+=`<button class="primary" ${dis} onclick="bulkDownload('mp3')"><span class="material-symbols-outlined">download</span>${t.sel_dl_mp3}</button>`;
+  if(md.is_gestionnaire){
+    html+=`<span class="bb-sep"></span>`;
+    html+=`<button ${dis} onclick="bulkPublish(true)"><span class="material-symbols-outlined">visibility</span>${t.sel_publish}</button>`;
+    html+=`<button class="danger" ${dis} onclick="bulkPublish(false)"><span class="material-symbols-outlined">visibility_off</span>${t.sel_unpublish}</button>`;
+  }
+  html+=`<span class="bb-sep"></span>`;
+  html+=`<button class="bb-icon" title="${t.sel_done}" aria-label="${t.sel_done}" onclick="exitSelectMode()"><span class="material-symbols-outlined">close</span></button>`;
+  document.getElementById("bb-actions").innerHTML=html;
+}
+function bulkDownload(kind){
+  const t=T[L()];
+  if(!picked.size)return;
+  if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  // Téléchargement natif du navigateur : lien GET direct (le navigateur streame
+  // et affiche sa propre barre de progression). Le clic synchrone conserve le
+  // « geste utilisateur » et évite de bufferiser tout le zip en mémoire.
+  const qs=new URLSearchParams();
+  qs.set("kind",kind);
+  [...picked].forEach(s=>qs.append("slugs",s));
+  const a=document.createElement("a");
+  a.href=`/download/bulk?${qs.toString()}`;
+  a.rel="noopener";
+  document.body.appendChild(a);a.click();a.remove();
+  selToast(t.sel_preparing);
+}
+async function bulkPublish(published){
+  const t=T[L()];
+  if(!picked.size)return;
+  try{
+    const r=await fetch("/api/albums/bulk-published",{method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({slugs:[...picked],published})});
+    if(!r.ok)throw new Error(r.status);
+    const res=await r.json();
+    // Refléter le nouvel état dans le catalogue local sans recharger.
+    (res.updated||[]).forEach(slug=>{
+      const a=ALBUMS.find(x=>x.slug===slug);if(a)a.published=published;});
+    selToast(res.count?t.sel_pub_done(res.count):t.sel_pub_noop);
+    render();updateBulkBar();
+  }catch(e){selToast(t.sel_err,true);}
+}
+
 function buildFilters(){
   const t=T[L()];
   // Artist dropdown
@@ -732,6 +905,7 @@ function buildFilters(){
   });
   // i18n labels
   document.getElementById("t-filter").textContent=t.filter;
+  document.getElementById("t-select").textContent=t.sel_start;
   document.getElementById("t-f-artist").textContent=t.f_artist;
   document.getElementById("t-f-year").textContent=t.f_year;
   document.getElementById("t-f-labels").textContent=t.f_labels;
@@ -759,20 +933,23 @@ document.getElementById("sort-select").addEventListener("change",async e=>{
   const apiSort=currentSort==="artist"?"date_concert":currentSort;
   ALBUMS=await(await fetch(`/api/catalogue?sort=${apiSort}`)).json();
   render();updateCount();
+  if(selectMode)updateBulkBar();
 });
 
-document.getElementById("q").addEventListener("input",()=>{render();updateCount();});
+document.getElementById("q").addEventListener("input",()=>{render();updateCount();if(selectMode)updateBulkBar();});
 
 // ── Navigation vers la page album ─────────────────────────────────────────
 document.getElementById("albums").addEventListener("click",e=>{
-  if(e.target.closest("a,button")) return;
   const card=e.target.closest(".album");
-  if(card){
-    const slugs=[...document.querySelectorAll('#albums .album')].map(c=>c.dataset.slug);
-    sessionStorage.setItem('l2m-album-nav',JSON.stringify({slugs}));
-    location.href=`/album/${card.dataset.slug}`;
-  }
+  if(!card) return;
+  // Mode sélection : toute la carte coche/décoche, pas de navigation.
+  if(selectMode){e.preventDefault();togglePick(card.dataset.slug);return;}
+  if(e.target.closest("a,button")) return;
+  const slugs=[...document.querySelectorAll('#albums .album')].map(c=>c.dataset.slug);
+  sessionStorage.setItem('l2m-album-nav',JSON.stringify({slugs}));
+  location.href=`/album/${card.dataset.slug}`;
 });
+document.getElementById("select-btn").onclick=toggleSelectMode;
 
 // ── Version footer ────────────────────────────────────────────────────────
 async function loadVersion(){

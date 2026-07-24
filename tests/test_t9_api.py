@@ -251,3 +251,70 @@ def test_version(client):
     assert v["version"] == expected
     assert v["env"] in ("prod", "preprod")
     assert "commit" in v
+
+
+def _make_album(c, artist, title, date, published=False):
+    payload = {"album": {"artist": artist, "title": title, "date": date},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    if published:
+        c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
+    return slug
+
+
+def test_bulk_published_permissions_and_idempotency(client):
+    c, _ = client
+    s1 = _make_album(c, "Bulk", "One", "2026-01-01")
+    s2 = _make_album(c, "Bulk", "Two", "2026-01-02")
+    # anonyme / user interdits
+    assert c.patch("/api/albums/bulk-published",
+                   json={"slugs": [s1], "published": True}).status_code == 401
+    assert c.patch("/api/albums/bulk-published", headers=USER,
+                   json={"slugs": [s1], "published": True}).status_code == 403
+    # gestionnaire : publie les deux + un slug inconnu ignoré
+    r = c.patch("/api/albums/bulk-published", headers=GEST,
+                json={"slugs": [s1, s2, "nope"], "published": True})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["count"] == 2 and set(body["updated"]) == {s1, s2}
+    assert body["missing"] == ["nope"]
+    # état reflété
+    assert c.get(f"/api/albums/{s1}", headers=GEST).json()["published"] is True
+    # idempotent : re-publier ne change rien
+    r2 = c.patch("/api/albums/bulk-published", headers=GEST,
+                 json={"slugs": [s1, s2], "published": True})
+    assert r2.json()["count"] == 0
+    # dépublier en masse
+    r3 = c.patch("/api/albums/bulk-published", headers=GEST,
+                 json={"slugs": [s1, s2], "published": False})
+    assert r3.json()["count"] == 2
+    assert c.get(f"/api/albums/{s1}", headers=GEST).json()["published"] is False
+
+
+def test_bulk_download_auth_and_zip(client):
+    import io as _io, zipfile as _zip
+    c, projects = client
+    # Un album rendu (mp3 réel) + un slug sans média : le second doit être ignoré.
+    s1 = _make_album(c, "Zip", "Real", "2026-02-02", published=True)
+    s2 = _make_album(c, "Zip", "Empty", "2026-02-03", published=True)
+    _seed_master(projects / s1)
+    c.post(f"/api/jobs/{s1}/render", params={"media": "audio"}, headers=GEST)
+    with c.stream("GET", f"/api/jobs/{s1}/events", headers=GEST) as resp:
+        for line in resp.iter_lines():
+            if line.startswith("data:") and json.loads(line[5:].strip())["status"] == "complete":
+                break
+    # anonyme interdit (GET : téléchargement natif du navigateur)
+    assert c.get("/download/bulk", params={"slugs": [s1], "kind": "mp3"}).status_code == 401
+    # user : zip regroupant uniquement l'album qui a du média
+    r = c.get("/download/bulk", params={"slugs": [s1, s2], "kind": "mp3"}, headers=USER)
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    with _zip.ZipFile(_io.BytesIO(r.content)) as z:
+        names = z.namelist()
+    assert len(names) == 1 and names[0].endswith("_mp3.zip")
+    # sélection sans média téléchargeable -> 404
+    assert c.get("/download/bulk", params={"slugs": [s2], "kind": "mp3"},
+                 headers=USER).status_code == 404
+    # kind invalide -> 400
+    assert c.get("/download/bulk", params={"slugs": [s1], "kind": "flac"},
+                 headers=USER).status_code == 400

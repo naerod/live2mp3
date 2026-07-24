@@ -18,7 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+import os
+import tempfile
+
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from starlette.background import BackgroundTask
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -216,6 +220,11 @@ class TracksEditIn(BaseModel):
 
 
 class PublishIn(BaseModel):
+    published: bool
+
+
+class BulkPublishIn(BaseModel):
+    slugs: list[str]
     published: bool
 
 
@@ -649,6 +658,53 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
+@app.get("/download/bulk")
+def download_bulk(kind: str = "mp3",
+                  slugs: list[str] = Query(default=[]),
+                  identity: dict = Depends(require_user)) -> FileResponse:
+    """Un seul ZIP regroupant plusieurs albums, un sous-dossier par album.
+
+    En **GET** (et non POST) pour que le front déclenche un téléchargement natif
+    du navigateur (barre de progression, pas de blob 100 % en mémoire, pas de
+    bufferisation Cloudflare d'une réponse fetch). Le zip est écrit sur disque
+    puis servi avec un Content-Length, puis supprimé après envoi.
+
+    On réutilise le zip par album (déjà mis en cache par `_zip_media`) et on le
+    stocke tel quel (ZIP_STORED : pas de recompression de médias déjà zippés).
+    Les albums invisibles pour le lecteur (dépubliés, non gestionnaire) ou sans
+    média du type demandé sont ignorés silencieusement — on ne révèle rien.
+    """
+    if kind not in ("mp3", "mp4"):
+        raise HTTPException(400, "type invalide (mp3|mp4)")
+    # Dédoublonnage en gardant l'ordre de sélection.
+    slugs = list(dict.fromkeys(slugs))
+    if not slugs:
+        raise HTTPException(400, "aucun album sélectionné")
+
+    entries: list[tuple[Path, str]] = []
+    for slug in slugs:
+        try:
+            m = _ensure_album_visible(slug, identity)
+            zip_path = _zip_media(PROJECTS_DIR / slug, kind)
+        except HTTPException:
+            continue  # invisible ou sans média du type → on saute
+        stem = download_stem(m.data, slug)
+        entries.append((zip_path, f"{stem}/{stem}_{kind}.zip"))
+
+    if not entries:
+        raise HTTPException(404, f"aucun album téléchargeable ({kind})")
+
+    fd, tmp = tempfile.mkstemp(prefix="l2m_bulk_", suffix=".zip")
+    os.close(fd)
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for src, arc in entries:
+            z.write(src, arc)
+
+    name = f"live2mp3_selection_{kind}_{len(entries)}.zip"
+    return FileResponse(tmp, media_type="application/zip", filename=name,
+                        background=BackgroundTask(os.remove, tmp))
+
+
 # --- Gestion d'album (niveau gestionnaire) --------------------------------
 @app.get("/api/albums/{slug}")
 def album_detail(slug: str,
@@ -868,6 +924,37 @@ def set_published(slug: str, payload: PublishIn,
         except Exception:
             notified = 0
     return {"ok": True, "published": payload.published, "notified": notified}
+
+
+@app.patch("/api/albums/bulk-published")
+def set_published_bulk(payload: BulkPublishIn,
+                       identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Publie/dépublie plusieurs albums d'un coup (niveau gestionnaire).
+
+    Idempotent : un album déjà dans l'état visé n'est pas réécrit et ne renotifie
+    pas. Les slugs inconnus sont ignorés et remontés dans `missing`.
+    """
+    slugs = list(dict.fromkeys(payload.slugs))
+    updated, notified, missing = [], 0, []
+    for slug in slugs:
+        path = PROJECTS_DIR / slug / "manifest.yaml"
+        if not path.exists():
+            missing.append(slug)
+            continue
+        m = Manifest.load(path)
+        if m.data.get("published", True) == payload.published:
+            continue  # déjà dans l'état visé
+        m.data["published"] = payload.published
+        m.save(path)
+        updated.append(slug)
+        if payload.published:
+            try:
+                notified += notifications.announce_post(slug)
+            except Exception:
+                pass
+    return {"ok": True, "published": payload.published,
+            "updated": updated, "count": len(updated),
+            "notified": notified, "missing": missing}
 
 
 # --- Outil (niveau gestionnaire) ------------------------------------------
