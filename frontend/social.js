@@ -274,8 +274,8 @@ const L2M = (function () {
       is_user: !!sm.is_user, is_gestionnaire: !!sm.is_gestionnaire, is_admin: !!sm.is_admin,
     };
 
-    // Le bouton est visible par tous : la fenêtre de choix explique le rôle
-    // requis aux visiteurs et aux utilisateurs simples.
+    // Le bouton n'a de sens que connecté (visiteurs non concernés par l'import).
+    document.getElementById("import-btn").style.display = meData.authenticated ? "" : "none";
     document.getElementById("import-btn").onclick = () => {
       // `opts.rights` permet à la vitrine de refléter le mode « Voir en tant que ».
       const r = (opts.rights ? opts.rights() : null) || meData;
