@@ -562,9 +562,8 @@ function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
 function applyViewToHeader(){
   const md=meDisplay();
   const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
-  // Le bouton Importer reste visible pour tous : c'est la fenêtre de choix qui
-  // explique le rôle requis (elle lit les droits simulés via `rights`).
-  show("import-btn",true);
+  // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
+  show("import-btn",md.authenticated);
   show("usermenu",md.authenticated);
   show("login",!md.authenticated);
   show("lang",!md.authenticated);
