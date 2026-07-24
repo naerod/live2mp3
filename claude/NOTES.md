@@ -642,3 +642,20 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
 - Idées d'autres actions en masse proposées à l'utilisateur (non implémentées) :
   suppression groupée, étiquetage/désétiquetage en masse, ré-attribution
   artiste/lieu, export pochettes PDF groupé, régénération covers.
+
+2026-07-23 (suite): polish actions groupées + INCIDENT OOM — preprod v1.10.11.
+- Bouton « Terminer » → croix seule (icône close, title/aria-label au survol).
+- Retrait du bouton « Télécharger MP4 » (vidéo = un album à la fois) ; « Télécharger
+  MP3 » renommé « Télécharger », boutons sur une seule ligne.
+- Fix centrage vertical des boutons de la barre : `button,.primary` (app.css) porte
+  un `margin-top:16px` global (formulaires) → neutralisé par `.bulkbar button{margin:0}`.
+- **INCIDENT** : le téléchargement groupé construisait le ZIP entièrement en mémoire
+  (io.BytesIO + fetch/blob). « Tout télécharger » sur beaucoup d'albums → uvicorn à
+  8,5 Go → CT110 (cap 10 Go) en thrashing (load 237), sites prod KO ~10 min, aggravé
+  par 2 builds deploy concurrents. Résolu : kill du process depuis l'hôte Proxmox +
+  refonte `/download/bulk` en **GET + fichier temporaire disque** (FileResponse,
+  Content-Length, BackgroundTask os.remove) ; le front déclenche un **download natif
+  du navigateur** (lien GET, barre de progression, rien en mémoire).
+  Voir workspace/debugging/2026-07-23_ct110-oom-download-bulk-memoire.md
+- Tests adaptés (GET au lieu de POST). 195 passed. Endpoint vérifié : GET 200,
+  application/zip, Content-Length OK, magic PK.
