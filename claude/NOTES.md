@@ -1,5 +1,72 @@
 # Notes
 
+2026-07-25 : **Réouverture de l'éditeur audio sur un album déjà publié**
+(preprod v1.15.4). Mission : les erreurs de découpage remontées par les
+utilisateurs Finamp ne pouvaient être corrigées qu'en repassant par le flow
+de création complet — impossible de rouvrir l'éditeur Peaks.js sur un album
+déjà publié depuis la fiche de gestion.
+- **Limite de portée découverte à l'investigation** : seuls les albums créés
+  via l'**outil lien** (depuis v1.6.0) conservent `source/master.wav` — les
+  imports manuels (majorité du catalogue historique : Coldplay, Indochine,
+  Linkin Park, TØP, U2 2006…) n'ont aucun dossier `source/`. L'éditeur ne peut
+  donc rouvrir que les concerts importés via l'outil lien avec master encore
+  présent sur disque. Nouveau champ `has_editor_source` sur
+  `GET /api/albums/{slug}` (vérifie `source/preview.mp3` ou `source/master.wav`).
+- **Bouton « Ouvrir l'éditeur audio »** en haut à gauche de la section Pistes
+  (`album.html`), visible gestionnaire, désactivé + info-bulle explicative si
+  `has_editor_source` est faux. Ouvre `/app#{slug}` : réutilise **à l'identique**
+  la logique de reprise de session déjà présente dans `app.js` (resume IIFE,
+  `pipeline_state.download/ai_markers === "done"` → `openEditor()` direct) —
+  aucun nouvel endpoint créé, `/api/jobs/{slug}/setlist|markers|render` chargent
+  et re-sauvegardent le manifest complet donc ne touchent jamais `published`.
+- **Bug critique corrigé dans le pipeline de rendu** (jamais exercé jusqu'ici,
+  le flow de création ne rend chaque piste qu'une fois dans un `build/` vide) :
+  `render.run()` est idempotent par nom de fichier (`skip si le fichier existe
+  déjà`). Sur un album déjà rendu, éditer un timecode sans changer le titre ne
+  produisait donc **aucun nouveau rendu** (silencieux), et une piste renommée/
+  supprimée laissait un fichier orphelin (visible dans le ZIP et dans Jellyfin).
+  Fix : `render.run()` purge désormais les fichiers `build/audio`/`build/video`
+  qui ne correspondent plus à aucune piste courante ; `start_render` force un
+  re-rendu complet (`force=True`) quand l'album est déjà publié au moment de
+  l'appel (= forcément une ré-édition, jamais le flow de création où
+  `published` est encore `False` à ce stade).
+- **Rafraîchissement Jellyfin** (`backend/jellyfin.py`, nouveau) : le montage
+  Jellyfin de CT110 (`sync-media.sh`, cron 10 min) ne détecte que l'apparition/
+  disparition d'un symlink d'album (publication/dépublication), jamais un
+  changement de contenu à l'intérieur d'un dossier déjà monté. Après un
+  re-rendu sur un album publié, appel best-effort à
+  `POST http://jellyfin:8096/Library/Refresh` (réseau Docker `apps_web`
+  partagé avec live2mp3-app/-preprod-app). Clé `JELLYFIN_API_KEY` = même clé
+  que `sync-media.sh` (`/opt/apps/jellyfin/apikey` sur CT110), injectée dans
+  le `.env` preprod (pas encore dans le `.env` prod — **à faire avant toute
+  promotion**, sinon dégradation silencieuse : pas de refresh Jellyfin après
+  re-rendu en prod).
+- **Wording adapté côté éditeur pour une ré-édition** (`reedit` en JS, déduit
+  de `manifest.published` à l'ouverture) : bouton « Enregistrer et republier »
+  au lieu de « Valider et créer l'album », écran final sans la mention
+  « créé en brouillon » (fausse pour un album déjà public). Implémenté via
+  l'attribut `data-i18n` (pas juste `textContent`) pour survivre à un
+  changement de langue en cours de session.
+- **Vérifié bout-en-bout sur preprod réel** (pas seulement en tests unitaires) :
+  script Python exécuté dans le conteneur `live2mp3-preprod-app` (fixture
+  ffmpeg synthétique, comme les tests) — création, publication, reprise via
+  manifest (état identique à un vrai album créé), édition (fusion 2 pistes →
+  1, nom de fichier inchangé), re-rendu confirmant purge de l'orpheline +
+  réencodage forcé (mtime), `published` intact, `Library/Refresh` Jellyfin
+  réellement déclenché (2 scans Jellyfin observés dans les logs du conteneur
+  aux horodatages du test). Contrôle visuel Chromium headless (tunnel SSH +
+  proxy Python injectant les en-têtes gestionnaire, cf.
+  [[reference_live2mp3_e2e_roles]]) : bouton bien positionné à gauche de
+  « Pistes », désactivé/activé selon `has_editor_source`, éditeur Peaks.js
+  rouvert avec la piste existante, bouton « Enregistrer et republier » affiché
+  une fois l'album publié. Projet de test entièrement supprimé après coup
+  (fichiers + dépublication + `DELETE /api/jobs/{slug}`).
+- 10 tests ajoutés (purge/force render, endpoint API bout-en-bout avec mock
+  Jellyfin, `has_editor_source`). 199 tests verts au total.
+- **Reste à faire avant promotion prod** : ajouter `JELLYFIN_API_KEY` au `.env`
+  prod sur CT110 (même clé, cf. ci-dessus) ; valider une fois de plus sur un
+  vrai album utilisateur (pas seulement la fixture synthétique) si possible.
+
 2026-07-21 (suite 2) : **Rôle admin applicatif `live2mp3-admin`** (preprod v1.8.33).
 - Le rôle « Administrateur » du site n'est plus le superuser global Authentik.
   Nouveau groupe **`live2mp3-admin`** (pk `18fa33c5-…`, non-superuser) =
