@@ -701,7 +701,7 @@ async function startRender(){
   currentPhase="render";
   const r=await fetch(`/api/jobs/${slug}/render`,{method:"POST"});
   if(!r.ok){alert(T("err_generic"));return;}
-  runProgress("render_title",RENDER_STAGES,finish);
+  runProgress(reedit?"render_title_reedit":"render_title",RENDER_STAGES,finish);
 }
 
 async function finish(){

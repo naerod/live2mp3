@@ -26,6 +26,7 @@ const I18N = {
     err_required:"Artiste et titre de l'album sont requis.",
     // Étapes 3/5 — progression
     prep_title:"Préparation du concert",render_title:"Création de l'album",
+    render_title_reedit:"Mise à jour de l'album",
     stage_download:"Téléchargement de la source",
     stage_preview:"Préparation de l'écoute",
     stage_waveform:"Forme d'onde",
@@ -96,6 +97,7 @@ const I18N = {
     del:"Delete",play:"Play",
     err_required:"Artist and album title are required.",
     prep_title:"Preparing the concert",render_title:"Creating the album",
+    render_title_reedit:"Updating the album",
     stage_download:"Downloading the source",
     stage_preview:"Preparing playback",
     stage_waveform:"Waveform",
