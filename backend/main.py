@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import re
-from . import catalogue, entities, jobs, linktool, llm
+from . import catalogue, entities, jellyfin, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
     _rename_audio_files,
@@ -716,6 +716,7 @@ def album_detail(slug: str,
     album = m.data.get("album", {})
     src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    src_dir = PROJECTS_DIR / slug / "source"
     return {
         "slug": slug,
         "album": album,
@@ -731,6 +732,10 @@ def album_detail(slug: str,
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
+        # L'éditeur de coupes a besoin du master : seuls les albums importés
+        # via l'outil lien (pas les imports manuels) le conservent.
+        "has_editor_source": (src_dir / "preview.mp3").exists()
+                              or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
         "per_track_covers": bool(album.get("per_track_covers", False)),
         "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
@@ -1388,11 +1393,18 @@ def update_markers(slug: str, payload: dict,
     return {"ok": True, "tracks": len(m.tracks)}
 
 
-def _run_render_bg(slug: str, media: str, gap: float, video: bool) -> None:
+def _run_render_bg(slug: str, media: str, gap: float, video: bool,
+                   republish: bool = False) -> None:
     project_dir = PROJECTS_DIR / slug
     try:
         jobs.run_render_pipeline(project_dir, media=media, gap_seconds=gap,
-                                 video=video, progress=_make_cb(slug))
+                                 video=video, force=republish,
+                                 progress=_make_cb(slug))
+        if republish:
+            # Best-effort : un album déjà publié qu'on vient de re-rendre doit
+            # réapparaître à jour dans Jellyfin/Finamp (le symlink existe déjà,
+            # sync-media.sh ne détecte pas un changement de contenu interne).
+            jellyfin.refresh_library()
         _publish(slug, {"stage": "all", "status": "complete", "info": {},
                         "ts": time.time()})
     except Exception as e:  # pragma: no cover
@@ -1405,15 +1417,23 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0,
                  video: bool | None = None,
                  identity: dict = Depends(require_gestionnaire)) -> dict:
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
+    path = project_dir / "manifest.yaml"
+    if not path.exists():
         raise HTTPException(404, "projet introuvable")
+    m = Manifest.load(path)
     if video is None:
         # Clips MP4 seulement si la source vidéo a été téléchargée.
-        m = Manifest.load(project_dir / "manifest.yaml")
         video = m.data.get("source", {}).get("media", "video") == "video"
+    # Un album déjà publié qu'on ré-édite (cf. bouton « Ouvrir l'éditeur audio »
+    # sur la fiche de gestion) doit forcer le re-rendu : le pipeline est
+    # idempotent par nom de fichier, donc une piste dont le nom ne change pas
+    # garderait sinon son ancien découpage. En création, published est encore
+    # False à ce stade → comportement idempotent existant inchangé.
+    republish = bool(m.data.get("published"))
     _progress_last[slug] = []
     _progress_bus[slug] = queue.Queue()
-    threading.Thread(target=_run_render_bg, args=(slug, media, gap, video),
+    threading.Thread(target=_run_render_bg,
+                     args=(slug, media, gap, video, republish),
                      daemon=True).start()
     return {"ok": True, "slug": slug}
 

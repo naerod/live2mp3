@@ -45,6 +45,27 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path) -> None:
     ])
 
 
+def _expected_filenames(m: Manifest, ext: str) -> set[str]:
+    names = set()
+    for track in m.tracks:
+        if track.get("start") is None or track.get("end") is None:
+            continue
+        names.add(m.track_filename(track, ext))
+    return names
+
+
+def _purge_orphans(dir_: Path, expected: set[str]) -> None:
+    """Retire les fichiers d'un rendu précédent qui ne correspondent plus à
+    aucune piste courante (piste renommée, fusionnée ou supprimée depuis un
+    précédent rendu). Sans ça, un re-rendu sur un album déjà publié laisse des
+    pistes fantômes dans le ZIP et dans la bibliothèque Jellyfin."""
+    if not dir_.exists():
+        return
+    for f in dir_.iterdir():
+        if f.is_file() and f.name not in expected:
+            f.unlink()
+
+
 def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dict:
     project_dir = Path(project_dir)
     m = Manifest.load(project_dir / "manifest.yaml")
@@ -52,6 +73,10 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dic
     master_mkv = project_dir / m.data["source"]["master_mkv"]
     audio_dir = project_dir / "build" / "audio"
     video_dir = project_dir / "build" / "video"
+
+    _purge_orphans(audio_dir, _expected_filenames(m, "mp3"))
+    if video:
+        _purge_orphans(video_dir, _expected_filenames(m, "mp4"))
 
     rendered = {"audio": [], "video": []}
     for track in m.tracks:

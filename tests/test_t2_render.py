@@ -49,3 +49,39 @@ def test_render_idempotent(synth_audio_only):
     mtime = mp3.stat().st_mtime
     render.run(synth_audio_only, video=False)  # sans --force -> skip
     assert mp3.stat().st_mtime == mtime
+
+
+def test_render_force_reencodes_existing_file(synth_audio_only):
+    """Ré-éditer un album déjà rendu (même titre, timecode différent) doit
+    réellement changer l'audio produit — sans --force le nom de fichier ne
+    change pas et le pipeline idempotent ignorerait le nouveau découpage."""
+    render.run(synth_audio_only, video=False)
+    audio_dir = synth_audio_only / "build" / "audio"
+    mp3 = next(audio_dir.glob("01.*"))
+    mtime = mp3.stat().st_mtime
+
+    from backend.manifest import Manifest
+    m = Manifest.load(synth_audio_only / "manifest.yaml")
+    m.tracks[0]["end"] = m.tracks[0]["start"] + 1.0  # découpe raccourcie
+    m.save()
+
+    render.run(synth_audio_only, video=False, force=True)
+    assert mp3.stat().st_mtime > mtime
+    assert _duration(mp3) == __import__("pytest").approx(1.0, abs=0.15)
+
+
+def test_render_purges_orphan_files(synth_audio_only):
+    """Une piste renommée ou supprimée depuis le dernier rendu ne doit pas
+    laisser de fichier fantôme dans build/audio (ZIP + Jellyfin en dépendent)."""
+    render.run(synth_audio_only, video=False)
+    audio_dir = synth_audio_only / "build" / "audio"
+    assert len(list(audio_dir.glob("*.mp3"))) == 4
+
+    from backend.manifest import Manifest
+    m = Manifest.load(synth_audio_only / "manifest.yaml")
+    m.data["tracks"] = m.data["tracks"][:2]  # 2 pistes supprimées
+    m.save()
+
+    render.run(synth_audio_only, video=False, force=True)
+    remaining = list(audio_dir.glob("*.mp3"))
+    assert len(remaining) == 2

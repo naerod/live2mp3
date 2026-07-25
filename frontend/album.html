@@ -108,6 +108,10 @@
   .del-btn{all:unset;cursor:pointer;color:var(--muted);display:flex;padding:3px;border-radius:5px}
   .del-btn:hover{color:#e57373;background:rgba(229,115,115,.12)}
   .del-btn .material-symbols-outlined{font-size:15px}
+  .tracks-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .tracks-head h2{margin:0}
+  #btn-open-editor[disabled]{opacity:.5;cursor:not-allowed}
+  #btn-open-editor[disabled]:hover{background:transparent;border-color:var(--border)}
   .add-track-row{display:flex;gap:8px}
   .add-track-row input{flex:1;margin:0;padding:6px 10px;font-size:13px}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
@@ -280,7 +284,10 @@
 
       <!-- Pistes -->
       <div class="sec">
-        <h2 id="t-tracks-h">Pistes</h2>
+        <div class="tracks-head">
+          <h2 id="t-tracks-h">Pistes</h2>
+          <button class="icon-btn" id="btn-open-editor"><span class="material-symbols-outlined">content_cut</span><span id="t-btn-open-editor">Ouvrir l'éditeur audio</span></button>
+        </div>
         <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-tracks-legend"></span></p>
         <ul class="tracks-list" id="tracks-list"></ul>
         <div class="add-track-row">
@@ -338,7 +345,10 @@ const TT={
       del_t:"Supprimer",ptc_label:"Dissocier les pistes",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
       status_pub:"Visible dans la vitrine",
-      status_draft:"Dépublié — visible uniquement des gestionnaires"},
+      status_draft:"Dépublié — visible uniquement des gestionnaires",
+      open_editor:"Ouvrir l'éditeur audio",
+      open_editor_hint:"Rouvrir l'éditeur de coupes (Peaks.js) sur le master conservé de cet album",
+      open_editor_no_source:"Indisponible : fichier source non conservé pour cet album (import manuel)"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
@@ -359,7 +369,10 @@ const TT={
       new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Split tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
       status_pub:"Visible in the catalogue",
-      status_draft:"Unpublished — visible to managers only"}
+      status_draft:"Unpublished — visible to managers only",
+      open_editor:"Open the audio editor",
+      open_editor_hint:"Reopen the cut editor (Peaks.js) on this album's retained master",
+      open_editor_no_source:"Unavailable: no source file kept for this album (manual import)"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
@@ -407,8 +420,26 @@ function applyLang(){
   if(chint) chint.textContent=DATA&&DATA.has_cover?t.cover_replace:t.cover_hint;
   document.getElementById("new-track").placeholder=t.new_track;
   document.getElementById("newlabel").placeholder=t.add_label;
+  document.getElementById("t-btn-open-editor").textContent=t.open_editor;
+  refreshOpenEditorBtn();
   if(DATA){renderDL();renderTraycard();}
 }
+
+// Bouton « Ouvrir l'éditeur audio » : réutilise tel quel l'éditeur Peaks.js
+// de l'outil de création (/app#slug reprend directement à l'étape éditeur
+// puisque download+ai_markers sont déjà "done"). Désactivé si le master n'a
+// pas été conservé (albums importés manuellement, sans source/).
+function refreshOpenEditorBtn(){
+  const btn=document.getElementById("btn-open-editor");
+  if(!btn)return;
+  const t=TT[L()];
+  const hasSrc=!DATA||DATA.has_editor_source;
+  btn.disabled=!hasSrc;
+  btn.title=hasSrc?t.open_editor_hint:t.open_editor_no_source;
+}
+document.getElementById("btn-open-editor").onclick=()=>{
+  location.href=`/app#${encodeURIComponent(SLUG)}`;
+};
 
 
 const SLUG=decodeURIComponent(location.pathname.split("/app/album/")[1]||"");
