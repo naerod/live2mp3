@@ -32,6 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import re
+from uuid import uuid4
 from . import catalogue, entities, jellyfin, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
@@ -54,8 +55,13 @@ from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
 from .pipeline import boundaries, download, preanalyze
 from .covers import (
+    COVER_EXTS,
+    COVER_MAX_BYTES,
     MEDIA_TYPES,
+    _on_covers_changed,
+    _read_upload as _covers_read_upload,
     cover_file,
+    covers_dir,
     rank_covers,
     router as covers_router,
     top_cover,
@@ -63,7 +69,7 @@ from .covers import (
     zip_basename,
 )
 from .printable import cover_pdf, traycard_pdf
-from .social import router as social_router
+from .social import router as social_router, _ensure_profile, _album_exists
 from .follows import router as follows_router
 from . import notifications
 from .notifications import router as notifications_router
@@ -854,27 +860,59 @@ def update_tracks(slug: str, payload: TracksEditIn,
 @app.post("/api/albums/{slug}/cover")
 async def upload_cover(slug: str, file: UploadFile = File(...),
                        identity: dict = Depends(require_gestionnaire)) -> dict:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
+    """Remplace la pochette « officielle » d'un album (outil de gestion).
+
+    Historiquement, cette route écrivait un simple `artwork/cover.jpg` et
+    mettait à jour `album.cover` dans le manifest — mais depuis l'ajout du
+    système de propositions (table `covers`, servies par /cover-img/{id}), la
+    fiche publique n'affichait plus jamais ce fichier, ce qui donnait au
+    gestionnaire l'impression d'un enregistrement invisible.
+
+    On aligne donc l'upload gestionnaire sur le pipeline « community » :
+    l'image est stockée sous `artwork/covers/{key}_cover{ext}`, une ligne est
+    insérée dans `covers` au nom du gestionnaire avec `pinned=1` (au plus une
+    épinglée par album — on dépingle l'ancienne d'abord), puis
+    `_on_covers_changed()` repointe le manifest vers cette nouvelle gagnante.
+    Résultat : la vitrine (`/cover/{slug}`), la fiche publique
+    (`/cover-img/{id}`) et les MP3 (`_write_album_cover`) reçoivent tous la
+    même image, sans qu'un client ait besoin de vider son cache — un nouvel
+    upload = nouvelle clé + nouvel id = nouvelles URLs.
+    """
+    if not _album_exists(slug):
         raise HTTPException(404, "album introuvable")
-    ct = file.content_type or ""
-    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-    ext = ext_map.get(ct)
-    if not ext:
-        ext = Path(file.filename or "cover.jpg").suffix or ".jpg"
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    username = identity.get("username") or ""
+    if not username:
+        raise HTTPException(400, "identité manquante")
+    cdata, cext = await _covers_read_upload(file, COVER_EXTS, COVER_MAX_BYTES, "pochette")
+    key = uuid4().hex
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        # Une seule cover épinglée à la fois (index partiel dans le schéma).
+        conn.execute("UPDATE covers SET pinned=0 WHERE slug=? AND pinned=1", (slug,))
+        cur = conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, created_at, updated_at, pinned) "
+            "VALUES(?,?,?,?,?,?,?,?,1)",
+            (slug, username, key, cext, "", "", now, now),
+        )
+        cover_id = cur.lastrowid
+        covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        cover_file(slug, key, cext).write_bytes(cdata)
+    # Repoint le manifest vers la nouvelle gagnante, puis nettoie le vieux
+    # artwork/cover.* legacy (plus lu par personne une fois le manifest bougé).
+    _on_covers_changed(slug)
     art_dir = PROJECTS_DIR / slug / "artwork"
-    art_dir.mkdir(exist_ok=True)
-    # Retire une éventuelle ancienne pochette d'une autre extension
-    for old in art_dir.glob("cover.*"):
-        if old.suffix.lower() != ext:
-            old.unlink(missing_ok=True)
-    cover_path = art_dir / f"cover{ext}"
-    cover_path.write_bytes(await file.read())
+    if art_dir.is_dir():
+        for old in art_dir.glob("cover.*"):
+            if old.is_file():
+                old.unlink(missing_ok=True)
     m = Manifest.load(path)
-    m.data.setdefault("album", {})["cover"] = f"artwork/cover{ext}"
-    m.save()
     embedded = _write_album_cover(slug, m)
-    return {"ok": True, "cover": f"artwork/cover{ext}", "mp3_embedded": embedded}
+    return {"ok": True, "cover_id": cover_id,
+            "cover": m.data.get("album", {}).get("cover"),
+            "mp3_embedded": embedded}
 
 
 @app.post("/api/albums/{slug}/traycard")
