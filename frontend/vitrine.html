@@ -608,7 +608,11 @@ const GENERIC_COVER=`<div class="cover-generic">
 function coverHtml(a,size){
   if(a.has_cover){
     const sz=size?`width="${size}" height="${size}"`:"";
-    return `<img class="cover-img" src="/cover/${a.slug}" alt="" loading="lazy" ${sz}>`;
+    // ?v=<mtime> : dès qu'un gestionnaire remplace la pochette, l'URL change et
+    // le navigateur refetch — sans ce param, la vitrine sert l'ancienne image
+    // depuis son cache disque (le nom de fichier ne change pas).
+    const v=a.cover_v||0;
+    return `<img class="cover-img" src="/cover/${a.slug}?v=${v}" alt="" loading="lazy" ${sz}>`;
   }
   return GENERIC_COVER;
 }

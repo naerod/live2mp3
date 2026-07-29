@@ -434,7 +434,7 @@ async function loadContent(){
     POSTERS=ps;
   }
 
-  await loadCovers(d.has_cover);
+  await loadCovers(d.has_cover, d.cover_v||0);
   renderAlbum(d);
 
   if(location.hash==='#comments'){
@@ -647,13 +647,16 @@ function focusSlide(id,kind){
   if(IDX<0)IDX=0;
 }
 
-async function loadCovers(hasCoverFallback){
+async function loadCovers(hasCoverFallback,coverV){
   try{
     const d=await fetch(`/api/social/albums/${slug}/covers`).then(r=>r.json());
     COVERS=d.covers||[];
   }catch(e){COVERS=[];}
   if(COVERS.length===0&&hasCoverFallback){
-    COVERS=[{id:0,cover_url:`/cover/${slug}`,has_traycard:false,
+    // v=cover_v : refetch immédiat après remplacement de la pochette par un
+    // gestionnaire (sinon on garde l'ancienne image en cache disque navigateur).
+    const v=coverV||0;
+    COVERS=[{id:0,cover_url:`/cover/${slug}?v=${v}`,has_traycard:false,
              username:null,display_name:null,avatar:null,pinned:false,liked:false,likes:0}];
   }
   buildSlides();

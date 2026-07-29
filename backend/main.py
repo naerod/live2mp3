@@ -410,6 +410,7 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "entities": entities.album_entities(m.data.get("album", {})),
         "labels": cat.get("labels", []),
         "has_cover": cat.get("has_cover", False),
+        "cover_v": cat.get("cover_v", 0),
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
@@ -455,7 +456,11 @@ def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    return FileResponse(cover)
+    # Le front ajoute ?v=<mtime> pour invalider dès qu'un gestionnaire remplace
+    # la cover. On force la revalidation pour rattraper les vieux liens sans v=.
+    return FileResponse(cover, headers={
+        "Cache-Control": "no-cache, must-revalidate",
+    })
 
 
 # --- Téléchargements (niveau user) ----------------------------------------

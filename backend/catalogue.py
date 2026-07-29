@@ -92,6 +92,16 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         has_cover = (pdir.name in cover_slugs) or bool(
             cover_rel and (pdir / cover_rel).exists()
         )
+        # Version de la pochette servie par /cover/{slug} : mtime en secondes,
+        # utilisé comme query param côté front pour invalider le cache navigateur
+        # dès qu'un gestionnaire remplace la cover (sinon la vitrine affiche
+        # l'ancienne image tant que le fichier a le même nom).
+        cover_v = 0
+        if cover_rel:
+            try:
+                cover_v = int((pdir / cover_rel).stat().st_mtime)
+            except OSError:
+                cover_v = 0
         has_traycard = pdir.name in tray_slugs
         meta = m.data.get("meta", {})
         albums.append({
@@ -111,6 +121,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "has_mp3": has_mp3,
             "has_mp4": has_mp4,
             "has_cover": has_cover,
+            "cover_v": cover_v,
             "has_traycard": has_traycard,
             "labels": _labels(album, has_mp3, has_mp4),
             "imported_by": meta.get("imported_by", ""),
