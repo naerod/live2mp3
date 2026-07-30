@@ -1529,7 +1529,7 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0,
         renderqueue.enqueue(slug, media=media, gap=gap, video=video,
                             republish=republish,
                             requested_by=identity.get("username", ""))
-    except ValueError as e:
+    except renderqueue.DuplicateRender as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "slug": slug}
 

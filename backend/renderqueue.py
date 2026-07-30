@@ -32,6 +32,15 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 JOB_TIMEOUT = 6 * 3600
 META_TTL = 24 * 3600
 
+class DuplicateRender(Exception):
+    """Un rendu occupe déjà ce slug.
+
+    Exception dédiée plutôt qu'un ValueError générique : RQ lève lui aussi des
+    ValueError (identifiant invalide, file inconnue), et les confondre avait
+    déguisé une erreur de configuration en simple refus de doublon.
+    """
+
+
 _conn: redis.Redis | None = None
 
 
@@ -46,9 +55,20 @@ def queue() -> Queue:
     return Queue(QUEUE_NAME, connection=conn(), default_timeout=JOB_TIMEOUT)
 
 
+JOB_PREFIX = "render-"
+
+
 def job_id(slug: str) -> str:
-    """Un job par slug : c'est ce qui rend le doublon impossible."""
-    return f"render:{slug}"
+    """Un job par slug : c'est ce qui rend le doublon impossible.
+
+    Pas de deux-points dans l'identifiant : RQ n'accepte que lettres, chiffres,
+    tirets et soulignés (les slugs respectent déjà cette contrainte).
+    """
+    return f"{JOB_PREFIX}{slug}"
+
+
+def _slug_of(jid: str) -> str:
+    return jid[len(JOB_PREFIX):]
 
 
 # --- Drapeaux d'annulation / pause ----------------------------------------
@@ -123,11 +143,11 @@ def active_status(slug: str) -> str | None:
 
 def enqueue(slug: str, *, media: str, gap: float, video: bool,
             republish: bool, requested_by: str = "") -> Job:
-    """Met un rendu en file. Lève ValueError si le slug en a déjà un."""
+    """Met un rendu en file. Lève DuplicateRender si le slug en a déjà un."""
     if active_status(slug):
-        raise ValueError("un rendu est déjà en cours ou en attente")
+        raise DuplicateRender("un rendu est déjà en cours ou en attente")
     # Un job terminé garde son id : sans purge, RQ refuserait de réutiliser
-    # `render:<slug>` pour le rendu suivant du même album.
+    # `render-<slug>` pour le rendu suivant du même album.
     old = fetch(slug)
     if old is not None:
         try:
@@ -173,16 +193,16 @@ def cancel(slug: str) -> str:
 def _started_slugs() -> list[str]:
     try:
         reg = StartedJobRegistry(QUEUE_NAME, connection=conn())
-        return [i.split(":", 1)[1] for i in reg.get_job_ids()
-                if i.startswith("render:")]
+        return [_slug_of(i) for i in reg.get_job_ids()
+                if i.startswith(JOB_PREFIX)]
     except Exception:
         return []
 
 
 def _queued_slugs() -> list[str]:
     try:
-        return [i.split(":", 1)[1] for i in queue().job_ids
-                if i.startswith("render:")]
+        return [_slug_of(i) for i in queue().job_ids
+                if i.startswith(JOB_PREFIX)]
     except Exception:
         return []
 
@@ -211,7 +231,7 @@ def reorder(slugs: list[str]) -> list[str]:
     c'est aussi la sémantique attendue côté interface.
     """
     q = queue()
-    current = [i for i in q.job_ids if i.startswith("render:")]
+    current = [i for i in q.job_ids if i.startswith(JOB_PREFIX)]
     wanted = [job_id(s) for s in slugs if job_id(s) in current]
     # Tout job en attente absent de la demande garde sa place relative, à la fin.
     wanted += [i for i in current if i not in wanted]
@@ -222,4 +242,4 @@ def reorder(slugs: list[str]) -> list[str]:
     for jid in wanted:
         pipe.rpush(key, jid)
     pipe.execute()
-    return [i.split(":", 1)[1] for i in wanted]
+    return [_slug_of(i) for i in wanted]
