@@ -1017,7 +1017,7 @@ async function load(){
   if(wanted){location.replace(`/album/${encodeURIComponent(wanted)}`);return;}
   loadVersion();
   // Restaurer le tri depuis localStorage
-  const savedSort=localStorage.getItem("l2m-sort")||"date_concert";
+  const savedSort=localStorage.getItem("l2m-sort")||"date_import";
   currentSort=savedSort;
   document.getElementById("sort-select").value=currentSort;
   ME=await L2M.initHeader({
