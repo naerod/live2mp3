@@ -54,7 +54,7 @@ from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
-from .pipeline import boundaries, download, preanalyze
+from .pipeline import boundaries, bundle, download, preanalyze
 from .covers import (
     COVER_EXTS,
     COVER_MAX_BYTES,
@@ -328,7 +328,7 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
                                 f"{session['uuid']}/",
                                 headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
                             )
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/outpost.goauthentik.io/sign_out?rd=/", status_code=302)
 
 
 def _norm_title(s: str) -> str:
@@ -1578,14 +1578,31 @@ def events(slug: str,
 @app.get("/api/jobs/{slug}/bundle")
 def download_bundle(slug: str,
                     identity: dict = Depends(require_gestionnaire)) -> FileResponse:
-    path = PROJECTS_DIR / slug / "build" / "bundle.zip"
-    if not path.exists():
-        raise HTTPException(404, "bundle non généré")
-    manifest_path = PROJECTS_DIR / slug / "manifest.yaml"
-    stem = download_stem(Manifest.load(manifest_path).data, slug) \
-        if manifest_path.exists() else slug
-    return FileResponse(path, filename=f"{stem}.zip",
-                        media_type="application/zip")
+    """ZIP assemblé à la demande, puis supprimé une fois servi.
+
+    Il n'est plus produit par le pipeline ni conservé : du MP3/MP4 étant déjà
+    compressé, le ZIP ne gagnait rien et doublait l'occupation disque de chaque
+    album (13 Go de doublons relevés le 2026-07-30). Construit sur disque et
+    non en mémoire — un bundle dépasse couramment 4 Go.
+    """
+    project_dir = PROJECTS_DIR / slug
+    manifest_path = project_dir / "manifest.yaml"
+    if not manifest_path.exists():
+        raise HTTPException(404, "projet introuvable")
+    if not any((project_dir / "build" / "audio").glob("*.mp3")):
+        raise HTTPException(404, "aucun média à télécharger")
+
+    stem = download_stem(Manifest.load(manifest_path).data, slug)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f"bundle-{slug}-"))
+    try:
+        out = bundle.run(project_dir, out_zip=tmp_dir / "bundle.zip")["bundle"]
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+    return FileResponse(
+        out, filename=f"{stem}.zip", media_type="application/zip",
+        background=BackgroundTask(shutil.rmtree, tmp_dir, ignore_errors=True),
+    )
 
 
 @app.get("/api/jobs/{slug}/waveform.dat")

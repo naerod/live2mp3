@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import Callable
 
 from .manifest import Manifest
-from .pipeline import artwork, bundle, disc, preanalyze, render, tags
+from .pipeline import artwork, disc, preanalyze, render, tags
 
 ProgressCb = Callable[[str, str, dict], None]
 
 # Ordre d'exécution (download/preanalyze pilotés à part car réseau/GPU)
-RENDER_STAGES = ["render", "tags", "artwork", "disc", "bundle"]
+RENDER_STAGES = ["render", "tags", "artwork", "disc"]
 
 
 def _noop(stage: str, status: str, info: dict) -> None:  # pragma: no cover
@@ -25,16 +25,25 @@ def _noop(stage: str, status: str, info: dict) -> None:  # pragma: no cover
 def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
                         video: bool = True, gap_seconds: float = 2.0,
                         force: bool = False,
-                        progress: ProgressCb = _noop) -> dict:
-    """Exécute render -> tags -> artwork -> disc -> bundle.
+                        progress: ProgressCb = _noop,
+                        cancel: Callable[[], bool] | None = None) -> dict:
+    """Exécute render -> tags -> artwork -> disc.
 
     Suppose les timecodes déjà présents (validés via l'UI Peaks.js).
     `force` : ré-encode même les pistes dont le fichier existe déjà — requis
     pour un re-rendu sur un album déjà publié (sinon une piste dont le nom ne
     change pas garderait son ancien découpage, cf. render.run/idempotence).
+    `cancel` : sondé pendant le rendu et entre les stages ; lève
+    render.Cancelled dès qu'il passe à True.
     """
     project_dir = Path(project_dir)
     results: dict = {}
+
+    def _check() -> None:
+        # Les stages après render durent quelques secondes : inutile de les
+        # interrompre en plein milieu, il suffit de ne pas enchaîner.
+        if cancel and cancel():
+            raise render.Cancelled()
 
     progress("render", "running", {})
 
@@ -45,8 +54,9 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
         })
 
     results["render"] = render.run(project_dir, video=video, force=force,
-                                   on_track=_on_track)
+                                   on_track=_on_track, cancel=cancel)
     progress("render", "done", {"tracks": len(results["render"]["audio"])})
+    _check()
 
     progress("tags", "running", {})
     results["tags"] = tags.run(project_dir)
@@ -60,9 +70,10 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
     results["disc"] = disc.run(project_dir, media=media, gap_seconds=gap_seconds)
     progress("disc", "done", {})
 
-    progress("bundle", "running", {})
-    results["bundle"] = bundle.run(project_dir)
-    progress("bundle", "done", {"count": results["bundle"]["count"]})
+    # Le ZIP n'est plus construit ici : il ne compresse rien (MP3/MP4 déjà
+    # compressés) et dupliquait donc intégralement build/ sur le disque —
+    # 13 Go de doublons relevés sur la bibliothèque le 2026-07-30. Il est
+    # désormais assemblé à la volée au téléchargement (cf. main.py).
 
     return results
 

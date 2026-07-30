@@ -225,7 +225,7 @@ $("btn-create").onclick=async()=>{
 // Étapes 3 & 5 — Progression SSE
 // ============================================================
 const PREP_STAGES=["download","preview","waveform","ai_markers"];
-const RENDER_STAGES=["render","tags","artwork","disc","bundle"];
+const RENDER_STAGES=["render","tags","artwork","disc"];
 
 function runProgress(titleKey,stages,onComplete){
   show("step-progress");
