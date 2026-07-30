@@ -21,6 +21,11 @@
       stage_ai_markers: "Coupes détectées", stage_render: "Rendu",
       stage_tags: "Tags", stage_artwork: "Pochette", stage_disc: "Disque",
       stage_none: "À peine commencé",
+      q_title: "Rendus en cours", q_sub: "File d'attente des albums en cours de création. Glissez une ligne pour changer l'ordre.",
+      q_running: "En cours", q_paused: "En pause", q_queued: "En attente",
+      q_pause: "Mettre en pause", q_resume: "Reprendre", q_cancel: "Arrêter ce rendu",
+      q_confirm: (t) => `Arrêter le rendu de « ${t} » ?\n\nLes pistes déjà encodées seront supprimées.`,
+      q_err: "Action impossible",
     },
     en: {
       back: "Back", title: "Drafts",
@@ -100,6 +105,103 @@
       </div>`;
   }
 
+  // --- File des rendus en cours ---------------------------------------
+  // Section volontairement absente du DOM quand la file est vide : c'est un
+  // état transitoire, pas une rubrique permanente de la page.
+  let queuePoll = null;
+
+  function queueRow(it) {
+    const st = it.state === "running" ? t("q_running")
+             : it.state === "paused" ? t("q_paused") : t("q_queued");
+    const tags = (it.formats || []).map(f =>
+      `<span class="q-tag q-tag-${f}">${f}</span>`).join("");
+    const active = it.state === "running" || it.state === "paused";
+    const pauseIco = it.state === "paused" ? "play_arrow" : "pause";
+    const pauseLbl = it.state === "paused" ? t("q_resume") : t("q_pause");
+    return `<div class="q-row q-${it.state}" data-slug="${esc(it.slug)}" draggable="${!active}">
+      <span class="material-symbols-outlined q-ico">${active ? "sync" : "schedule"}</span>
+      <span class="q-body">
+        <span class="q-title">${esc(it.artist || "")}${it.artist ? " — " : ""}${esc(it.title || it.slug)}</span>
+        <span class="q-meta"><span class="q-state">${esc(st)}</span>${tags}</span>
+      </span>
+      ${active ? `<button class="icon-btn icon-only q-pause" data-slug="${esc(it.slug)}" title="${esc(pauseLbl)}"><span class="material-symbols-outlined">${pauseIco}</span></button>` : ""}
+      <button class="icon-btn icon-only q-cancel" data-slug="${esc(it.slug)}" title="${esc(t("q_cancel"))}"><span class="material-symbols-outlined">stop_circle</span></button>
+    </div>`;
+  }
+
+  async function loadQueue() {
+    let items = [];
+    try {
+      const r = await fetch("/api/render-queue");
+      if (r.ok) items = (await r.json()).items || [];
+    } catch (e) { /* la file est un confort : son absence ne casse pas la page */ }
+    const host = document.getElementById("queue-slot");
+    if (!host) return;
+    if (!items.length) { host.innerHTML = ""; return; }
+    host.innerHTML = `
+      <div class="card q-card">
+        <div class="dr-head">
+          <span class="material-symbols-outlined">sync</span>
+          <h1>${esc(t("q_title"))}</h1>
+        </div>
+        <p class="dr-sub">${esc(t("q_sub"))}</p>
+        <div class="q-list">${items.map(queueRow).join("")}</div>
+      </div>`;
+    wireQueue(items);
+  }
+
+  function wireQueue(items) {
+    const byId = Object.fromEntries(items.map(i => [i.slug, i]));
+    document.querySelectorAll(".q-pause").forEach(b => b.addEventListener("click", async () => {
+      const slug = b.dataset.slug;
+      const want = byId[slug] && byId[slug].state !== "paused";
+      b.disabled = true;
+      try {
+        const r = await fetch(`/api/jobs/${encodeURIComponent(slug)}/render/pause?paused=${want}`, { method: "POST" });
+        if (!r.ok) throw new Error();
+      } catch (e) { alert(t("q_err")); }
+      loadQueue();
+    }));
+    document.querySelectorAll(".q-cancel").forEach(b => b.addEventListener("click", async () => {
+      const slug = b.dataset.slug;
+      const it = byId[slug] || {};
+      if (!confirm(T[LANG()].q_confirm(it.title || slug))) return;
+      b.disabled = true;
+      try {
+        const r = await fetch(`/api/jobs/${encodeURIComponent(slug)}/render/cancel`, { method: "POST" });
+        if (!r.ok) throw new Error();
+      } catch (e) { alert(t("q_err")); }
+      loadQueue(); load();
+    }));
+    // Réordonnancement : seules les lignes en attente sont déplaçables — le
+    // rendu actif occupe le worker, le sortir de sa place n'aurait aucun sens.
+    const list = document.querySelector(".q-list");
+    if (!list) return;
+    let dragged = null;
+    list.addEventListener("dragstart", e => {
+      dragged = e.target.closest(".q-row");
+      if (dragged) dragged.classList.add("q-dragging");
+    });
+    list.addEventListener("dragend", () => {
+      if (dragged) dragged.classList.remove("q-dragging");
+      dragged = null;
+      const slugs = [...list.querySelectorAll(".q-row")].map(r => r.dataset.slug);
+      fetch("/api/render-queue/reorder", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slugs }),
+      }).catch(() => {}).then(() => loadQueue());
+    });
+    list.addEventListener("dragover", e => {
+      e.preventDefault();
+      if (!dragged) return;
+      const over = e.target.closest(".q-row");
+      if (!over || over === dragged || !over.getAttribute("draggable")) return;
+      const rect = over.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      list.insertBefore(dragged, after ? over.nextSibling : over);
+    });
+  }
+
   async function load() {
     let d;
     try {
@@ -109,6 +211,7 @@
     } catch (e) { return denied(false); }
     const list = (d.drafts || []);
     document.getElementById("content").innerHTML = `
+      <div id="queue-slot"></div>
       <div class="card">
         <div class="dr-head">
           <span class="material-symbols-outlined">drafts</span>
@@ -123,6 +226,10 @@
           </div>`}
       </div>`;
     wire(list);
+    loadQueue();
+    // Un rendu avance sans que l'utilisateur agisse : rafraîchissement doux.
+    if (queuePoll) clearInterval(queuePoll);
+    queuePoll = setInterval(loadQueue, 5000);
   }
 
   function wire(list) {

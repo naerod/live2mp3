@@ -6,16 +6,17 @@ un callback (branché sur SSE côté API, ou Redis pub/sub côté worker).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Callable
 
 from .manifest import Manifest
-from .pipeline import artwork, bundle, disc, preanalyze, render, tags
+from .pipeline import artwork, disc, preanalyze, render, tags
 
 ProgressCb = Callable[[str, str, dict], None]
 
 # Ordre d'exécution (download/preanalyze pilotés à part car réseau/GPU)
-RENDER_STAGES = ["render", "tags", "artwork", "disc", "bundle"]
+RENDER_STAGES = ["render", "tags", "artwork", "disc"]
 
 
 def _noop(stage: str, status: str, info: dict) -> None:  # pragma: no cover
@@ -25,16 +26,26 @@ def _noop(stage: str, status: str, info: dict) -> None:  # pragma: no cover
 def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
                         video: bool = True, gap_seconds: float = 2.0,
                         force: bool = False,
-                        progress: ProgressCb = _noop) -> dict:
-    """Exécute render -> tags -> artwork -> disc -> bundle.
+                        progress: ProgressCb = _noop,
+                        cancel: Callable[[], bool] | None = None,
+                        paused: Callable[[], bool] | None = None) -> dict:
+    """Exécute render -> tags -> artwork -> disc.
 
     Suppose les timecodes déjà présents (validés via l'UI Peaks.js).
     `force` : ré-encode même les pistes dont le fichier existe déjà — requis
     pour un re-rendu sur un album déjà publié (sinon une piste dont le nom ne
     change pas garderait son ancien découpage, cf. render.run/idempotence).
+    `cancel` : sondé pendant le rendu et entre les stages ; lève
+    render.Cancelled dès qu'il passe à True.
     """
     project_dir = Path(project_dir)
     results: dict = {}
+
+    def _check() -> None:
+        # Les stages après render durent quelques secondes : inutile de les
+        # interrompre en plein milieu, il suffit de ne pas enchaîner.
+        if cancel and cancel():
+            raise render.Cancelled()
 
     progress("render", "running", {})
 
@@ -45,8 +56,10 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
         })
 
     results["render"] = render.run(project_dir, video=video, force=force,
-                                   on_track=_on_track)
+                                   on_track=_on_track, cancel=cancel,
+                                   paused=paused)
     progress("render", "done", {"tracks": len(results["render"]["audio"])})
+    _check()
 
     progress("tags", "running", {})
     results["tags"] = tags.run(project_dir)
@@ -60,11 +73,71 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
     results["disc"] = disc.run(project_dir, media=media, gap_seconds=gap_seconds)
     progress("disc", "done", {})
 
-    progress("bundle", "running", {})
-    results["bundle"] = bundle.run(project_dir)
-    progress("bundle", "done", {"count": results["bundle"]["count"]})
+    # Le ZIP n'est plus construit ici : il ne compresse rien (MP3/MP4 déjà
+    # compressés) et dupliquait donc intégralement build/ sur le disque —
+    # 13 Go de doublons relevés sur la bibliothèque le 2026-07-30. Il est
+    # désormais assemblé à la volée au téléchargement (cf. main.py).
 
     return results
+
+
+def render_job(*, slug: str, media: str, gap: float, video: bool,
+               republish: bool) -> dict:
+    """Point d'entrée exécuté par le worker RQ (cf. renderqueue.enqueue).
+
+    Vit dans le worker, pas dans l'API : la progression passe donc par Redis,
+    et l'annulation/pause sont lues depuis Redis à chaque sondage.
+    """
+    from pathlib import Path as _Path
+
+    from . import jellyfin, notifications, progress, renderqueue
+    from .manifest import PROJECTS_DIR
+
+    project_dir = _Path(PROJECTS_DIR) / slug
+    requested_by = renderqueue.get_meta(slug).get("requested_by", "")
+    cb = progress.make_cb(slug)
+    try:
+        run_render_pipeline(
+            project_dir, media=media, gap_seconds=gap, video=video,
+            force=republish, progress=cb,
+            cancel=lambda: renderqueue.cancel_requested(slug),
+            paused=lambda: renderqueue.is_paused(slug),
+        )
+        if republish:
+            # Un album déjà publié qu'on vient de re-rendre doit réapparaître à
+            # jour dans Jellyfin : le symlink existe déjà, sync-media.sh ne voit
+            # pas un changement de contenu interne.
+            jellyfin.refresh_library()
+        # Purge des masters : désactivée par défaut. Elle rend ~1,6 Go par
+        # album mais impose un re-téléchargement (2-3 min) à la prochaine
+        # ré-ouverture de l'éditeur — et devient définitive si la vidéo source
+        # disparaît de YouTube entre-temps. À n'activer qu'en connaissance de
+        # cause, via L2M_PURGE_MASTERS=1.
+        if os.environ.get("L2M_PURGE_MASTERS") == "1":
+            try:
+                from .pipeline import download as _dl
+                _dl.purge_master(project_dir)
+            except Exception:
+                pass
+        try:
+            notifications.notify_render_done(slug, requested_by)
+        except Exception:
+            # Une notification ratée ne doit pas faire échouer un rendu abouti.
+            pass
+        progress.publish(slug, {"stage": "all", "status": "complete", "info": {}})
+        return {"ok": True, "slug": slug}
+    except render.Cancelled:
+        progress.publish(slug, {"stage": "all", "status": "cancelled",
+                                "info": {}})
+        return {"ok": False, "slug": slug, "cancelled": True}
+    except Exception as e:
+        progress.publish(slug, {"stage": "error", "status": "error",
+                                "info": {"message": str(e)}})
+        raise
+    finally:
+        renderqueue.clear_cancel(slug)
+        renderqueue.set_paused(slug, False)
+        renderqueue.clear_meta(slug)
 
 
 def run_full_pipeline(project_dir: str | Path, *, download_fn=None,

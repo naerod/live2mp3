@@ -34,6 +34,7 @@ from pydantic import BaseModel
 import re
 from uuid import uuid4
 from . import catalogue, entities, jellyfin, jobs, linktool, llm
+from . import progress, renderqueue
 from .albumfiles import (
     _extract_embedded_cover,
     _rename_audio_files,
@@ -54,7 +55,7 @@ from .db import get_conn, init_db
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
-from .pipeline import boundaries, download, preanalyze
+from .pipeline import boundaries, bundle, download, preanalyze
 from .covers import (
     COVER_EXTS,
     COVER_MAX_BYTES,
@@ -129,9 +130,10 @@ def _startup() -> None:
     except Exception:
         pass
 
-# --- État de progression en mémoire (par slug) ----------------------------
-_progress_bus: dict[str, "queue.Queue[dict]"] = {}
-_progress_last: dict[str, list[dict]] = {}
+# --- État de progression (Redis, partagé API <-> worker) ------------------
+# Le rendu s'exécute dans le worker RQ : l'émetteur et le lecteur du flux SSE
+# ne sont plus dans le même process, un dictionnaire en mémoire ne suffit plus.
+# Voir backend/progress.py.
 
 # Détection des chansons passée à la demande : la transcription est le poste le
 # plus long et l'humain ajuste les coupes de toute façon. Le drapeau est relu
@@ -145,17 +147,11 @@ class _SkipDetection(Exception):
 
 
 def _publish(slug: str, event: dict) -> None:
-    _progress_last.setdefault(slug, []).append(event)
-    q = _progress_bus.get(slug)
-    if q is not None:
-        q.put(event)
+    progress.publish(slug, event)
 
 
 def _make_cb(slug: str):
-    def cb(stage: str, status: str, info: dict) -> None:
-        _publish(slug, {"stage": stage, "status": status, "info": info,
-                        "ts": time.time()})
-    return cb
+    return progress.make_cb(slug)
 
 
 # --- Modèles --------------------------------------------------------------
@@ -171,6 +167,9 @@ class TrackIn(BaseModel):
 
 class AlbumIn(BaseModel):
     artist: str
+    # Id Deezer canonique choisi dans la liste déroulante : c'est lui qui relie
+    # l'album à sa page artiste, indépendamment de l'orthographe saisie.
+    artist_id: str | None = None
     title: str
     date: str | None = None
     venue: str | None = None
@@ -328,7 +327,7 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
                                 f"{session['uuid']}/",
                                 headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
                             )
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url="/outpost.goauthentik.io/sign_out?rd=/", status_code=302)
 
 
 def _norm_title(s: str) -> str:
@@ -1341,8 +1340,7 @@ def start_prepare(slug: str,
     project_dir = PROJECTS_DIR / slug
     if not (project_dir / "manifest.yaml").exists():
         raise HTTPException(404, "projet introuvable")
-    _progress_last[slug] = []
-    _progress_bus[slug] = queue.Queue()
+    progress.reset(slug)
     _skip_detection.discard(slug)   # repart d'un état propre
     threading.Thread(target=_run_prepare_bg,
                      args=(slug, identity.get("username") or ""),
@@ -1481,8 +1479,7 @@ def delete_job(slug: str,
         raise HTTPException(403, "brouillon d'un autre gestionnaire")
     linktool.delete_project_social(slug)
     shutil.rmtree(project_dir, ignore_errors=True)
-    _progress_last.pop(slug, None)
-    _progress_bus.pop(slug, None)
+    progress.reset(slug)
     return {"ok": True}
 
 
@@ -1506,29 +1503,16 @@ def update_markers(slug: str, payload: dict,
     return {"ok": True, "tracks": len(m.tracks)}
 
 
-def _run_render_bg(slug: str, media: str, gap: float, video: bool,
-                   republish: bool = False) -> None:
-    project_dir = PROJECTS_DIR / slug
-    try:
-        jobs.run_render_pipeline(project_dir, media=media, gap_seconds=gap,
-                                 video=video, force=republish,
-                                 progress=_make_cb(slug))
-        if republish:
-            # Best-effort : un album déjà publié qu'on vient de re-rendre doit
-            # réapparaître à jour dans Jellyfin/Finamp (le symlink existe déjà,
-            # sync-media.sh ne détecte pas un changement de contenu interne).
-            jellyfin.refresh_library()
-        _publish(slug, {"stage": "all", "status": "complete", "info": {},
-                        "ts": time.time()})
-    except Exception as e:  # pragma: no cover
-        _publish(slug, {"stage": "error", "status": "error",
-                        "info": {"message": str(e)}, "ts": time.time()})
-
-
 @app.post("/api/jobs/{slug}/render")
 def start_render(slug: str, media: str = "audio", gap: float = 2.0,
                  video: bool | None = None,
                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Met le rendu en file (worker RQ). Refuse un doublon sur le même album.
+
+    Le rendu tournait avant dans un thread de ce process : ffmpeg disputait ses
+    cœurs à l'API, un redémarrage tuait le job, et rien n'empêchait deux rendus
+    concurrents d'écrire les mêmes fichiers.
+    """
     project_dir = PROJECTS_DIR / slug
     path = project_dir / "manifest.yaml"
     if not path.exists():
@@ -1543,12 +1527,81 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0,
     # garderait sinon son ancien découpage. En création, published est encore
     # False à ce stade → comportement idempotent existant inchangé.
     republish = bool(m.data.get("published"))
-    _progress_last[slug] = []
-    _progress_bus[slug] = queue.Queue()
-    threading.Thread(target=_run_render_bg,
-                     args=(slug, media, gap, video, republish),
-                     daemon=True).start()
+    progress.reset(slug)
+    try:
+        renderqueue.enqueue(slug, media=media, gap=gap, video=video,
+                            republish=republish,
+                            requested_by=identity.get("username", ""))
+    except renderqueue.DuplicateRender as e:
+        raise HTTPException(409, str(e))
     return {"ok": True, "slug": slug}
+
+
+@app.post("/api/jobs/{slug}/render/cancel")
+def cancel_render(slug: str,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Arrête un rendu en file ou en cours.
+
+    Le ffmpeg courant est tué et son fichier partiel supprimé (cf.
+    pipeline/render.py) : un rendu relancé ensuite repart proprement.
+    """
+    state = renderqueue.cancel(slug)
+    if state == "none":
+        raise HTTPException(404, "aucun rendu en cours pour cet album")
+    if state in ("queued", "deferred"):
+        # Retiré de la file : personne ne publiera l'évènement final, l'API
+        # s'en charge pour que l'interface réagisse tout de suite.
+        progress.publish(slug, {"stage": "all", "status": "cancelled",
+                                "info": {}})
+    return {"ok": True, "was": state}
+
+
+class QueueOrderIn(BaseModel):
+    slugs: list[str]
+
+
+@app.get("/api/render-queue")
+def render_queue(identity: dict = Depends(require_gestionnaire)) -> dict:
+    """File des rendus : l'actif en tête, puis les suivants dans l'ordre."""
+    items = []
+    for it in renderqueue.listing():
+        m = None
+        mpath = PROJECTS_DIR / it["slug"] / "manifest.yaml"
+        if mpath.exists():
+            try:
+                m = Manifest.load(mpath).data
+            except Exception:
+                m = None
+        album = (m or {}).get("album", {})
+        items.append({
+            **it,
+            "artist": album.get("artist", ""),
+            "title": album.get("title", "") or it["slug"],
+            "formats": ["mp3", "mp4"] if it.get("video") else ["mp3"],
+        })
+    return {"items": items}
+
+
+@app.post("/api/render-queue/reorder")
+def render_queue_reorder(payload: QueueOrderIn,
+                         identity: dict = Depends(require_gestionnaire)) -> dict:
+    return {"ok": True, "order": renderqueue.reorder(payload.slugs)}
+
+
+@app.post("/api/jobs/{slug}/render/pause")
+def pause_render(slug: str, paused: bool = True,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Gèle (SIGSTOP) ou relance (SIGCONT) le rendu en cours.
+
+    Rien n'est perdu : le process reprend exactement où il s'était arrêté.
+    """
+    if renderqueue.active_status(slug) is None:
+        raise HTTPException(404, "aucun rendu en cours pour cet album")
+    renderqueue.set_paused(slug, paused)
+    progress.publish(slug, {"stage": "render",
+                            "status": "paused" if paused else "running",
+                            "info": {"paused": paused}})
+    return {"ok": True, "paused": paused}
 
 
 @app.get("/api/jobs/{slug}/events")
@@ -1556,19 +1609,21 @@ def events(slug: str,
            identity: dict = Depends(require_gestionnaire)) -> StreamingResponse:
     """Flux SSE de progression."""
     def gen():
-        for ev in _progress_last.get(slug, []):
+        # Rejeu de l'historique : un client qui arrive en cours de rendu, ou qui
+        # revient après un aller-retour dans l'interface, retrouve l'état exact.
+        seen_final = False
+        for ev in progress.history(slug):
             yield f"data: {json.dumps(ev)}\n\n"
-        q = _progress_bus.get(slug)
-        if q is None:
+            if ev.get("status") in ("complete", "error", "cancelled"):
+                seen_final = True
+        if seen_final:
             return
-        while True:
-            try:
-                ev = q.get(timeout=30)
-            except queue.Empty:
+        for ev in progress.stream(slug):
+            if ev is None:
                 yield ": keepalive\n\n"
                 continue
             yield f"data: {json.dumps(ev)}\n\n"
-            if ev.get("status") in ("complete", "error"):
+            if ev.get("status") in ("complete", "error", "cancelled"):
                 break
     return StreamingResponse(gen(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache",
@@ -1578,14 +1633,31 @@ def events(slug: str,
 @app.get("/api/jobs/{slug}/bundle")
 def download_bundle(slug: str,
                     identity: dict = Depends(require_gestionnaire)) -> FileResponse:
-    path = PROJECTS_DIR / slug / "build" / "bundle.zip"
-    if not path.exists():
-        raise HTTPException(404, "bundle non généré")
-    manifest_path = PROJECTS_DIR / slug / "manifest.yaml"
-    stem = download_stem(Manifest.load(manifest_path).data, slug) \
-        if manifest_path.exists() else slug
-    return FileResponse(path, filename=f"{stem}.zip",
-                        media_type="application/zip")
+    """ZIP assemblé à la demande, puis supprimé une fois servi.
+
+    Il n'est plus produit par le pipeline ni conservé : du MP3/MP4 étant déjà
+    compressé, le ZIP ne gagnait rien et doublait l'occupation disque de chaque
+    album (13 Go de doublons relevés le 2026-07-30). Construit sur disque et
+    non en mémoire — un bundle dépasse couramment 4 Go.
+    """
+    project_dir = PROJECTS_DIR / slug
+    manifest_path = project_dir / "manifest.yaml"
+    if not manifest_path.exists():
+        raise HTTPException(404, "projet introuvable")
+    if not any((project_dir / "build" / "audio").glob("*.mp3")):
+        raise HTTPException(404, "aucun média à télécharger")
+
+    stem = download_stem(Manifest.load(manifest_path).data, slug)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f"bundle-{slug}-"))
+    try:
+        out = bundle.run(project_dir, out_zip=tmp_dir / "bundle.zip")["bundle"]
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+    return FileResponse(
+        out, filename=f"{stem}.zip", media_type="application/zip",
+        background=BackgroundTask(shutil.rmtree, tmp_dir, ignore_errors=True),
+    )
 
 
 @app.get("/api/jobs/{slug}/waveform.dat")

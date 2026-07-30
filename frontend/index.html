@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/shared/naerod-social.css">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <script src="https://unpkg.com/peaks.js@3.4.2/dist/peaks.min.js"></script>
@@ -59,7 +60,7 @@
       </div>
     </div>
     <div class="grid">
-      <label data-i18n="artist">Artiste<input id="f-artist" placeholder="U2"></label>
+      <label data-i18n="artist">Artiste<div id="f-artist"></div></label>
       <label data-i18n="album">Titre de l'album<input id="f-title" placeholder="Live in Times Square 2014"></label>
       <label data-i18n="date">Date du concert<input id="f-date" type="date"></label>
       <label data-i18n="venue">Lieu<input id="f-venue" placeholder="Times Square, New York"></label>
@@ -83,9 +84,17 @@
     </div>
   </section>
 
+  <style>
+  /* Bouton d'arrêt aligné à droite du titre de progression. */
+  #step-progress h1{display:flex;align-items:center;gap:10px}
+  .progress-cancel{margin-left:auto;font-size:13px}
+  .progress-cancel .material-symbols-outlined{color:var(--like,#e05a5a)}
+  </style>
   <!-- Étapes 3 et 5 : progression (préparation puis rendu) -->
   <section id="step-progress" class="card hidden">
-    <h1><span class="material-symbols-outlined step-ico">hourglass_top</span><span id="progress-title"></span></h1>
+    <h1><span class="material-symbols-outlined step-ico">hourglass_top</span><span id="progress-title"></span>
+      <button id="btn-cancel-render" class="icon-btn hidden progress-cancel"><span class="material-symbols-outlined">stop_circle</span> <span data-i18n="cancel_render">Annuler le rendu</span></button>
+    </h1>
     <ul id="stages" class="stages"></ul>
     <div id="skip-detect-wrap" class="skip-wrap hidden">
       <button id="btn-skip-detect" class="icon-btn"><span class="material-symbols-outlined">skip_next</span> <span data-i18n="skip_detect">Passer cette étape</span></button>

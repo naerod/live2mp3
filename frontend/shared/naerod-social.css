@@ -1,0 +1,262 @@
+/* ════════════════════════════════════════════════════════════════════════
+   naerod-social.css — styles des briques d'identité partagées.
+
+   NE PAS ÉDITER DANS UN SITE : la source est
+   /home/claude/workspace/shared/naerod/naerod-social.css (sync.sh propage).
+
+   Aucune couleur en dur. Le site hôte mappe les huit variables ci-dessous
+   sur sa propre DA — c'est le seul écart autorisé entre sites.
+     --nrd-fg --nrd-muted --nrd-bg --nrd-card --nrd-border
+     --nrd-accent --nrd-danger --nrd-gold
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Avatar et identité ────────────────────────────────────────────── */
+.soc-avatar {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--nrd-bg); border: 1px solid var(--nrd-border);
+  font-weight: 600; color: #fff; overflow: hidden;
+  text-transform: uppercase; user-select: none;
+}
+.soc-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.soc-avlink { line-height: 0; display: inline-flex; }
+a.soc-avatar:hover, a.soc-user:hover, .soc-avlink:hover { opacity: .85; }
+.soc-user { font-weight: 600; color: var(--nrd-fg); text-decoration: none; }
+.soc-user:hover { color: var(--nrd-accent); }
+.soc-empty { color: var(--nrd-muted); font-size: 13.5px; padding: 14px 0; text-align: center; }
+
+.soc-poster {
+  display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
+  color: var(--nrd-muted); font-size: 12.5px; font-weight: 600;
+}
+.soc-poster .soc-avatar { width: 22px; height: 22px; font-size: 11px; }
+.soc-poster-name { color: var(--nrd-fg); }
+.soc-poster:hover .soc-poster-name { color: var(--nrd-accent); }
+.soc-poster-pre { color: var(--nrd-muted); font-size: 12.5px; margin-right: 6px; }
+
+/* ── Badge de rôle ─────────────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 600; vertical-align: middle;
+  border: 1px solid var(--nrd-border); background: var(--nrd-bg); color: var(--nrd-muted);
+}
+.role-badge .material-symbols-outlined { font-size: 15px; }
+.role-badge.role-user { color: var(--nrd-muted); }
+.role-badge.role-gestionnaire,
+.role-badge.role-artiste,
+.role-badge.role-organisation {
+  color: var(--nrd-accent); border-color: var(--nrd-accent);
+  background: color-mix(in srgb, var(--nrd-accent) 10%, transparent);
+}
+.role-badge.role-admin {
+  color: var(--nrd-gold); border-color: var(--nrd-gold);
+  background: color-mix(in srgb, var(--nrd-gold) 12%, transparent);
+}
+
+/* ── Menu de profil (le bouton d'avatar n'est jamais un simple lien) ── */
+.usermenu { position: relative; display: inline-flex; }
+.um-trigger {
+  margin: 0; padding: 2px; border: none; background: transparent; cursor: pointer;
+  border-radius: 50%; line-height: 0; transition: transform .12s;
+}
+.um-trigger:hover { transform: scale(1.05); }
+.um-trigger .soc-avatar { width: 38px; height: 38px; font-size: 16px; border: 2px solid var(--nrd-border); }
+.usermenu.open .um-trigger .soc-avatar { border-color: var(--nrd-accent); }
+.um-pop {
+  position: absolute; top: calc(100% + 10px); right: 0; min-width: 236px; z-index: 60;
+  background: var(--nrd-card); border: 1px solid var(--nrd-border); border-radius: 14px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .5); padding: 6px;
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity .15s, transform .15s;
+}
+.usermenu.open .um-pop { opacity: 1; transform: none; pointer-events: auto; }
+.um-head {
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 12px;
+  border-bottom: 1px solid var(--nrd-border); margin-bottom: 6px; text-decoration: none;
+}
+.um-head:hover { text-decoration: none; }
+.um-head .soc-avatar { width: 42px; height: 42px; font-size: 18px; }
+.um-head .um-name { font-weight: 700; font-size: 14px; color: var(--nrd-fg); line-height: 1.2; }
+.um-head .um-handle { color: var(--nrd-muted); font-size: 12px; }
+.um-head:hover .um-name { color: var(--nrd-accent); }
+.um-item {
+  display: flex; align-items: center; gap: 11px; width: 100%; margin: 0; padding: 9px 11px;
+  border: none; background: transparent; color: var(--nrd-fg); border-radius: 9px;
+  cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 500;
+  text-decoration: none; text-align: left;
+}
+.um-item:hover { background: var(--nrd-bg); text-decoration: none; color: var(--nrd-fg); }
+.um-item .material-symbols-outlined { font-size: 19px; color: var(--nrd-muted); }
+.um-item .um-val { margin-left: auto; color: var(--nrd-muted); font-size: 12px; font-weight: 600; }
+.um-item.danger, .um-item.danger:hover { color: var(--nrd-danger); }
+.um-item.danger .material-symbols-outlined { color: var(--nrd-danger); }
+.um-sep { height: 1px; background: var(--nrd-border); margin: 6px 4px; }
+
+/* ── Suivre / cloche d'entité ──────────────────────────────────────── */
+.follow-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.follow-btn {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0; height: 38px;
+  padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  border: 1px solid var(--nrd-accent); background: var(--nrd-accent);
+  color: var(--nrd-on-accent, #0d0f13);
+  transition: background .15s, border-color .15s, color .15s;
+}
+.follow-btn .material-symbols-outlined { font-size: 18px; }
+.follow-btn:hover { filter: brightness(1.06); }
+.follow-btn.following { background: var(--nrd-card); color: var(--nrd-fg); border-color: var(--nrd-border); }
+.follow-btn.following:hover {
+  border-color: var(--nrd-danger); color: var(--nrd-danger);
+  background: color-mix(in srgb, var(--nrd-danger) 10%, var(--nrd-card)); filter: none;
+}
+.bell-btn {
+  display: inline-flex; align-items: center; justify-content: center; margin: 0;
+  width: 38px; height: 38px; padding: 0; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--nrd-border); background: var(--nrd-card); color: var(--nrd-muted);
+}
+.bell-btn .material-symbols-outlined { font-size: 19px; }
+.bell-btn:hover { border-color: var(--nrd-accent); color: var(--nrd-fg); }
+.bell-btn.on {
+  background: color-mix(in srgb, var(--nrd-accent) 16%, var(--nrd-card));
+  border-color: var(--nrd-accent); color: var(--nrd-accent);
+}
+
+/* ── Cloche du header + dropdown ───────────────────────────────────── */
+.notif-bell { position: relative; display: inline-flex; }
+.notif-bell .nb-trigger { position: relative; }
+.nb-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--nrd-danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 17px; text-align: center;
+  border: 2px solid var(--nrd-bg); box-sizing: content-box;
+}
+.nb-pop {
+  position: absolute; top: calc(100% + 10px); right: 0; width: min(360px, 92vw); z-index: 60;
+  background: var(--nrd-card); border: 1px solid var(--nrd-border); border-radius: 14px;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, .5); padding: 6px; overflow: hidden;
+}
+.notif-bell.open .nb-pop { animation: nb-in .15s ease; }
+@keyframes nb-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.nb-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 6px; }
+.nb-head b { font-size: 14px; }
+.nb-markall {
+  margin: 0; padding: 0; border: none; background: transparent; color: var(--nrd-accent);
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.nb-markall:hover { text-decoration: underline; }
+.nb-list { max-height: min(60vh, 420px); overflow: auto; }
+.nb-all {
+  display: block; text-align: center; padding: 10px; margin-top: 4px; font-size: 13px;
+  font-weight: 600; color: var(--nrd-accent); text-decoration: none;
+  border-top: 1px solid var(--nrd-border);
+}
+.nb-all:hover { background: var(--nrd-bg); text-decoration: none; }
+
+/* ── Item de notification (cloche + page centre) ───────────────────── */
+.notif-item {
+  display: flex; align-items: flex-start; gap: 11px; padding: 11px 10px; border-radius: 10px;
+  text-decoration: none; color: var(--nrd-fg); position: relative; transition: background .12s;
+}
+.notif-item:hover { background: var(--nrd-bg); text-decoration: none; }
+.notif-item.unread { background: color-mix(in srgb, var(--nrd-accent) 8%, transparent); }
+.notif-ic {
+  font-size: 20px; color: var(--nrd-accent); flex-shrink: 0; margin-top: 1px;
+  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: color-mix(in srgb, var(--nrd-accent) 12%, var(--nrd-card));
+}
+.notif-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.notif-reason { font-size: 12.5px; color: var(--nrd-muted); }
+.notif-reason b { color: var(--nrd-fg); font-weight: 600; }
+.notif-post {
+  font-size: 14px; font-weight: 600; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.notif-time { font-size: 11.5px; color: var(--nrd-muted); margin-top: 1px; }
+.notif-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--nrd-accent);
+  flex-shrink: 0; margin-top: 6px;
+}
+
+/* Rendus d'album : vignette d'artiste (Deezer) et tags de format.
+   `.notif-render` est une entrée d'état — jamais comptée, jamais marquée lue. */
+.notif-pic { overflow: hidden; padding: 0; }
+.notif-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.notif-fmt {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 5px; border-radius: 4px; margin-left: 5px;
+  background: color-mix(in srgb, var(--nrd-fg) 12%, transparent);
+}
+.notif-render .notif-ic { animation: notif-spin 1.8s linear infinite; }
+.notif-render .notif-pic { animation: none; }
+@keyframes notif-spin { to { transform: rotate(360deg); } }
+
+/* Toast de fin de rendu — apparaît où que soit l'utilisateur sur le site. */
+.nrd-rtoast {
+  position: fixed; right: 18px; bottom: 18px; z-index: 9999;
+  display: flex; align-items: flex-start; gap: 11px; max-width: 380px;
+  padding: 13px 14px; border-radius: 13px; text-decoration: none;
+  background: var(--nrd-card); border: 1px solid var(--nrd-border);
+  box-shadow: 0 16px 40px -14px rgba(0,0,0,.65);
+  color: var(--nrd-fg);
+  opacity: 0; transform: translateY(12px); transition: opacity .28s, transform .28s;
+}
+.nrd-rtoast.show { opacity: 1; transform: translateY(0); }
+.nrd-rtoast:hover { border-color: var(--nrd-accent); text-decoration: none; }
+.nrd-rtoast > .material-symbols-outlined { color: var(--nrd-accent); font-size: 22px; }
+.nrd-rtoast-body { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.nrd-rtoast-body b { font-size: 13.5px; font-weight: 650; line-height: 1.3; }
+.nrd-rtoast-body span { font-size: 12px; color: var(--nrd-muted); }
+.nrd-rtoast-x {
+  background: none; border: 0; color: var(--nrd-muted); cursor: pointer;
+  padding: 0; line-height: 1;
+}
+.nrd-rtoast-x .material-symbols-outlined { font-size: 17px; }
+@media (max-width: 560px) {
+  .nrd-rtoast { left: 14px; right: 14px; max-width: none; bottom: 14px; }
+}
+
+/* Notification d'action administrateur */
+.notif-admin-tag {
+  display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--nrd-muted); margin-bottom: 2px;
+}
+.notif-admin-tag .material-symbols-outlined { font-size: 13px; }
+.notif-admin .notif-reason { font-size: 14px; font-weight: 600; color: var(--nrd-fg); }
+.notif-admin .notif-ic {
+  color: var(--nrd-muted); background: color-mix(in srgb, var(--nrd-muted) 14%, var(--nrd-card));
+}
+.notif-grant {
+  background: color-mix(in srgb, var(--nrd-gold) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--nrd-gold) 30%, transparent); outline-offset: -1px;
+}
+.notif-grant:hover { background: color-mix(in srgb, var(--nrd-gold) 16%, transparent); }
+.notif-grant.unread { background: color-mix(in srgb, var(--nrd-gold) 15%, transparent); }
+.notif-grant .notif-ic {
+  color: color-mix(in srgb, var(--nrd-gold) 40%, #000);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--nrd-gold) 55%, #fff) 0%, var(--nrd-gold) 100%);
+}
+.notif-grant .notif-admin-tag { color: var(--nrd-gold); }
+.notif-grant .notif-dot { background: var(--nrd-gold); }
+
+/* ── Page centre de notifications ──────────────────────────────────── */
+.notif-page-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.notif-page-head h1 { margin: 0; font-size: 22px; }
+.notif-list { display: flex; flex-direction: column; }
+.notif-list .notif-item { border-bottom: 1px solid var(--nrd-border); border-radius: 0; }
+.notif-list .notif-item:last-child { border-bottom: none; }
+.notif-list .notif-post { white-space: normal; }
+
+/* Cibles tactiles : propriété du composant, pas de la DA locale — c'est donc
+   ici qu'elle vit, et les deux sites en bénéficient. */
+@media (max-width: 700px) {
+  .follow-btn, .bell-btn { height: 44px; }
+  .bell-btn { width: 44px; }
+}
+@media (max-width: 520px) {
+  .um-pop { min-width: 210px; }
+  .follow-btn { padding: 0 13px; }
+}

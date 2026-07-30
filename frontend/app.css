@@ -8,6 +8,24 @@
   --accent:#5561d6; --border:#e0e2ec; --ok:#2e8b5d; --run:#c58f16;
   --up:#5561d6; --down:#d1524d; --like:#d1524d;
 }
+
+/* ── Contrat du bundle partagé (shared/naerod-social.css) ─────────────────
+   Les briques d'identité (avatar, menu de profil, cloche, bouton Suivre) sont
+   communes à tout l'écosystème naerod : la source est
+   /home/claude/workspace/shared/naerod/, propagée par sync.sh. Le bundle ne
+   connaît que ces variables ; c'est ici qu'on les branche sur la DA de
+   live2mp3. Aucune couleur n'est écrite dans le bundle lui-même. */
+:root, [data-theme="light"]{
+  --nrd-fg:var(--fg);
+  --nrd-muted:var(--muted);
+  --nrd-bg:var(--bg);
+  --nrd-card:var(--card);
+  --nrd-border:var(--border);
+  --nrd-accent:var(--accent);
+  --nrd-on-accent:#0d0f13;
+  --nrd-danger:var(--down);
+  --nrd-gold:var(--run);
+}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);
   font-family:"Google Sans",system-ui,sans-serif;font-optical-sizing:auto;
@@ -100,16 +118,17 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 /* Grisage du contenu */
 .app-locked #app-content{filter:grayscale(1) brightness(.5);pointer-events:none;user-select:none}
 
-/* ============ Composants sociaux (profils, likes, commentaires) ============ */
-.soc-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
-  display:inline-flex;align-items:center;justify-content:center;background:var(--bg);
-  border:1px solid var(--border);font-weight:600;color:#fff;overflow:hidden;
-  text-transform:uppercase;user-select:none}
-.soc-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
-.soc-user{font-weight:600;color:var(--fg)}
-.soc-user:hover{color:var(--accent)}
+/* ============ Composants sociaux (profils, likes, commentaires) ============
+   Avatar, menu de profil, cloche, bouton Suivre et badges de rôle vivent
+   désormais dans le bundle partagé `shared/naerod-social.css` (source :
+   /home/claude/workspace/shared/naerod/). Ne restent ici que les briques
+   propres à live2mp3 : likes, commentaires, page profil, import. */
 .soc-dim{color:var(--muted);font-size:12px}
+/* Déclinaisons de taille de l'avatar partagé, propres aux écrans live2mp3.
+   Le composant vient du bundle ; seules ses tailles contextuelles sont ici. */
+.soc-byline .soc-avatar{width:26px;height:26px;font-size:12px}
+.prof-hero .soc-avatar{width:88px;height:88px;font-size:32px}
+@media(max-width:520px){.prof-hero .soc-avatar{width:64px;height:64px;font-size:24px}}
 
 /* Bouton like (cœur) */
 .soc-like{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 14px;
@@ -158,8 +177,7 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .soc-clike-btn.on .material-symbols-outlined{color:var(--like);font-variation-settings:'FILL' 1}
 .soc-clike-btn:hover .material-symbols-outlined{color:var(--like)}
 .soc-byline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
-.soc-byline .soc-avatar{width:26px;height:26px;font-size:12px}
-.soc-mention{color:var(--accent);font-weight:600}
+.soc-byline.soc-mention{color:var(--accent);font-weight:600}
 .soc-body{font-size:14px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
 .soc-body.deleted{color:var(--muted);font-style:italic}
 .soc-actions{display:flex;gap:14px;margin-top:6px}
@@ -171,19 +189,14 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .soc-replies .soc-comment{padding:10px 0}
 .soc-more{margin:6px 0 0;padding:0;border:none;background:transparent;color:var(--accent);
   font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
-.soc-more .material-symbols-outlined{font-size:16px}
-.soc-empty{color:var(--muted);font-size:13.5px;padding:14px 0;text-align:center}
-
-/* ============ Page profil ============ */
+.soc-more .material-symbols-outlined{font-size:16px}/* ============ Page profil ============ */
 .prof-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
-.prof-hero .soc-avatar{width:88px;height:88px;font-size:32px}
-/* Badge de rôle cliquable (admin) : ouvre le sélecteur de rôle */
+.prof-hero/* Badge de rôle cliquable (admin) : ouvre le sélecteur de rôle */
 .role-badge-btn{display:inline-flex;align-items:center;gap:2px;margin:0;padding:0;
   border:none;background:none;cursor:pointer;vertical-align:middle;border-radius:999px;
   transition:opacity .12s}
 .role-badge-btn:hover{opacity:.82}
-.role-badge-btn .role-badge{cursor:pointer}
-.role-caret{font-size:18px;color:var(--muted)}
+.role-badge-btn.role-caret{font-size:18px;color:var(--muted)}
 /* Sélecteur de rôle (modale) */
 .modal-title{margin:0 0 16px;font-size:17px;text-align:center}
 .role-picker{max-width:440px;text-align:left}
@@ -287,52 +300,16 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .prof-cmt .lnk b{color:var(--fg)}
 .prof-cmt .lnk:hover b{color:var(--accent)}
 .prof-cmt .txt{font-size:14px;line-height:1.5;white-space:pre-wrap}
-@media(max-width:520px){.prof-hero .soc-avatar{width:64px;height:64px;font-size:24px}}
+@media(max-width:520px){.prof-hero}
 
-/* ============ Menu utilisateur (avatar déroulant, header) ============ */
-.usermenu{position:relative;display:inline-flex}
-.um-trigger{margin:0;padding:2px;border:none;background:transparent;cursor:pointer;
-  border-radius:50%;line-height:0;transition:transform .12s}
-.um-trigger:hover{transform:scale(1.05)}
-.um-trigger .soc-avatar{width:38px;height:38px;font-size:16px;border:2px solid var(--border)}
-.usermenu.open .um-trigger .soc-avatar{border-color:var(--accent)}
-.um-pop{position:absolute;top:calc(100% + 10px);right:0;min-width:230px;z-index:60;
-  background:var(--card);border:1px solid var(--border);border-radius:14px;
-  box-shadow:0 16px 40px -12px rgba(0,0,0,.5);padding:6px;
-  opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .15s,transform .15s}
-.usermenu.open .um-pop{opacity:1;transform:none;pointer-events:auto}
-.um-head{display:flex;align-items:center;gap:10px;padding:10px 10px 12px;
-  border-bottom:1px solid var(--border);margin-bottom:6px;text-decoration:none}
-.um-head .soc-avatar{width:42px;height:42px;font-size:18px}
-.um-head .um-name{font-weight:700;font-size:14px;color:var(--fg);line-height:1.2}
-.um-head .um-handle{color:var(--muted);font-size:12px}
-.um-head:hover .um-name{color:var(--accent)}
-.um-item{display:flex;align-items:center;gap:11px;width:100%;margin:0;padding:9px 11px;
-  border:none;background:transparent;color:var(--fg);border-radius:9px;cursor:pointer;
-  font-family:inherit;font-size:13.5px;font-weight:500;text-decoration:none;text-align:left}
-.um-item:hover{background:var(--bg)}
-.um-item .material-symbols-outlined{font-size:19px;color:var(--muted)}
-.um-item .um-val{margin-left:auto;color:var(--muted);font-size:12px;font-weight:600}
-.um-item.danger{color:var(--down)}
-.um-item.danger .material-symbols-outlined{color:var(--down)}
-.um-sep{height:1px;background:var(--border);margin:6px 4px}
-
-/* Bouton retour (page profil) */
+/* ============ Menu utilisateur (avatar déroulant, header) ============ *//* Bouton retour (page profil) */
 .back-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px 0 12px;
   border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--fg);
   font-size:13.5px;font-weight:600;text-decoration:none;transition:all .15s}
 .back-btn:hover{border-color:var(--accent);background:var(--bg)}
 .back-btn .material-symbols-outlined{font-size:20px}
 
-/* Posteur d'un album (avatar + pseudo) */
-.soc-avlink{line-height:0;display:inline-flex}
-.soc-poster{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--muted);
-  font-size:12.5px;font-weight:600}
-.soc-poster .soc-avatar{width:22px;height:22px;font-size:11px}
-.soc-poster-name{color:var(--fg)}
-.soc-poster:hover .soc-poster-name{color:var(--accent)}
-.soc-poster-pre{color:var(--muted);font-size:12.5px;margin-right:6px}
-.page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
+/* Posteur d'un album (avatar + pseudo) */.page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
 
 /* ============ Mobile ============ */
 /* Écrans tactiles : les contrôles cachés derrière un survol doivent rester visibles */
@@ -346,12 +323,7 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
   .tools{gap:6px;margin-left:auto}
   .icon-btn{height:46px;padding:0 14px;font-size:14px;border-radius:12px;gap:6px}
   .icon-btn.icon-only{width:46px}
-  .icon-btn .material-symbols-outlined{font-size:21px}
-  .um-trigger .soc-avatar{width:46px;height:46px;font-size:19px}
-  .um-pop{min-width:250px}
-  .um-item{padding:12px;font-size:15px;gap:12px}
-  .um-item .material-symbols-outlined{font-size:21px}
-  .back-btn{height:44px;font-size:14.5px}
+  .icon-btn .material-symbols-outlined{font-size:21px}  .back-btn{height:44px;font-size:14.5px}
   .prof-tabs button{padding:12px 14px;font-size:15px}
   main{margin:20px auto;padding:0 14px}
   input,select,textarea{font-size:16px}
@@ -520,29 +492,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 /* ============================================================
    Suivi (bouton Suivre / cloche), badge de rôle, page d'entité
    Partagé : pages artiste/festival/lieu (entity.js) et profils.
-   ============================================================ */
-.follow-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
-/* Bouton Suivre → Suivi (façon X). Non suivi = CTA plein accent ;
-   suivi = contour discret, survol rouge pour signaler « ne plus suivre ». */
-.follow-btn{display:inline-flex;align-items:center;gap:6px;margin:0;height:38px;
-  padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;
-  border:1px solid var(--accent);background:var(--accent);color:#0d0f13;
-  transition:background .15s,border-color .15s,color .15s}
-.follow-btn .material-symbols-outlined{font-size:18px}
-.follow-btn:hover{filter:brightness(1.06)}
-.follow-btn.following{background:var(--card);color:var(--fg);border-color:var(--border)}
-.follow-btn.following:hover{border-color:var(--like);color:var(--like);
-  background:color-mix(in srgb,var(--like) 10%,var(--card));filter:none}
-/* Cloche (notifications) — visible une fois suivi. `on` = notifications actives. */
-.bell-btn{display:inline-flex;align-items:center;justify-content:center;margin:0;
-  width:38px;height:38px;padding:0;border-radius:50%;cursor:pointer;
-  border:1px solid var(--border);background:var(--card);color:var(--muted)}
-.bell-btn .material-symbols-outlined{font-size:19px}
-.bell-btn:hover{border-color:var(--accent);color:var(--fg)}
-.bell-btn.on{background:color-mix(in srgb,var(--accent) 16%,var(--card));
-  border-color:var(--accent);color:var(--accent)}
-
-/* Listes Abonnements / Abonnés sur un profil */
+   ============================================================ *//* Bouton Suivre → Suivi (façon X). Non suivi = CTA plein accent ;
+   suivi = contour discret, survol rouge pour signaler « ne plus suivre ». *//* Cloche (notifications) — visible une fois suivi. `on` = notifications actives. *//* Listes Abonnements / Abonnés sur un profil */
 .follow-grp{margin-top:10px}
 .follow-grp:first-child{margin-top:4px}
 /* En-tête de groupe repliable (bouton pleine largeur) */
@@ -574,18 +525,7 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .fr-act{flex-shrink:0}
 .fr-you{font-size:12.5px;color:var(--muted);flex-shrink:0;font-style:italic}
 
-/* Badge de rôle sur un profil (utilisateur / gestionnaire / admin) */
-.role-badge{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 10px;
-  border-radius:999px;font-size:12px;font-weight:600;vertical-align:middle;
-  border:1px solid var(--border);background:var(--bg);color:var(--muted)}
-.role-badge .material-symbols-outlined{font-size:15px}
-.role-badge.role-user{color:var(--muted)}
-.role-badge.role-gestionnaire{color:var(--accent);border-color:var(--accent);
-  background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.role-badge.role-admin{color:var(--run);border-color:var(--run);
-  background:color-mix(in srgb,var(--run) 12%,transparent)}
-
-/* Page d'entité (hero) */
+/* Badge de rôle sur un profil (utilisateur / gestionnaire / admin) *//* Page d'entité (hero) */
 .entity-hero .entity-pic{width:88px;height:88px;border-radius:50%;object-fit:cover;
   flex-shrink:0;border:1px solid var(--border)}
 .entity-hero .entity-pic.ph{display:flex;align-items:center;justify-content:center;
@@ -612,8 +552,8 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .guest-chip button .material-symbols-outlined{font-size:16px}
 
 @media (max-width:700px){
-  .follow-btn,.bell-btn{height:44px}
-  .bell-btn{width:44px}
+  /* Les tailles tactiles de .follow-btn / .bell-btn sont portées par le
+     bundle partagé : ce sont des propriétés du composant, pas de la DA. */
   .entity-hero .entity-pic{width:72px;height:72px}
 }
 
@@ -625,84 +565,7 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 
 /* ============================================================
    Notifications — cloche header, dropdown, items, centre
-   ============================================================ */
-.notif-bell{position:relative;display:inline-flex}
-.notif-bell .nb-trigger{position:relative}
-.nb-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;
-  border-radius:999px;background:var(--like);color:#fff;font-size:11px;font-weight:700;
-  line-height:17px;text-align:center;border:2px solid var(--bg);box-sizing:content-box}
-.nb-pop{position:absolute;top:calc(100% + 10px);right:0;width:min(360px,92vw);z-index:60;
-  background:var(--card);border:1px solid var(--border);border-radius:14px;
-  box-shadow:0 16px 40px -12px rgba(0,0,0,.5);padding:6px;overflow:hidden}
-.notif-bell.open .nb-pop{animation:nb-in .15s ease}
-@keyframes nb-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.nb-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 6px}
-.nb-head b{font-size:14px}
-.nb-markall{margin:0;padding:0;border:none;background:transparent;color:var(--accent);
-  font-size:12px;font-weight:600;cursor:pointer}
-.nb-markall:hover{text-decoration:underline}
-.nb-list{max-height:min(60vh,420px);overflow:auto}
-.nb-all{display:block;text-align:center;padding:10px;margin-top:4px;font-size:13px;
-  font-weight:600;color:var(--accent);text-decoration:none;border-top:1px solid var(--border)}
-.nb-all:hover{background:var(--bg)}
-
-/* Un item de notification (partagé cloche + page centre) */
-.notif-item{display:flex;align-items:flex-start;gap:11px;padding:11px 10px;border-radius:10px;
-  text-decoration:none;color:var(--fg);position:relative;transition:background .12s}
-.notif-item:hover{background:var(--bg)}
-.notif-item.unread{background:color-mix(in srgb,var(--accent) 8%,transparent)}
-.notif-ic{font-size:20px;color:var(--accent);flex-shrink:0;margin-top:1px;
-  width:34px;height:34px;display:flex;align-items:center;justify-content:center;
-  border-radius:50%;background:color-mix(in srgb,var(--accent) 12%,var(--card))}
-.notif-body{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
-.notif-reason{font-size:12.5px;color:var(--muted)}
-.notif-reason b{color:var(--fg);font-weight:600}
-.notif-post{font-size:14px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.notif-time{font-size:11.5px;color:var(--muted);margin-top:1px}
-.notif-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-top:6px}
-
-/* Notification d'action administrateur (promotion/rétrogradation gestionnaire) */
-.notif-admin-tag{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;
-  font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
-  color:var(--muted);margin-bottom:2px}
-.notif-admin-tag .material-symbols-outlined{font-size:13px}
-.notif-admin .notif-reason{font-size:14px;font-weight:600;color:var(--fg)}
-.notif-admin .notif-ic{color:var(--muted);
-  background:color-mix(in srgb,var(--muted) 14%,var(--card))}
-/* Promotion : habillage « valorisant » doré (l'user a gagné quelque chose) */
-.notif-grant{background:color-mix(in srgb,var(--run) 10%,transparent);
-  outline:1px solid color-mix(in srgb,var(--run) 30%,transparent);outline-offset:-1px}
-.notif-grant:hover{background:color-mix(in srgb,var(--run) 16%,transparent)}
-.notif-grant.unread{background:color-mix(in srgb,var(--run) 15%,transparent)}
-.notif-grant .notif-ic{color:#8a6d16;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--run) 55%,#fff) 0%,var(--run) 100%)}
-.notif-grant .notif-admin-tag{color:var(--run)}
-.notif-grant .notif-dot{background:var(--run)}
-
-/* Rappel « brouillon en cours » — tâche à finir, pas un évènement passé : même
-   gabarit que la notif admin, teinte accent pour le distinguer du flux social. */
-.notif-draft-tag{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;
-  font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
-  color:var(--accent);margin-bottom:2px}
-.notif-draft-tag .material-symbols-outlined{font-size:13px}
-.notif-draft .notif-reason{font-size:14px;font-weight:600;color:var(--fg)}
-.notif-draft{background:color-mix(in srgb,var(--accent) 9%,transparent);
-  outline:1px solid color-mix(in srgb,var(--accent) 28%,transparent);outline-offset:-1px}
-.notif-draft:hover{background:color-mix(in srgb,var(--accent) 15%,transparent)}
-.notif-draft .notif-ic{color:#fff;background:var(--accent)}
-.notif-draft .notif-dot{background:var(--accent)}
-
-/* Page centre de notifications */
-.notif-page-head{display:flex;align-items:center;justify-content:space-between;
-  gap:12px;flex-wrap:wrap;margin-bottom:8px}
-.notif-page-head h1{margin:0;font-size:22px}
-.notif-page-head .icon-btn{margin:0}
-.notif-list{display:flex;flex-direction:column}
-.notif-list .notif-item{border-bottom:1px solid var(--border);border-radius:0}
-.notif-list .notif-item:last-child{border-bottom:none}
-.notif-list .notif-post{white-space:normal}
-
-/* ============================================================
+   ============================================================ */@keyframes nb-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}/* Un item de notification (partagé cloche + page centre) *//* Notification d'action administrateur (promotion/rétrogradation gestionnaire) *//* Promotion : habillage « valorisant » doré (l'user a gagné quelque chose) *//* Page centre de notifications */.notif-page-head .icon-btn{margin:0}/* ============================================================
    Page Paramètres — préférences de notification
    ============================================================ */
 .set-card{max-width:720px;margin:0 auto}
@@ -743,7 +606,5 @@ a.soc-avatar:hover,a.soc-user:hover{opacity:.85}
 .sw input:checked+.sw-track .sw-thumb{transform:translateX(17px)}
 .sw input:focus-visible+.sw-track{outline:2px solid var(--accent);outline-offset:2px}
 
-@media (max-width:700px){
-  .nb-pop{width:min(360px,94vw)}
-  .set-cell{width:60px}
+@media (max-width:700px){  .set-cell{width:60px}
 }

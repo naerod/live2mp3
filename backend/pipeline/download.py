@@ -106,6 +106,39 @@ def run(project_dir: str | Path, progress: ProgressCb | None = None) -> dict:
     return {"master": str(master), "master_wav": str(wav)}
 
 
+def purge_master(project_dir: str | Path) -> dict:
+    """Supprime les masters d'un album rendu, en les rendant re-téléchargeables.
+
+    Les masters (MKV + WAV) pèsent ~1,6 Go par album et ne servent qu'à
+    re-découper : une fois les pistes produites, ils dorment. On les supprime
+    et on repasse `download` à `pending` — rouvrir l'éditeur relance alors la
+    préparation, qui re-télécharge depuis `source.url` et régénère la forme
+    d'onde. La détection IA, elle, est sautée puisque tous les timecodes
+    existent (cf. main.py::prepare) : les coupes réglées à la main survivent.
+
+    Refuse de purger sans URL source : sans elle, la suppression serait
+    définitive et l'album ne pourrait plus jamais être re-découpé.
+    """
+    project_dir = Path(project_dir)
+    m = Manifest.load(project_dir / "manifest.yaml")
+    src = m.data.get("source", {})
+    if not src.get("url"):
+        return {"purged": False, "reason": "aucune URL source"}
+    freed = 0
+    for key in ("master_mkv", "master_wav"):
+        rel = src.get(key)
+        if not rel:
+            continue
+        f = project_dir / rel
+        if f.is_file():
+            freed += f.stat().st_size
+            f.unlink()
+    if not freed:
+        return {"purged": False, "reason": "déjà purgé"}
+    m.set_state("download", "pending")
+    return {"purged": True, "freed": freed}
+
+
 if __name__ == "__main__":
     import sys
 

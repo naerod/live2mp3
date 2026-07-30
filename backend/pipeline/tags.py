@@ -65,9 +65,12 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
 
 def tag_mp4(path: Path, track: dict, album: dict, total: int) -> None:
     tmp = path.with_suffix(".tagged.mp4")
+    # `+faststart` obligatoire ici aussi : cette réécriture en copie de flux
+    # reconstruit le conteneur et replacerait sinon l'index en fin de fichier,
+    # annulant celui posé au rendu (cf. pipeline/render.py).
     cmd = [
         "ffmpeg", "-y", "-i", str(path),
-        "-map_metadata", "-1", "-c", "copy",
+        "-map_metadata", "-1", "-c", "copy", "-movflags", "+faststart",
         "-metadata", f"title={numbered_title(track['n'], track['title'])}",
         "-metadata", f"track={track['n']}/{total}",
         "-metadata", f"album={album.get('title', '')}",

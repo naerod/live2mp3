@@ -15,6 +15,7 @@ désabonnement prévu) mais **jamais envoyé** tant que le master-switch
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -187,6 +188,77 @@ def notify_role(conn, *, recipient: str, actor: str, new_role: str,
          new_role, _display_name(conn, actor), "", "", "", _now()),
     )
     return True
+
+
+def notify_render_done(slug: str, recipient: str) -> bool:
+    """Notifie la fin d'un rendu à celui qui l'a lancé.
+
+    **Non désactivable** : c'est l'aboutissement d'une action explicite de
+    l'utilisateur, pas une sollicitation sociale. Pointe vers la fiche de
+    gestion, puisque l'album sort du rendu non publié.
+    """
+    if not recipient:
+        return False
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    album = {}
+    if mpath.is_file():
+        try:
+            album = Manifest.load(mpath).data.get("album", {}) or {}
+        except Exception:
+            album = {}
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO notifications(username, type, actor, reason_type, "
+            "reason_id, reason_label, slug, title, subtitle, read, created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,0,?)",
+            (recipient, "render_done", recipient, "render",
+             album.get("artist_id", "") or "", album.get("artist", ""),
+             slug, album.get("title", "") or slug,
+             album.get("artist", ""), _now()),
+        )
+    return True
+
+
+def render_activity(username: str) -> list[dict]:
+    """Rendus en cours de l'utilisateur, en entrée « silencieuse ».
+
+    Synthétiques comme les rappels de brouillon : listés en tête du panneau,
+    jamais comptés dans la pastille et jamais marquables comme lus (cf.
+    list_notifications). Un rendu en cours est un état, pas un évènement.
+    """
+    try:
+        from . import renderqueue
+        items = renderqueue.listing()
+    except Exception:
+        return []
+    out: list[dict] = []
+    for it in items:
+        if it.get("requested_by") != username:
+            continue
+        mpath = PROJECTS_DIR / it["slug"] / "manifest.yaml"
+        album = {}
+        if mpath.is_file():
+            try:
+                album = Manifest.load(mpath).data.get("album", {}) or {}
+            except Exception:
+                album = {}
+        out.append({
+            "id": None,
+            "type": "render_running",
+            "username": username,
+            "actor": username,
+            "reason_type": "render",
+            "reason_id": album.get("artist_id", "") or "",
+            "reason_label": album.get("artist", ""),
+            "slug": it["slug"],
+            "title": album.get("title", "") or it["slug"],
+            "subtitle": album.get("artist", ""),
+            "state": it.get("state", "queued"),
+            "formats": ["mp3", "mp4"] if it.get("video") else ["mp3"],
+            "read": False,
+            "created_at": it.get("queued_at") or time.time(),
+        })
+    return out
 
 
 def announce_post(slug: str) -> int:
@@ -371,7 +443,7 @@ def list_notifications(offset: int = 0, limit: int = 20,
     # Les rappels de brouillon coiffent la première page : ce sont des tâches en
     # attente, pas de l'historique — les noyer sous les notifications anciennes
     # (ou pire, les faire tomber page 2) raterait leur seul but.
-    reminders = draft_reminders(username)
+    reminders = render_activity(username) + draft_reminders(username)
     if reminders:
         # `unread` volontairement inchangé : un rappel est un état permanent,
         # pas un évènement non lu. L'inclure rendrait la pastille inextinguible

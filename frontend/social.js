@@ -35,6 +35,12 @@ const L2M = (function () {
       notif_role_now_neutral: "Votre rôle est désormais",
       notif_role_by: "par",
       notif_draft_tag: "Brouillon en cours",
+      notif_render_tag: "Rendu en cours", notif_render_queued: "En attente",
+      notif_render_paused: "En pause",
+      notif_render_msg: "Création de l'album en cours",
+      notif_done_tag: "Rendu terminé",
+      notif_done_msg: a => `Le rendu de l'album ${a} est terminé !`,
+      notif_done_cta: "Cliquez ici pour accéder à sa page (non publiée)",
       notif_draft_msg: "Vous avez un import à terminer",
     },
     en: {
@@ -69,6 +75,12 @@ const L2M = (function () {
       notif_role_now_neutral: "Your role is now",
       notif_role_by: "by",
       notif_draft_tag: "Draft in progress",
+      notif_render_tag: "Rendering", notif_render_queued: "Queued",
+      notif_render_paused: "Paused",
+      notif_render_msg: "Album creation in progress",
+      notif_done_tag: "Render complete",
+      notif_done_msg: a => `The render of ${a} is complete!`,
+      notif_done_cta: "Click here to open its (unpublished) page",
       notif_draft_msg: "You have an import to finish",
     },
   };
@@ -504,8 +516,25 @@ const L2M = (function () {
     }
   }
   // Rendu d'une notification (réutilisé par la cloche et la page centre).
+  // Photos d'artistes en lazy-load : un seul appel groupé, repli silencieux
+  // sur l'icône déjà en place si Deezer ne répond pas.
+  async function loadArtistThumbs(root) {
+    const slots = [...root.querySelectorAll(".notif-pic[data-artist]")];
+    if (!slots.length) return;
+    const ids = [...new Set(slots.map(s => s.dataset.artist))].join(",");
+    let pics = {};
+    try { pics = await api("GET", `/api/social/artist-pics?ids=${encodeURIComponent(ids)}`); }
+    catch (e) { return; }
+    slots.forEach(s => {
+      const url = pics[s.dataset.artist];
+      if (url) s.innerHTML = `<img src="${url}" alt="" referrerpolicy="no-referrer">`;
+    });
+  }
+
   function notifItem(n) {
     if (n.type === "draft_pending") return notifDraftItem(n);
+    if (n.type === "render_running") return notifRenderItem(n);
+    if (n.type === "render_done") return notifRenderDoneItem(n);
     if (n.type === "role_grant" || n.type === "role_revoke") return notifRoleItem(n);
     const icon = NOTIF_TYPE_ICON[n.type] || NOTIF_ICON[n.reason_type] || "notifications";
     return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
@@ -525,6 +554,46 @@ const L2M = (function () {
   // Pas de classe `unread` ni de pastille : un rappel est un état permanent et
   // n'entre pas dans le compteur (cf. backend/notifications.py), l'afficher
   // comme « non lu » laisserait croire à un tout-marquer-lu défaillant.
+  // Vignette d'artiste (Deezer) partagée par les entrées de rendu : l'id
+  // canonique est déjà dans le manifest, la photo vient du cache de suggest.py.
+  function artistThumb(n, fallbackIcon) {
+    const id = n.reason_id;
+    if (!id) return `<span class="notif-ic material-symbols-outlined">${fallbackIcon}</span>`;
+    return `<span class="notif-ic notif-pic" data-artist="${esc(id)}">` +
+           `<span class="material-symbols-outlined">${fallbackIcon}</span></span>`;
+  }
+
+  // Rendu en cours — entrée « silencieuse » : listée, jamais comptée, sans
+  // pastille (cf. backend/notifications.py::render_activity).
+  function notifRenderItem(n) {
+    const state = n.state === "paused" ? t("notif_render_paused")
+                : n.state === "queued" ? t("notif_render_queued")
+                : t("notif_render_tag");
+    const tags = (n.formats || []).map(f => `<span class="notif-fmt">${f}</span>`).join("");
+    return `<a class="notif-item notif-render" href="/app#${encodeURIComponent(n.slug)}">
+      ${artistThumb(n, "sync")}
+      <span class="notif-body">
+        <span class="notif-draft-tag"><span class="material-symbols-outlined">sync</span>${esc(state)}${tags}</span>
+        <span class="notif-reason">${esc(t("notif_render_msg"))}</span>
+        <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
+      </span>
+    </a>`;
+  }
+
+  // Fin de rendu — vraie notification, comptée et marquable comme lue.
+  function notifRenderDoneItem(n) {
+    return `<a class="notif-item${n.read ? "" : " unread"}" href="/app/album/${encodeURIComponent(n.slug)}">
+      ${artistThumb(n, "check_circle")}
+      <span class="notif-body">
+        <span class="notif-draft-tag"><span class="material-symbols-outlined">check_circle</span>${t("notif_done_tag")}</span>
+        <span class="notif-reason">${esc(T[LANG()].notif_done_msg((n.subtitle ? n.subtitle + " — " : "") + n.title))}</span>
+        <span class="notif-post">${esc(t("notif_done_cta"))}</span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
   function notifDraftItem(n) {
     return `<a class="notif-item notif-draft" href="/app#${encodeURIComponent(n.slug)}">
       <span class="notif-ic material-symbols-outlined">drafts</span>
@@ -576,9 +645,46 @@ const L2M = (function () {
         `<span class="nb-badge">${unread > 99 ? "99+" : unread}</span>`);
     }
     async function refreshCount() {
+      const before = unread;
       try { unread = (await api("GET", "/api/social/notifications/count")).unread; }
       catch (e) { unread = 0; }
       paintBadge();
+      // Une notification apparue pendant que l'utilisateur est ailleurs sur le
+      // site mérite un signal : un rendu dure 20 min, personne ne surveille la
+      // cloche. On ne signale que les fins de rendu — les interactions
+      // sociales n'ont pas à interrompre.
+      if (unread > before) announceRenderDone();
+    }
+
+    let announced = new Set();
+    async function announceRenderDone() {
+      let d = { items: [] };
+      try { d = await api("GET", "/api/social/notifications?limit=5"); } catch (e) { return; }
+      for (const n of d.items) {
+        if (n.type !== "render_done" || n.read || announced.has(n.id)) continue;
+        announced.add(n.id);
+        renderToast(n);
+      }
+    }
+
+    function renderToast(n) {
+      const el = document.createElement("a");
+      el.className = "nrd-rtoast";
+      el.href = `/app/album/${encodeURIComponent(n.slug)}`;
+      const who = (n.subtitle ? n.subtitle + " — " : "") + n.title;
+      el.innerHTML = `<span class="material-symbols-outlined">check_circle</span>
+        <span class="nrd-rtoast-body">
+          <b>${esc(T[LANG()].notif_done_msg(who))}</b>
+          <span>${esc(t("notif_done_cta"))}</span>
+        </span>
+        <button class="nrd-rtoast-x" aria-label="fermer"><span class="material-symbols-outlined">close</span></button>`;
+      el.querySelector(".nrd-rtoast-x").onclick = (e) => {
+        e.preventDefault(); e.stopPropagation(); el.remove();
+      };
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add("show"));
+      // Assez long pour être lu sans être bloquant ; le clic reste possible.
+      setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 12000);
     }
     async function loadPop() {
       pop.innerHTML = `
@@ -591,6 +697,7 @@ const L2M = (function () {
       const list = pop.querySelector(".nb-list");
       list.innerHTML = d.items.length ? d.items.map(notifItem).join("")
         : `<div class="soc-empty">${t("notif_empty")}</div>`;
+      loadArtistThumbs(list);
       pop.querySelector(".nb-markall").onclick = async (e) => {
         e.preventDefault(); e.stopPropagation();
         try { unread = (await api("POST", "/api/social/notifications/read", { all: true })).unread; }
@@ -598,7 +705,7 @@ const L2M = (function () {
         paintBadge();
         // Un rappel de brouillon reste non lu : il n'est pas « lisible », seule
         // la fin (ou la suppression) de l'import le fait disparaître.
-        list.querySelectorAll(".notif-item:not(.notif-draft)").forEach(el => {
+        list.querySelectorAll(".notif-item:not(.notif-draft):not(.notif-render)").forEach(el => {
           el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
         });
       };
@@ -991,7 +1098,7 @@ const L2M = (function () {
   return {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
     likeButton, followButton, roleBadge, entityHref, comments, userMenu,
-    notifBell, notifItem, autocomplete, LANG,
+    notifBell, notifItem, loadArtistThumbs, autocomplete, LANG,
     getTheme, applyTheme, getLang, applyLang, initHeader,
   };
 })();
