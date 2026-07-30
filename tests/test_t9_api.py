@@ -109,9 +109,88 @@ def test_markers_update_locks(client):
     assert m["tracks"][0]["start"] == 0.0
 
 
+def _wait_render_complete(c, slug):
+    with c.stream("GET", f"/api/jobs/{slug}/events", headers=GEST) as resp:
+        for line in resp.iter_lines():
+            if not line or not line.startswith("data:"):
+                continue
+            ev = json.loads(line[5:].strip())
+            if ev["status"] == "error":
+                pytest.fail(f"pipeline error: {ev['info']}")
+            if ev["status"] == "complete":
+                break
+
+
+def test_reedit_published_album_forces_rerender_and_refreshes_jellyfin(client, monkeypatch):
+    """Rouvrir l'éditeur sur un album déjà publié (bouton « Ouvrir l'éditeur
+    audio » de la fiche de gestion) : le re-rendu doit refléter le nouveau
+    découpage même à nom de fichier inchangé, purger les pistes retirées, et
+    déclencher un rafraîchissement Jellyfin — ce qu'un rendu de création
+    (album encore non publié) ne doit pas faire."""
+    from backend import jellyfin
+
+    calls = []
+    monkeypatch.setattr(jellyfin, "refresh_library", lambda: calls.append(1) or True)
+
+    c, projects = client
+    payload = {
+        "album": {"artist": "Re", "title": "Edit", "date": "2026-04-04"},
+        "tracks": [
+            {"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True},
+            {"n": 2, "title": "B", "start": 3.0, "end": 6.0, "locked": True},
+        ],
+        "target": "audio_cd",
+    }
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    _seed_master(projects / slug)
+
+    # Rendu de création (album non publié) : pas de refresh Jellyfin.
+    c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
+    _wait_render_complete(c, slug)
+    assert calls == []
+    audio_dir = projects / slug / "build" / "audio"
+    track1_mp3 = next(audio_dir.glob("01.*"))
+    track1_mtime = track1_mp3.stat().st_mtime
+    track2_mp3 = next(audio_dir.glob("02.*"))
+
+    # Publication, puis ré-édition (fusion des 2 pistes en 1 seule "A" plus
+    # longue : nom de fichier inchangé pour la piste 1, piste 2 supprimée).
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
+    r = c.put(f"/api/jobs/{slug}/setlist", headers=GEST,
+             json={"tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 6.0}]})
+    assert r.status_code == 200
+
+    c.post(f"/api/jobs/{slug}/render", params={"media": "audio"}, headers=GEST)
+    _wait_render_complete(c, slug)
+
+    # Refresh Jellyfin déclenché.
+    assert calls == [1]
+    # L'ancienne piste 2 (orpheline) a disparu ; la piste 1 (nom de fichier
+    # inchangé) a bien été réencodée malgré l'idempotence par défaut.
+    remaining = list(audio_dir.glob("*.mp3"))
+    assert len(remaining) == 1
+    assert not track2_mp3.exists()
+    assert track1_mp3.stat().st_mtime > track1_mtime
+    # L'album reste publié : ces endpoints ne touchent jamais `published`.
+    assert c.get(f"/api/albums/{slug}", headers=GEST).json()["published"] is True
+
+
 def test_manifest_404(client):
     c, _ = client
     assert c.get("/api/jobs/nope/manifest", headers=GEST).status_code == 404
+
+
+def test_has_editor_source_reflects_master_presence(client):
+    """L'éditeur de coupes ne peut rouvrir que les albums qui ont conservé
+    leur master (outil lien) — pas les imports manuels sans source/."""
+    c, projects = client
+    payload = {"album": {"artist": "Src", "title": "Alb", "date": "2026-06-06"},
+               "tracks": [{"n": 1, "title": "A", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "audio_cd"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    assert c.get(f"/api/albums/{slug}", headers=GEST).json()["has_editor_source"] is False
+    _seed_master(projects / slug)
+    assert c.get(f"/api/albums/{slug}", headers=GEST).json()["has_editor_source"] is True
 
 
 def test_vitrine_public(client):

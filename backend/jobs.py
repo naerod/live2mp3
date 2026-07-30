@@ -24,16 +24,20 @@ def _noop(stage: str, status: str, info: dict) -> None:  # pragma: no cover
 
 def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
                         video: bool = True, gap_seconds: float = 2.0,
+                        force: bool = False,
                         progress: ProgressCb = _noop) -> dict:
     """Exécute render -> tags -> artwork -> disc -> bundle.
 
     Suppose les timecodes déjà présents (validés via l'UI Peaks.js).
+    `force` : ré-encode même les pistes dont le fichier existe déjà — requis
+    pour un re-rendu sur un album déjà publié (sinon une piste dont le nom ne
+    change pas garderait son ancien découpage, cf. render.run/idempotence).
     """
     project_dir = Path(project_dir)
     results: dict = {}
 
     progress("render", "running", {})
-    results["render"] = render.run(project_dir, video=video)
+    results["render"] = render.run(project_dir, video=video, force=force)
     progress("render", "done", {"tracks": len(results["render"]["audio"])})
 
     progress("tags", "running", {})

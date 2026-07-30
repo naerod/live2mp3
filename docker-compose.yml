@@ -21,6 +21,10 @@ services:
       # Promotion/rétrogradation gestionnaire via l'API Authentik (groupe app).
       AUTHENTIK_URL: ${AUTHENTIK_URL:-http://authentik-server:9000}
       AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
+      # Rafraîchissement de la bibliothèque Jellyfin après un re-rendu sur un
+      # album déjà publié (réseau apps_web partagé, cf. backend/jellyfin.py).
+      JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
+      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY:-}
     volumes:
       # Stockage des albums : bind-mount hôte, partagé prod/preprod (voir DEPLOY.md).
       # `:?` = échec bruyant si absent du .env, plutôt qu'un repli silencieux

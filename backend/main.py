@@ -32,7 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import re
-from . import catalogue, entities, jobs, linktool, llm
+from uuid import uuid4
+from . import catalogue, entities, jellyfin, jobs, linktool, llm
 from .albumfiles import (
     _extract_embedded_cover,
     _rename_audio_files,
@@ -54,8 +55,13 @@ from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
 from .pipeline import boundaries, download, preanalyze
 from .covers import (
+    COVER_EXTS,
+    COVER_MAX_BYTES,
     MEDIA_TYPES,
+    _on_covers_changed,
+    _read_upload as _covers_read_upload,
     cover_file,
+    covers_dir,
     rank_covers,
     router as covers_router,
     top_cover,
@@ -63,7 +69,7 @@ from .covers import (
     zip_basename,
 )
 from .printable import cover_pdf, traycard_pdf
-from .social import router as social_router
+from .social import router as social_router, _ensure_profile, _album_exists
 from .follows import router as follows_router
 from . import notifications
 from .notifications import router as notifications_router
@@ -410,6 +416,7 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "entities": entities.album_entities(m.data.get("album", {})),
         "labels": cat.get("labels", []),
         "has_cover": cat.get("has_cover", False),
+        "cover_v": cat.get("cover_v", 0),
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
@@ -455,7 +462,11 @@ def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    return FileResponse(cover)
+    # Le front ajoute ?v=<mtime> pour invalider dès qu'un gestionnaire remplace
+    # la cover. On force la revalidation pour rattraper les vieux liens sans v=.
+    return FileResponse(cover, headers={
+        "Cache-Control": "no-cache, must-revalidate",
+    })
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
@@ -716,6 +727,7 @@ def album_detail(slug: str,
     album = m.data.get("album", {})
     src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    src_dir = PROJECTS_DIR / slug / "source"
     return {
         "slug": slug,
         "album": album,
@@ -731,6 +743,10 @@ def album_detail(slug: str,
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
+        # L'éditeur de coupes a besoin du master : seuls les albums importés
+        # via l'outil lien (pas les imports manuels) le conservent.
+        "has_editor_source": (src_dir / "preview.mp3").exists()
+                              or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
         "per_track_covers": bool(album.get("per_track_covers", False)),
         "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
@@ -844,27 +860,59 @@ def update_tracks(slug: str, payload: TracksEditIn,
 @app.post("/api/albums/{slug}/cover")
 async def upload_cover(slug: str, file: UploadFile = File(...),
                        identity: dict = Depends(require_gestionnaire)) -> dict:
-    path = PROJECTS_DIR / slug / "manifest.yaml"
-    if not path.exists():
+    """Remplace la pochette « officielle » d'un album (outil de gestion).
+
+    Historiquement, cette route écrivait un simple `artwork/cover.jpg` et
+    mettait à jour `album.cover` dans le manifest — mais depuis l'ajout du
+    système de propositions (table `covers`, servies par /cover-img/{id}), la
+    fiche publique n'affichait plus jamais ce fichier, ce qui donnait au
+    gestionnaire l'impression d'un enregistrement invisible.
+
+    On aligne donc l'upload gestionnaire sur le pipeline « community » :
+    l'image est stockée sous `artwork/covers/{key}_cover{ext}`, une ligne est
+    insérée dans `covers` au nom du gestionnaire avec `pinned=1` (au plus une
+    épinglée par album — on dépingle l'ancienne d'abord), puis
+    `_on_covers_changed()` repointe le manifest vers cette nouvelle gagnante.
+    Résultat : la vitrine (`/cover/{slug}`), la fiche publique
+    (`/cover-img/{id}`) et les MP3 (`_write_album_cover`) reçoivent tous la
+    même image, sans qu'un client ait besoin de vider son cache — un nouvel
+    upload = nouvelle clé + nouvel id = nouvelles URLs.
+    """
+    if not _album_exists(slug):
         raise HTTPException(404, "album introuvable")
-    ct = file.content_type or ""
-    ext_map = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
-    ext = ext_map.get(ct)
-    if not ext:
-        ext = Path(file.filename or "cover.jpg").suffix or ".jpg"
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    username = identity.get("username") or ""
+    if not username:
+        raise HTTPException(400, "identité manquante")
+    cdata, cext = await _covers_read_upload(file, COVER_EXTS, COVER_MAX_BYTES, "pochette")
+    key = uuid4().hex
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        # Une seule cover épinglée à la fois (index partiel dans le schéma).
+        conn.execute("UPDATE covers SET pinned=0 WHERE slug=? AND pinned=1", (slug,))
+        cur = conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, created_at, updated_at, pinned) "
+            "VALUES(?,?,?,?,?,?,?,?,1)",
+            (slug, username, key, cext, "", "", now, now),
+        )
+        cover_id = cur.lastrowid
+        covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        cover_file(slug, key, cext).write_bytes(cdata)
+    # Repoint le manifest vers la nouvelle gagnante, puis nettoie le vieux
+    # artwork/cover.* legacy (plus lu par personne une fois le manifest bougé).
+    _on_covers_changed(slug)
     art_dir = PROJECTS_DIR / slug / "artwork"
-    art_dir.mkdir(exist_ok=True)
-    # Retire une éventuelle ancienne pochette d'une autre extension
-    for old in art_dir.glob("cover.*"):
-        if old.suffix.lower() != ext:
-            old.unlink(missing_ok=True)
-    cover_path = art_dir / f"cover{ext}"
-    cover_path.write_bytes(await file.read())
+    if art_dir.is_dir():
+        for old in art_dir.glob("cover.*"):
+            if old.is_file():
+                old.unlink(missing_ok=True)
     m = Manifest.load(path)
-    m.data.setdefault("album", {})["cover"] = f"artwork/cover{ext}"
-    m.save()
     embedded = _write_album_cover(slug, m)
-    return {"ok": True, "cover": f"artwork/cover{ext}", "mp3_embedded": embedded}
+    return {"ok": True, "cover_id": cover_id,
+            "cover": m.data.get("album", {}).get("cover"),
+            "mp3_embedded": embedded}
 
 
 @app.post("/api/albums/{slug}/traycard")
@@ -1388,11 +1436,18 @@ def update_markers(slug: str, payload: dict,
     return {"ok": True, "tracks": len(m.tracks)}
 
 
-def _run_render_bg(slug: str, media: str, gap: float, video: bool) -> None:
+def _run_render_bg(slug: str, media: str, gap: float, video: bool,
+                   republish: bool = False) -> None:
     project_dir = PROJECTS_DIR / slug
     try:
         jobs.run_render_pipeline(project_dir, media=media, gap_seconds=gap,
-                                 video=video, progress=_make_cb(slug))
+                                 video=video, force=republish,
+                                 progress=_make_cb(slug))
+        if republish:
+            # Best-effort : un album déjà publié qu'on vient de re-rendre doit
+            # réapparaître à jour dans Jellyfin/Finamp (le symlink existe déjà,
+            # sync-media.sh ne détecte pas un changement de contenu interne).
+            jellyfin.refresh_library()
         _publish(slug, {"stage": "all", "status": "complete", "info": {},
                         "ts": time.time()})
     except Exception as e:  # pragma: no cover
@@ -1405,15 +1460,23 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0,
                  video: bool | None = None,
                  identity: dict = Depends(require_gestionnaire)) -> dict:
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
+    path = project_dir / "manifest.yaml"
+    if not path.exists():
         raise HTTPException(404, "projet introuvable")
+    m = Manifest.load(path)
     if video is None:
         # Clips MP4 seulement si la source vidéo a été téléchargée.
-        m = Manifest.load(project_dir / "manifest.yaml")
         video = m.data.get("source", {}).get("media", "video") == "video"
+    # Un album déjà publié qu'on ré-édite (cf. bouton « Ouvrir l'éditeur audio »
+    # sur la fiche de gestion) doit forcer le re-rendu : le pipeline est
+    # idempotent par nom de fichier, donc une piste dont le nom ne change pas
+    # garderait sinon son ancien découpage. En création, published est encore
+    # False à ce stade → comportement idempotent existant inchangé.
+    republish = bool(m.data.get("published"))
     _progress_last[slug] = []
     _progress_bus[slug] = queue.Queue()
-    threading.Thread(target=_run_render_bg, args=(slug, media, gap, video),
+    threading.Thread(target=_run_render_bg,
+                     args=(slug, media, gap, video, republish),
                      daemon=True).start()
     return {"ok": True, "slug": slug}
 

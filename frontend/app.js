@@ -41,6 +41,10 @@ let videoInfo=null;     // métadonnées de la vidéo sondée
 let setlistSource=null; // provenance de la setlist (setlist.fm) + attribution
 let currentPhase=null;  // "prepare" | "render" (pour le bouton réessayer)
 let peaksInstance=null;
+// Ré-édition d'un album déjà publié (bouton « Ouvrir l'éditeur audio » de la
+// fiche de gestion, reprise via /app#slug) : même éditeur, mais l'album n'est
+// pas "créé" — publié reste vrai tout du long, wording de fin différent.
+let reedit=false;
 
 // ============================================================
 // Étape 1 — Analyse du lien
@@ -354,6 +358,13 @@ function buildEditFromTracks(tracks){
 async function openEditor(){
   show("step-editor");
   const m=await(await fetch(`/api/jobs/${slug}/manifest`)).json();
+  reedit=!!m.published;
+  // Attribut (pas juste le texte) : un changement de langue en cours de
+  // session ré-applique data-i18n via applyI18n() et écraserait un simple
+  // textContent codé en dur ici.
+  $("btn-render").querySelector("[data-i18n]")
+    .setAttribute("data-i18n",reedit?"validate_render_reedit":"validate_render");
+  applyI18n(LANG());
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
@@ -690,7 +701,7 @@ async function startRender(){
   currentPhase="render";
   const r=await fetch(`/api/jobs/${slug}/render`,{method:"POST"});
   if(!r.ok){alert(T("err_generic"));return;}
-  runProgress("render_title",RENDER_STAGES,finish);
+  runProgress(reedit?"render_title_reedit":"render_title",RENDER_STAGES,finish);
 }
 
 async function finish(){
@@ -698,11 +709,18 @@ async function finish(){
   $("summary").innerHTML=
     `<p><strong>${m.album.artist}</strong> — ${m.album.title}<br>`+
     `${m.tracks.length} ${T("tracks_word")}</p>`+
-    `<p class="note"><span class="material-symbols-outlined">visibility_off</span>`+
-    `<span>${T("done_draft_note")}</span></p>`;
+    // La note "créé en brouillon" est fausse pour une ré-édition : l'album
+    // était déjà publié et le reste (aucun changement de `published` ici).
+    (reedit?"":`<p class="note"><span class="material-symbols-outlined">visibility_off</span>`+
+    `<span>${T("done_draft_note")}</span></p>`);
   $("btn-album").href=`/album/${slug}`;
   $("btn-manage").href=`/app/album/${slug}`;
   $("btn-download").href=`/api/jobs/${slug}/bundle`;
+  if(reedit){
+    document.querySelector("#step-done h1 [data-i18n]")
+      .setAttribute("data-i18n","done_title_reedit");
+    applyI18n(LANG());
+  }
   show("step-done");
 }
 
