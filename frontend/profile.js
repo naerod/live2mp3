@@ -76,7 +76,7 @@
   function onLangChanged() { applyStaticI18n(); if (DATA) renderProfile(); }
 
   const USERNAME = decodeURIComponent((location.pathname.split("/u/")[1] || "").replace(/\/$/, ""));
-  let DATA = null, ME = { authenticated: false }, activeTab = "publications", pubSort = "date";
+  let DATA = null, ME = { authenticated: false }, activeTab = "publications", pubSort = "imported";
 
   function albumCard(a) {
     const cover = a.has_cover
