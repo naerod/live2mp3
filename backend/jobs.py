@@ -6,6 +6,7 @@ un callback (branché sur SSE côté API, ou Redis pub/sub côté worker).
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Callable
 
@@ -107,6 +108,17 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
             # jour dans Jellyfin : le symlink existe déjà, sync-media.sh ne voit
             # pas un changement de contenu interne.
             jellyfin.refresh_library()
+        # Purge des masters : désactivée par défaut. Elle rend ~1,6 Go par
+        # album mais impose un re-téléchargement (2-3 min) à la prochaine
+        # ré-ouverture de l'éditeur — et devient définitive si la vidéo source
+        # disparaît de YouTube entre-temps. À n'activer qu'en connaissance de
+        # cause, via L2M_PURGE_MASTERS=1.
+        if os.environ.get("L2M_PURGE_MASTERS") == "1":
+            try:
+                from .pipeline import download as _dl
+                _dl.purge_master(project_dir)
+            except Exception:
+                pass
         try:
             notifications.notify_render_done(slug, requested_by)
         except Exception:
