@@ -28,7 +28,7 @@
         await fetch("/api/social/notifications/read", { method: "POST",
           headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
       } catch (e) {}
-      document.querySelectorAll("#list .notif-item:not(.notif-draft)").forEach(el => {
+      document.querySelectorAll("#list .notif-item:not(.notif-draft):not(.notif-render)").forEach(el => {
         el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
       });
     };
@@ -49,6 +49,7 @@
       list.innerHTML = `<div class="soc-empty">${t("empty")}</div>`;
     } else {
       list.insertAdjacentHTML("beforeend", d.items.map(L2M.notifItem).join(""));
+      L2M.loadArtistThumbs(list);
     }
     offset += d.items.length;
     const more = document.getElementById("more-slot");

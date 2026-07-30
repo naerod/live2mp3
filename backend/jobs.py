@@ -89,10 +89,11 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
     """
     from pathlib import Path as _Path
 
-    from . import jellyfin, progress, renderqueue
+    from . import jellyfin, notifications, progress, renderqueue
     from .manifest import PROJECTS_DIR
 
     project_dir = _Path(PROJECTS_DIR) / slug
+    requested_by = renderqueue.get_meta(slug).get("requested_by", "")
     cb = progress.make_cb(slug)
     try:
         run_render_pipeline(
@@ -106,6 +107,11 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
             # jour dans Jellyfin : le symlink existe déjà, sync-media.sh ne voit
             # pas un changement de contenu interne.
             jellyfin.refresh_library()
+        try:
+            notifications.notify_render_done(slug, requested_by)
+        except Exception:
+            # Une notification ratée ne doit pas faire échouer un rendu abouti.
+            pass
         progress.publish(slug, {"stage": "all", "status": "complete", "info": {}})
         return {"ok": True, "slug": slug}
     except render.Cancelled:
