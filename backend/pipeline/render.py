@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from ..manifest import Manifest
 
@@ -66,7 +67,11 @@ def _purge_orphans(dir_: Path, expected: set[str]) -> None:
             f.unlink()
 
 
-def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dict:
+def run(project_dir: str | Path, force: bool = False, video: bool = True,
+        on_track: Callable[[int, int, str], None] | None = None) -> dict:
+    """`on_track(done, total, title)` est appelé avant chaque piste : le
+    ré-encodage vidéo dure plusieurs minutes par piste, sans ça l'UI reste
+    figée sur « en cours… » pendant tout le stage."""
     project_dir = Path(project_dir)
     m = Manifest.load(project_dir / "manifest.yaml")
     master_wav = project_dir / m.data["source"]["master_wav"]
@@ -78,11 +83,15 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dic
     if video:
         _purge_orphans(video_dir, _expected_filenames(m, "mp4"))
 
+    todo = [t for t in m.tracks
+            if t.get("start") is not None and t.get("end") is not None]
+    total = len(todo)
+
     rendered = {"audio": [], "video": []}
-    for track in m.tracks:
-        start, end = track.get("start"), track.get("end")
-        if start is None or end is None:
-            continue
+    for i, track in enumerate(todo):
+        start, end = track["start"], track["end"]
+        if on_track:
+            on_track(i, total, str(track.get("title", "")))
         # Audio
         a_out = audio_dir / m.track_filename(track, "mp3")
         if force or not a_out.exists():
@@ -95,6 +104,8 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dic
                 render_video(master_mkv, float(start), float(end), v_out)
             rendered["video"].append(str(v_out))
 
+    if on_track and total:
+        on_track(total, total, "")
     m.set_state("render", "done")
     return rendered
 

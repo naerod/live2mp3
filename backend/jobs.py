@@ -37,7 +37,15 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
     results: dict = {}
 
     progress("render", "running", {})
-    results["render"] = render.run(project_dir, video=video, force=force)
+
+    def _on_track(done: int, total: int, title: str) -> None:
+        progress("render", "running", {
+            "done": done, "total": total, "title": title,
+            "pct": (done / total * 100) if total else 0,
+        })
+
+    results["render"] = render.run(project_dir, video=video, force=force,
+                                   on_track=_on_track)
     progress("render", "done", {"tracks": len(results["render"]["audio"])})
 
     progress("tags", "running", {})

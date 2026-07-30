@@ -259,7 +259,12 @@ function runProgress(titleKey,stages,onComplete){
           // Progression connue -> barre remplie au pourcentage
           li.classList.remove("indet");
           fill.style.width=Math.round(info.pct)+"%";
-          pct.textContent=(info.phase?T("phase_"+info.phase)+" ":"")+Math.round(info.pct)+" %";
+          // Compteur de pistes quand le stage en fournit un (render) : le
+          // ré-encodage vidéo dure des minutes par piste, un simple « % »
+          // donne l'impression que ça ne bouge pas.
+          pct.textContent=info.total
+            ?`${info.done}/${info.total} · ${Math.round(info.pct)} %`
+            :(info.phase?T("phase_"+info.phase)+" ":"")+Math.round(info.pct)+" %";
         }else{
           // Progression inconnue -> barre animée « ça tourne »
           li.classList.add("indet");
