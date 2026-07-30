@@ -191,12 +191,26 @@ def cancel(slug: str) -> str:
 
 
 def _started_slugs() -> list[str]:
+    """Slugs réellement en cours.
+
+    Le StartedJobRegistry se nettoie paresseusement : un job terminé y reste
+    listé un moment. Sans revérifier le statut, la file afficherait des rendus
+    fantômes « en cours ».
+    """
     try:
         reg = StartedJobRegistry(QUEUE_NAME, connection=conn())
-        return [_slug_of(i) for i in reg.get_job_ids()
-                if i.startswith(JOB_PREFIX)]
+        ids = [i for i in reg.get_job_ids() if i.startswith(JOB_PREFIX)]
     except Exception:
         return []
+    out = []
+    for jid in ids:
+        try:
+            job = Job.fetch(jid, connection=conn())
+            if job.get_status(refresh=True) == "started":
+                out.append(_slug_of(jid))
+        except Exception:
+            continue
+    return out
 
 
 def _queued_slugs() -> list[str]:
