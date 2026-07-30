@@ -31,7 +31,7 @@ const I18N = {
     stage_preview:"Préparation de l'écoute",
     stage_waveform:"Forme d'onde",
     stage_ai_markers:"Détection des chansons",
-    stage_render:"Découpe des pistes",
+    stage_render:"Découpe et encodage des pistes",
     stage_tags:"Métadonnées MP3",
     stage_artwork:"Pochettes PDF",
     stage_disc:"Image disque",
@@ -61,6 +61,11 @@ const I18N = {
     reset_confirm:"Réinitialiser toutes les coupes à l'analyse IA d'origine ? Vos ajustements manuels seront perdus.",
     reset_done:"Coupes réinitialisées à l'analyse IA.",
     dlg_yes:"Oui, réinitialiser",dlg_no:"Annuler",
+    mp4_warn:"L'export MP4 ré-encode l'intégralité de la vidéo, piste par piste : "+
+      "comptez 30 min à 2 h de rendu selon la durée du concert, contre environ "+
+      "5 min pour un rendu MP3 seul.\n\nLe MP3 est produit dans les deux cas — "+
+      "la case ajoute uniquement les clips vidéo.",
+    mp4_warn_yes:"Garder le MP4",mp4_warn_no:"Annuler",
     disc_warn:(min,n)=>`Durée totale : ${min} min — au-delà de la capacité d'un disque (88 min). ${n} disques nécessaires ; séparation marquée sur la forme d'onde.`,
     disc_point:d=>`Disque ${d}`,
     err_no_tracks:"Aucune piste à créer.",
@@ -102,7 +107,7 @@ const I18N = {
     stage_preview:"Preparing playback",
     stage_waveform:"Waveform",
     stage_ai_markers:"Song detection",
-    stage_render:"Cutting tracks",
+    stage_render:"Cutting & encoding tracks",
     stage_tags:"MP3 metadata",
     stage_artwork:"PDF artwork",
     stage_disc:"Disc image",
@@ -131,6 +136,11 @@ const I18N = {
     reset_confirm:"Reset all cuts to the original AI analysis? Your manual adjustments will be lost.",
     reset_done:"Cuts reset to the AI analysis.",
     dlg_yes:"Yes, reset",dlg_no:"Cancel",
+    mp4_warn:"MP4 export re-encodes the entire video, track by track: expect "+
+      "30 min to 2 h of rendering depending on the length of the show, versus "+
+      "about 5 min for an MP3-only render.\n\nMP3 files are produced either way — "+
+      "this option only adds the video clips.",
+    mp4_warn_yes:"Keep MP4",mp4_warn_no:"Cancel",
     disc_warn:(min,n)=>`Total length: ${min} min — beyond a single disc's capacity (88 min). ${n} discs needed; split shown on the waveform.`,
     disc_point:d=>`Disc ${d}`,
     err_no_tracks:"No tracks to create.",

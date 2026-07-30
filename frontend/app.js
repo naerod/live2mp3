@@ -641,7 +641,9 @@ $("btn-add-track2").onclick=()=>{
 };
 
 // Modale de confirmation Oui/Non (pas de confirm() natif — cf. DA du projet).
-function confirmDialog(msg,onYes){
+// `opts` : {yes, no, icon, onNo} pour réutiliser la modale hors réinitialisation.
+function confirmDialog(msg,onYes,opts){
+  opts=opts||{};
   const back=document.createElement("div");
   back.className="cfm-back";
   back.innerHTML=`
@@ -649,18 +651,43 @@ function confirmDialog(msg,onYes){
       <p class="cfm-msg"></p>
       <div class="cfm-actions">
         <button class="icon-btn cfm-no"><span class="material-symbols-outlined">close</span> <span></span></button>
-        <button class="primary cfm-yes"><span class="material-symbols-outlined">restart_alt</span> <span></span></button>
+        <button class="primary cfm-yes"><span class="material-symbols-outlined">${opts.icon||"restart_alt"}</span> <span></span></button>
       </div>
     </div>`;
-  back.querySelector(".cfm-msg").textContent=msg;
-  back.querySelector(".cfm-no span:last-child").textContent=T("dlg_no");
-  back.querySelector(".cfm-yes span:last-child").textContent=T("dlg_yes");
-  const close=()=>back.remove();
+  // Le message peut contenir des \n (paragraphes) : pre-line posé ici plutôt
+  // que dans app.css, en cours de refonte sur une autre branche de travail.
+  const msgEl=back.querySelector(".cfm-msg");
+  msgEl.style.whiteSpace="pre-line";
+  msgEl.textContent=msg;
+  back.querySelector(".cfm-no span:last-child").textContent=opts.no||T("dlg_no");
+  back.querySelector(".cfm-yes span:last-child").textContent=opts.yes||T("dlg_yes");
+  let answered=false;
+  const close=()=>{
+    back.remove();
+    if(!answered&&opts.onNo)opts.onNo();
+  };
   back.querySelector(".cfm-no").onclick=close;
   back.addEventListener("click",e=>{if(e.target===back)close();});
-  back.querySelector(".cfm-yes").onclick=()=>{close();onYes();};
+  back.querySelector(".cfm-yes").onclick=()=>{answered=true;back.remove();onYes();};
   document.body.appendChild(back);
 }
+
+// --- Avertissement « export MP4 » ---
+// Cocher la case fait passer le rendu de ~5 min à 30 min–2 h (ré-encodage
+// H.264 de tout le concert). Sans avertissement, l'utilisateur croit à un
+// blocage pendant la découpe.
+(function(){
+  const cb=$("f-video");if(!cb)return;
+  cb.addEventListener("change",()=>{
+    if(!cb.checked)return;
+    confirmDialog(T("mp4_warn"),()=>{},{
+      icon:"movie",
+      yes:T("mp4_warn_yes"),
+      no:T("mp4_warn_no"),
+      onNo:()=>{cb.checked=false;},
+    });
+  });
+})();
 
 let _toastTimer=null;
 function toast(msg,err){
