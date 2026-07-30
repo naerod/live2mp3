@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/shared/naerod-social.css">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
@@ -494,6 +495,10 @@ const T={
       sel_count:n=>`${n} sélectionné${n>1?"s":""}`,
       sel_dl_mp3:"Télécharger",sel_dl_mp4:"Télécharger MP4",
       sel_publish:"Publier",sel_unpublish:"Dépublier",
+      // « Non publié » et non « Brouillon » : un brouillon est un import
+      // inachevé (cf. page /app/drafts), un album non publié est fini mais
+      // masqué au public. Deux états distincts, deux mots distincts.
+      unpublished_badge:"Non publié",
       sel_preparing:"Préparation du téléchargement…",
       sel_dl_empty:"Aucun média téléchargeable dans la sélection.",
       sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
@@ -539,6 +544,7 @@ const T={
       sel_count:n=>`${n} selected`,
       sel_dl_mp3:"Download",sel_dl_mp4:"Download MP4",
       sel_publish:"Publish",sel_unpublish:"Unpublish",
+      unpublished_badge:"Unpublished",
       sel_preparing:"Preparing download…",
       sel_dl_empty:"No downloadable media in the selection.",
       sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
@@ -678,7 +684,7 @@ function albumCard(a){
   const newBadge=isNew(a)
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
   const draftBadge=a.published===false&&md.is_gestionnaire
-    ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${L()==="fr"?"Brouillon":"Draft"}</span>`:"";
+    ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${T[L()].unpublished_badge}</span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
   const pick=`<div class="pick" aria-hidden="true"><span class="material-symbols-outlined">check</span></div>`;
