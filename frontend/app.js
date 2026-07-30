@@ -434,12 +434,14 @@ function applyZoomWindow(seconds){
   const lb=$("zoom-window-label");if(lb)lb.textContent=fmtClock(seconds);
 }
 
-// Recentre la vue zoomée autour d'un temps : 1 min avant, 3 min après.
+// Recentre la vue zoomée autour d'un temps, sans changer le niveau de zoom en
+// cours : ne fait que déplacer la fenêtre (25% avant / 75% après), pour ne pas
+// écraser un zoom manuel de l'utilisateur à chaque clic/seek sur la forme d'onde.
 function frameAround(t){
   const zv=peaksInstance&&peaksInstance.views&&peaksInstance.views.getView("zoomview");
-  if(!zv)return;
-  applyZoomWindow(240);            // 1 + 3 min
-  if(zv.setStartTime)zv.setStartTime(Math.max(0,t-60));
+  if(!zv||!zv.setStartTime)return;
+  const win=+($("zoom-window").value)||240;
+  zv.setStartTime(Math.max(0,t-win*0.25));
 }
 
 function wireZoomControls(){
