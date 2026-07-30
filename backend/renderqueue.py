@@ -41,18 +41,31 @@ class DuplicateRender(Exception):
     """
 
 
-_conn: redis.Redis | None = None
+# Deux connexions volontairement distinctes :
+# - `rq_conn()` sans décodage, car RQ sérialise ses jobs en binaire ; une
+#   connexion `decode_responses=True` fait échouer Job.fetch silencieusement
+#   (et donc le garde-fou anti-doublon, qui laissait alors passer deux rendus).
+# - `conn()` avec décodage pour nos propres clés (drapeaux, métadonnées JSON).
+_rq_conn: redis.Redis | None = None
+_kv_conn: redis.Redis | None = None
+
+
+def rq_conn() -> redis.Redis:
+    global _rq_conn
+    if _rq_conn is None:
+        _rq_conn = redis.from_url(REDIS_URL)
+    return _rq_conn
 
 
 def conn() -> redis.Redis:
-    global _conn
-    if _conn is None:
-        _conn = redis.from_url(REDIS_URL, decode_responses=True)
-    return _conn
+    global _kv_conn
+    if _kv_conn is None:
+        _kv_conn = redis.from_url(REDIS_URL, decode_responses=True)
+    return _kv_conn
 
 
 def queue() -> Queue:
-    return Queue(QUEUE_NAME, connection=conn(), default_timeout=JOB_TIMEOUT)
+    return Queue(QUEUE_NAME, connection=rq_conn(), default_timeout=JOB_TIMEOUT)
 
 
 JOB_PREFIX = "render-"
@@ -124,7 +137,7 @@ def clear_meta(slug: str) -> None:
 
 def fetch(slug: str) -> Job | None:
     try:
-        return Job.fetch(job_id(slug), connection=conn())
+        return Job.fetch(job_id(slug), connection=rq_conn())
     except Exception:
         return None
 
@@ -198,14 +211,14 @@ def _started_slugs() -> list[str]:
     fantômes « en cours ».
     """
     try:
-        reg = StartedJobRegistry(QUEUE_NAME, connection=conn())
+        reg = StartedJobRegistry(QUEUE_NAME, connection=rq_conn())
         ids = [i for i in reg.get_job_ids() if i.startswith(JOB_PREFIX)]
     except Exception:
         return []
     out = []
     for jid in ids:
         try:
-            job = Job.fetch(jid, connection=conn())
+            job = Job.fetch(jid, connection=rq_conn())
             if job.get_status(refresh=True) == "started":
                 out.append(_slug_of(jid))
         except Exception:
@@ -250,7 +263,7 @@ def reorder(slugs: list[str]) -> list[str]:
     # Tout job en attente absent de la demande garde sa place relative, à la fin.
     wanted += [i for i in current if i not in wanted]
     key = q.key
-    pipe = conn().pipeline()
+    pipe = rq_conn().pipeline()
     for jid in current:
         pipe.lrem(key, 0, jid)
     for jid in wanted:
