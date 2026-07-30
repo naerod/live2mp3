@@ -522,8 +522,11 @@ const L2M = (function () {
   // Rappel « brouillon en cours » — synthétique (pas d'id, jamais marqué lu) :
   // il disparaît quand le brouillon est terminé ou supprimé. Mène directement à
   // l'éditeur, qui reprend la session là où elle s'était arrêtée.
+  // Pas de classe `unread` ni de pastille : un rappel est un état permanent et
+  // n'entre pas dans le compteur (cf. backend/notifications.py), l'afficher
+  // comme « non lu » laisserait croire à un tout-marquer-lu défaillant.
   function notifDraftItem(n) {
-    return `<a class="notif-item notif-draft unread" href="/app#${encodeURIComponent(n.slug)}">
+    return `<a class="notif-item notif-draft" href="/app#${encodeURIComponent(n.slug)}">
       <span class="notif-ic material-symbols-outlined">drafts</span>
       <span class="notif-body">
         <span class="notif-draft-tag"><span class="material-symbols-outlined">pending</span>${t("notif_draft_tag")}</span>
@@ -531,7 +534,6 @@ const L2M = (function () {
         <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
         <span class="notif-time">${timeAgo(n.created_at)}</span>
       </span>
-      <span class="notif-dot"></span>
     </a>`;
   }
 

@@ -373,7 +373,9 @@ def list_notifications(offset: int = 0, limit: int = 20,
     # (ou pire, les faire tomber page 2) raterait leur seul but.
     reminders = draft_reminders(username)
     if reminders:
-        unread += len(reminders)
+        # `unread` volontairement inchangé : un rappel est un état permanent,
+        # pas un évènement non lu. L'inclure rendrait la pastille inextinguible
+        # — « tout marquer comme lu » ne peut rien contre un item sans id.
         total += len(reminders)
         if offset == 0:
             items = reminders + items
@@ -391,7 +393,8 @@ def unread_count(identity: dict = Depends(current_identity)) -> dict:
             "SELECT COUNT(*) AS n FROM notifications WHERE username=? AND read=0",
             (username,),
         ).fetchone()["n"]
-    return {"unread": n + len(draft_reminders(username))}
+    # Les rappels de brouillon sont exclus du compteur (cf. list_notifications).
+    return {"unread": n}
 
 
 class ReadIn(BaseModel):
@@ -418,10 +421,10 @@ def mark_read(payload: ReadIn, identity: dict = Depends(require_user)) -> dict:
             "SELECT COUNT(*) AS n FROM notifications WHERE username=? AND read=0",
             (username,),
         ).fetchone()["n"]
-    # Même total que /count : un rappel de brouillon n'est pas « lisible », il
-    # survit à un tout-marquer-lu. Sans ce rappel ici, la pastille tomberait à 0
-    # puis remonterait au rafraîchissement suivant.
-    return {"ok": True, "unread": unread + len(draft_reminders(username))}
+    # Même total que /count : les rappels de brouillon en sont exclus, sinon la
+    # pastille resterait allumée après un tout-marquer-lu (ils n'ont pas d'id,
+    # donc rien ne peut les marquer).
+    return {"ok": True, "unread": unread}
 
 
 # =====================================================================
