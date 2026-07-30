@@ -45,6 +45,21 @@ let peaksInstance=null;
 // fiche de gestion, reprise via /app#slug) : même éditeur, mais l'album n'est
 // pas "créé" — publié reste vrai tout du long, wording de fin différent.
 let reedit=false;
+// Sélecteur d'artiste (autocomplétion Deezer) — le même composant que sur la
+// fiche de gestion. Saisir l'artiste au clavier laissait passer les fautes de
+// frappe, qui créaient autant d'entités distinctes pour un même groupe.
+let artistAC=null;
+function mountArtistAC(id,label){
+  // `allowFree` : un artiste absent de Deezer reste enregistrable, simplement
+  // non lié à une page artiste.
+  artistAC=L2M.autocomplete($("f-artist"),{
+    endpoint:"/api/social/suggest/artists",icon:"music_note",allowFree:true,
+    placeholder:"U2",value:{id:id||"",label:label||""}});
+}
+function artistValue(){
+  const v=artistAC?artistAC.get():null;
+  return {id:(v&&v.id)||"",label:((v&&v.label)||"").trim()};
+}
 
 // ============================================================
 // Étape 1 — Analyse du lien
@@ -87,6 +102,7 @@ $("l-url").addEventListener("keydown",e=>{if(e.key==="Enter")$("btn-analyze").cl
 
 $("btn-manual").onclick=()=>{
   videoInfo=null;
+  mountArtistAC("","");
   $("src-card").classList.add("hidden");
   if(!$("track-rows").children.length)addFormRow({});
   show("step-form");
@@ -116,7 +132,7 @@ function parseTime(v){
 }
 
 function fillForm(sug,video,ai){
-  $("f-artist").value=sug.artist||"";
+  mountArtistAC(sug.artist_id||"",sug.artist||"");
   $("f-title").value=sug.title||"";
   $("f-date").value=sug.date||"";
   $("f-venue").value=[sug.venue,sug.city].filter(Boolean).join(", ");
@@ -180,7 +196,8 @@ function renumber(container){
 $("btn-add-track").onclick=()=>addFormRow({});
 
 $("btn-create").onclick=async()=>{
-  const artist=$("f-artist").value.trim();
+  const av=artistValue();
+  const artist=av.label;
   const title=$("f-title").value.trim();
   if(!artist||!title){alert(T("err_required"));return;}
   const tracks=[...$("track-rows").querySelectorAll(".track-row")].map((r,i)=>{
@@ -192,7 +209,7 @@ $("btn-create").onclick=async()=>{
     return t;
   }).filter(t=>t.title);
   const body={
-    album:{artist,title,date:$("f-date").value||null,
+    album:{artist,artist_id:av.id,title,date:$("f-date").value||null,
       venue:$("f-venue").value.trim()||null,
       festival:$("f-festival").value.trim()||null},
     tracks,

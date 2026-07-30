@@ -26,7 +26,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from . import llm, setlistfm
+from . import llm, setlistfm, suggest
 from .auth import require_gestionnaire
 from .covers import _now, _on_covers_changed, cover_file, covers_dir
 from .db import get_conn
@@ -155,8 +155,31 @@ def analyze(payload: AnalyzeIn,
         suggestion = heuristic_suggestion(video)
 
     setlist_src = apply_setlistfm(suggestion)
+    _resolve_suggested_artist(suggestion)
     return {"video": video, "suggestion": suggestion, "ai": ai,
             "setlist_source": setlist_src}
+
+
+def _resolve_suggested_artist(suggestion: dict) -> None:
+    """Canonicalise l'artiste suggéré sur Deezer quand la correspondance est
+    exacte, pour que le sélecteur du formulaire s'ouvre déjà renseigné.
+
+    Best-effort et volontairement strict : sans correspondance exacte on
+    laisse le nom brut, le gestionnaire choisira lui-même dans la liste. Un
+    rapprochement approximatif rattacherait l'album au mauvais artiste.
+    """
+    name = (suggestion.get("artist") or "").strip()
+    if not name:
+        return
+    try:
+        results = suggest.search_artists(name)
+    except Exception:
+        return
+    for r in results:
+        if r["label"].casefold() == name.casefold():
+            suggestion["artist_id"] = r["id"]
+            suggestion["artist"] = r["label"]
+            return
 
 
 def apply_setlistfm(suggestion: dict) -> dict | None:

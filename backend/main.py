@@ -167,6 +167,9 @@ class TrackIn(BaseModel):
 
 class AlbumIn(BaseModel):
     artist: str
+    # Id Deezer canonique choisi dans la liste déroulante : c'est lui qui relie
+    # l'album à sa page artiste, indépendamment de l'orthographe saisie.
+    artist_id: str | None = None
     title: str
     date: str | None = None
     venue: str | None = None
