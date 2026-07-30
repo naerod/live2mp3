@@ -2,8 +2,8 @@
 
 Boucle sur les pistes du manifest et coupe :
 - Audio : depuis master.wav -> MP3 VBR (`libmp3lame -q:a 0`) dans build/audio/
-- Vidéo : depuis master.mkv -> MP4 (`libx264 -crf 18`, coupe frame-accurate)
-  dans build/video/
+- Vidéo : depuis master.mkv -> MP4 (`libx264 -crf 18 -preset veryfast`,
+  coupe frame-accurate) dans build/video/
 
 Chaque piste dont start/end est renseigné est rendue ; les pistes sans
 timecode sont ignorées. Stage idempotent (skip si le fichier existe déjà
@@ -37,10 +37,15 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     duration = end - start
     # Seek d'entrée avant -i (rapide) + re-encode pour coupe frame-accurate.
+    # preset veryfast : le CRF (donc la qualité perçue) est inchangé, seule
+    # l'efficacité de compression baisse — fichiers ~20-30 % plus lourds pour
+    # un encodage ~4x plus rapide. Les masters YouTube tournent autour de
+    # 2 Mbps quand la sortie CRF 18 en fait 10 : la qualité est plafonnée par
+    # la source, pas par l'encodeur.
     _run([
         "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(master_mkv),
         "-t", f"{duration:.3f}",
-        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+        "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "256k",
         str(out),
     ])
