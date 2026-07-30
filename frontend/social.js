@@ -34,6 +34,8 @@ const L2M = (function () {
       notif_role_now: "Vous êtes désormais",
       notif_role_now_neutral: "Votre rôle est désormais",
       notif_role_by: "par",
+      notif_draft_tag: "Brouillon en cours",
+      notif_draft_msg: "Vous avez un import à terminer",
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -66,6 +68,8 @@ const L2M = (function () {
       notif_role_now: "You are now",
       notif_role_now_neutral: "Your role is now",
       notif_role_by: "by",
+      notif_draft_tag: "Draft in progress",
+      notif_draft_msg: "You have an import to finish",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -142,6 +146,11 @@ const L2M = (function () {
           ${card("manual", "upload_file", tx.manual_t, tx.manual_d)}
           ${card("tool", "auto_fix_high", tx.tool_t, tx.tool_d)}
         </div>
+        <button class="imp-card imp-card-wide${gest ? "" : " locked"}" data-act="drafts"${gest ? "" : " disabled"}>
+          <span class="material-symbols-outlined imp-card-ic">drafts</span>
+          <span class="imp-card-t">${tx.drafts_t}</span>
+          <span class="imp-card-d">${tx.drafts_d}</span>
+        </button>
         ${gest ? "" : `<div class="imp-choice-note">
           <span class="material-symbols-outlined">info</span>
           <span>${anon ? tx.note_anon : tx.note_user}</span>
@@ -159,7 +168,9 @@ const L2M = (function () {
     if (gest) ovl.querySelectorAll(".imp-card").forEach(b => {
       b.onclick = () => {
         close();
-        if (b.dataset.act === "tool") location.href = "/app";
+        const act = b.dataset.act;
+        if (act === "tool") location.href = "/app";
+        else if (act === "drafts") location.href = "/app/drafts";
         else (opts.onImport || (() => { location.href = "/?import=1"; }))();
       };
     });
@@ -225,6 +236,8 @@ const L2M = (function () {
         manual_d: "Déposez des MP3 déjà découpés (ou un ZIP) et complétez les informations.",
         tool_t: "Depuis un lien (assisté par IA)",
         tool_d: "Collez le lien d'une captation : découpe, titres et métadonnées proposés automatiquement.",
+        drafts_t: "Brouillons",
+        drafts_d: "Reprendre un import commencé mais jamais terminé.",
         need_role: "Réservé aux gestionnaires",
         note_user: "L'import d'albums est réservé aux comptes gestionnaires. Demandez cet accès à un administrateur.",
         note_anon: "L'import d'albums est réservé aux comptes gestionnaires. Connectez-vous avec un compte disposant de ce rôle.",
@@ -236,6 +249,8 @@ const L2M = (function () {
         manual_d: "Upload already-split MP3s (or a ZIP) and fill in the details.",
         tool_t: "From a link (AI-assisted)",
         tool_d: "Paste a concert link: splitting, titles and metadata are proposed automatically.",
+        drafts_t: "Drafts",
+        drafts_d: "Resume an import that was started but never finished.",
         need_role: "Managers only",
         note_user: "Importing albums is restricted to manager accounts. Ask an administrator for this access.",
         note_anon: "Importing albums is restricted to manager accounts. Log in with an account holding that role.",
@@ -490,6 +505,7 @@ const L2M = (function () {
   }
   // Rendu d'une notification (réutilisé par la cloche et la page centre).
   function notifItem(n) {
+    if (n.type === "draft_pending") return notifDraftItem(n);
     if (n.type === "role_grant" || n.type === "role_revoke") return notifRoleItem(n);
     const icon = NOTIF_TYPE_ICON[n.type] || NOTIF_ICON[n.reason_type] || "notifications";
     return `<a class="notif-item${n.read ? "" : " unread"}" href="/album/${encodeURIComponent(n.slug)}" data-id="${n.id}">
@@ -500,6 +516,22 @@ const L2M = (function () {
         <span class="notif-time">${timeAgo(n.created_at)}</span>
       </span>
       ${n.read ? "" : `<span class="notif-dot"></span>`}
+    </a>`;
+  }
+
+  // Rappel « brouillon en cours » — synthétique (pas d'id, jamais marqué lu) :
+  // il disparaît quand le brouillon est terminé ou supprimé. Mène directement à
+  // l'éditeur, qui reprend la session là où elle s'était arrêtée.
+  function notifDraftItem(n) {
+    return `<a class="notif-item notif-draft unread" href="/app#${encodeURIComponent(n.slug)}">
+      <span class="notif-ic material-symbols-outlined">drafts</span>
+      <span class="notif-body">
+        <span class="notif-draft-tag"><span class="material-symbols-outlined">pending</span>${t("notif_draft_tag")}</span>
+        <span class="notif-reason">${t("notif_draft_msg")}</span>
+        <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
+        <span class="notif-time">${timeAgo(n.created_at)}</span>
+      </span>
+      <span class="notif-dot"></span>
     </a>`;
   }
 
@@ -562,13 +594,17 @@ const L2M = (function () {
         try { unread = (await api("POST", "/api/social/notifications/read", { all: true })).unread; }
         catch (e) {}
         paintBadge();
-        list.querySelectorAll(".notif-item").forEach(el => {
+        // Un rappel de brouillon reste non lu : il n'est pas « lisible », seule
+        // la fin (ou la suppression) de l'import le fait disparaître.
+        list.querySelectorAll(".notif-item:not(.notif-draft)").forEach(el => {
           el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
         });
       };
       list.querySelectorAll(".notif-item").forEach(el => {
+        const id = parseInt(el.dataset.id, 10);
+        if (!Number.isInteger(id)) return;
         el.addEventListener("click", () => {
-          api("POST", "/api/social/notifications/read", { ids: [parseInt(el.dataset.id, 10)] }).catch(() => {});
+          api("POST", "/api/social/notifications/read", { ids: [id] }).catch(() => {});
         });
       });
     }

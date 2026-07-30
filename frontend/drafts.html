@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
+<title>live2mp3 — brouillons</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<style>
+  .dr-head{display:flex;align-items:center;gap:10px;margin:6px 0 4px}
+  .dr-head .material-symbols-outlined{font-size:30px;color:var(--accent)}
+  .dr-head h1{font-size:22px;font-weight:700;margin:0}
+  .dr-sub{color:var(--muted);font-size:13.5px;line-height:1.5;margin:0 0 16px}
+  .dr-list{display:flex;flex-direction:column;gap:8px}
+  /* Ligne cliquable = reprise de l'import ; la corbeille est un bouton à part
+     (stopPropagation) pour qu'un clic destructeur ne soit jamais accidentel. */
+  .dr-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;
+    padding:13px 15px;border-radius:12px;border:1px solid var(--border);
+    background:var(--card);cursor:pointer;text-align:left;width:100%;margin:0;
+    transition:border-color .15s,background .15s}
+  .dr-row:hover{border-color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 7%,var(--card))}
+  .dr-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .dr-title{font-size:15px;font-weight:600;color:var(--fg);line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dr-artist{font-size:13px;color:var(--accent);font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dr-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;
+    font-size:12px;color:var(--muted);margin-top:2px}
+  .dr-meta-i{display:inline-flex;align-items:center;gap:4px}
+  .dr-meta-i .material-symbols-outlined{font-size:14px}
+  .dr-age{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;
+    font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;
+    color:var(--muted);border:1px solid var(--border);background:var(--bg)}
+  .dr-age .material-symbols-outlined{font-size:14px}
+  /* Un brouillon qui traîne depuis longtemps se signale : orange après 7 jours,
+     rouge après 30 — repérage immédiat de ce qui est réellement abandonné. */
+  .dr-age.warn{color:var(--run);border-color:color-mix(in srgb,var(--run) 45%,transparent);
+    background:color-mix(in srgb,var(--run) 12%,var(--bg))}
+  .dr-age.old{color:var(--danger,#e57373);
+    border-color:color-mix(in srgb,var(--danger,#e57373) 45%,transparent);
+    background:color-mix(in srgb,var(--danger,#e57373) 12%,var(--bg))}
+  .dr-owner{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;
+    color:var(--fg);white-space:nowrap}
+  .dr-del{display:inline-flex;align-items:center;justify-content:center;
+    width:34px;height:34px;margin:0;padding:0;border-radius:9px;flex-shrink:0;
+    border:1px solid var(--border);background:var(--bg);cursor:pointer;
+    color:var(--danger,#e57373);transition:border-color .15s,background .15s}
+  .dr-del:hover:not(:disabled){border-color:var(--danger,#e57373);
+    background:color-mix(in srgb,var(--danger,#e57373) 12%,var(--bg))}
+  .dr-del:disabled{opacity:.35;cursor:not-allowed;color:var(--muted)}
+  .dr-del .material-symbols-outlined{font-size:19px}
+  .dr-empty{text-align:center;color:var(--muted);margin-top:56px}
+  .dr-empty .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
+  .dr-empty .dr-empty-t{font-size:15px;font-weight:600;color:var(--fg);margin-bottom:4px}
+  .notfound{text-align:center;color:var(--muted);margin-top:60px}
+  .notfound .material-symbols-outlined{font-size:56px;display:block;margin-bottom:12px}
+  @media (max-width:700px){
+    .dr-row{grid-template-columns:1fr auto;row-gap:10px}
+    .dr-main{grid-column:1/3}
+    .dr-owner{grid-column:1;grid-row:2;justify-self:start}
+    .dr-side{grid-column:1;grid-row:3;justify-self:start}
+    .dr-del{grid-column:2;grid-row:2/4;align-self:center}
+  }
+</style>
+</head>
+<body>
+<header></header>
+
+<main id="main">
+  <div class="page-nav">
+    <button class="icon-btn" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span><span id="t-back">Retour</span></button>
+  </div>
+  <div id="content"></div>
+</main>
+
+<script src="/static/social.js"></script>
+<script src="/static/drafts.js"></script>
+</body>
+</html>

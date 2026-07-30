@@ -307,6 +307,46 @@ def _notif_dict(r) -> dict:
     }
 
 
+def draft_reminders(username: str) -> list[dict]:
+    """Rappels « brouillon en cours » de l'utilisateur, calculés à la volée.
+
+    Volontairement **synthétiques** (aucune ligne en base) : un rappel n'est pas
+    un évènement mais un état. Le stocker obligerait à le créer à l'import, le
+    dédupliquer, puis le supprimer à la reprise/suppression du brouillon — avec
+    le risque de rappels fantômes pour un projet qui n'existe plus. Recalculé à
+    chaque lecture, le rappel apparaît et disparaît tout seul, et reste exact.
+
+    Conséquence assumée : pas d'`id` numérique donc non marquable comme lu (le
+    front les rend non cliquables-pour-lecture) — ils s'effacent en terminant ou
+    supprimant le brouillon, ce qui est l'action attendue de toute façon.
+    """
+    from . import catalogue
+
+    out: list[dict] = []
+    try:
+        drafts = catalogue.list_drafts()
+    except Exception:
+        return out
+    for d in drafts:
+        if d.get("imported_by") != username:
+            continue
+        out.append({
+            "id": None,
+            "type": "draft_pending",
+            "username": username,
+            "actor": username,
+            "reason_type": "draft",
+            "reason_id": d["slug"],
+            "reason_label": "",
+            "slug": d["slug"],
+            "title": d.get("title") or d["slug"],
+            "subtitle": d.get("artist", ""),
+            "read": False,
+            "created_at": d.get("updated_at") or d.get("imported_at") or "",
+        })
+    return out
+
+
 @router.get("/api/social/notifications")
 def list_notifications(offset: int = 0, limit: int = 20,
                        identity: dict = Depends(current_identity)) -> dict:
@@ -327,8 +367,18 @@ def list_notifications(offset: int = 0, limit: int = 20,
             "ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?",
             (username, limit, offset),
         ).fetchall()
+    items = [_notif_dict(r) for r in rows]
+    # Les rappels de brouillon coiffent la première page : ce sont des tâches en
+    # attente, pas de l'historique — les noyer sous les notifications anciennes
+    # (ou pire, les faire tomber page 2) raterait leur seul but.
+    reminders = draft_reminders(username)
+    if reminders:
+        unread += len(reminders)
+        total += len(reminders)
+        if offset == 0:
+            items = reminders + items
     return {"authenticated": True, "unread": unread, "total": total,
-            "offset": offset, "items": [_notif_dict(r) for r in rows]}
+            "offset": offset, "items": items}
 
 
 @router.get("/api/social/notifications/count")
@@ -341,7 +391,7 @@ def unread_count(identity: dict = Depends(current_identity)) -> dict:
             "SELECT COUNT(*) AS n FROM notifications WHERE username=? AND read=0",
             (username,),
         ).fetchone()["n"]
-    return {"unread": n}
+    return {"unread": n + len(draft_reminders(username))}
 
 
 class ReadIn(BaseModel):
@@ -368,7 +418,10 @@ def mark_read(payload: ReadIn, identity: dict = Depends(require_user)) -> dict:
             "SELECT COUNT(*) AS n FROM notifications WHERE username=? AND read=0",
             (username,),
         ).fetchone()["n"]
-    return {"ok": True, "unread": unread}
+    # Même total que /count : un rappel de brouillon n'est pas « lisible », il
+    # survit à un tout-marquer-lu. Sans ce rappel ici, la pastille tomberait à 0
+    # puis remonterait au rafraîchissement suivant.
+    return {"ok": True, "unread": unread + len(draft_reminders(username))}
 
 
 # =====================================================================

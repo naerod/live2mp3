@@ -43,6 +43,7 @@ from .albumfiles import (
     _write_track_tags,
 )
 from .auth import (
+    GROUP_APP_ADMIN,
     GROUP_GESTIONNAIRE,
     SUPERUSER_GROUPS,
     require_gestionnaire,
@@ -69,7 +70,12 @@ from .covers import (
     zip_basename,
 )
 from .printable import cover_pdf, traycard_pdf
-from .social import router as social_router, _ensure_profile, _album_exists
+from .social import (
+    router as social_router,
+    _album_exists,
+    _ensure_profile,
+    _profiles_map,
+)
 from .follows import router as follows_router
 from . import notifications
 from .notifications import router as notifications_router
@@ -1400,15 +1406,79 @@ def update_setlist(slug: str, payload: SetlistIn,
     return {"ok": True, "tracks": len(m.tracks)}
 
 
+def _is_app_admin(identity: dict) -> bool:
+    """Admin applicatif ou superuser Authentik (peut agir sur le bien d'autrui)."""
+    if identity.get("is_admin"):
+        return True
+    groups = set(identity.get("groups") or set())
+    return bool(groups & ({GROUP_APP_ADMIN} | SUPERUSER_GROUPS))
+
+
+def _may_delete_draft(identity: dict, owner: str) -> bool:
+    """Un gestionnaire ne supprime que ses propres brouillons ; l'admin, tous.
+
+    Un brouillon sans `imported_by` (import historique) est traité comme
+    appartenant à personne : seul un admin peut le nettoyer.
+    """
+    if _is_app_admin(identity):
+        return True
+    return bool(owner) and owner == identity.get("username")
+
+
+@app.get("/api/drafts")
+def list_drafts(identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Imports interrompus, tous gestionnaires confondus.
+
+    `can_delete` est calculé côté serveur pour que le front n'ait pas à
+    dupliquer la règle de droits (bouton corbeille grisé si faux) — la
+    vérification faisant autorité reste celle de `DELETE /api/jobs/{slug}`.
+    """
+    drafts = catalogue.list_drafts()
+    owners = {d["imported_by"] for d in drafts if d["imported_by"]}
+    profiles: dict[str, dict] = {}
+    if owners:
+        with get_conn() as conn:
+            profiles = _profiles_map(conn, owners)
+    for d in drafts:
+        u = d["imported_by"]
+        prof = profiles.get(u) or {}
+        d["owner"] = {
+            "username": u,
+            "display_name": prof.get("display_name") or u,
+            "avatar": bool(prof.get("avatar")),
+        } if u else None
+        d["can_delete"] = _may_delete_draft(identity, u)
+    return {"drafts": drafts, "is_admin": _is_app_admin(identity),
+            "username": identity.get("username") or ""}
+
+
+@app.get("/app/drafts", response_class=HTMLResponse)
+def drafts_page() -> HTMLResponse:
+    page = FRONTEND / "drafts.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — brouillons</h1>")
+
+
 @app.delete("/api/jobs/{slug}")
 def delete_job(slug: str,
                identity: dict = Depends(require_gestionnaire)) -> dict:
     """Supprime un brouillon (projet jamais rendu). Refus si l'album existe."""
     project_dir = PROJECTS_DIR / slug
-    if not (project_dir / "manifest.yaml").exists():
+    mpath = project_dir / "manifest.yaml"
+    if not mpath.exists():
         raise HTTPException(404, "projet introuvable")
     if any((project_dir / "build" / "audio").glob("*.mp3")):
         raise HTTPException(409, "album déjà rendu — suppression refusée")
+    # Un gestionnaire ne peut jeter que son propre brouillon : le travail d'un
+    # collègue (téléchargement + détection déjà payés) ne doit pas disparaître
+    # sur un clic. L'admin reste seul juge pour le ménage global.
+    try:
+        owner = (Manifest.load(mpath).data.get("meta", {}) or {}).get("imported_by", "")
+    except Exception:
+        owner = ""
+    if not _may_delete_draft(identity, owner):
+        raise HTTPException(403, "brouillon d'un autre gestionnaire")
     linktool.delete_project_social(slug)
     shutil.rmtree(project_dir, ignore_errors=True)
     _progress_last.pop(slug, None)
