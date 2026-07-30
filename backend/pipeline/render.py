@@ -2,7 +2,7 @@
 
 Boucle sur les pistes du manifest et coupe :
 - Audio : depuis master.wav -> MP3 VBR (`libmp3lame -q:a 0`) dans build/audio/
-- Vidéo : depuis master.mkv -> MP4 (`libx264 -crf 18 -preset veryfast`,
+- Vidéo : depuis master.mkv -> MP4 (H.264 CRF 23 veryfast par défaut,
   coupe frame-accurate) dans build/video/
 
 Chaque piste dont start/end est renseigné est rendue ; les pistes sans
@@ -12,6 +12,7 @@ et --force absent).
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -37,34 +38,56 @@ class Cancelled(Exception):
     """L'utilisateur a demandé l'arrêt du rendu."""
 
 
-def _run(cmd: list[str], cancel: Callable[[], bool] | None = None) -> None:
-    if cancel is None:
+def _run(cmd: list[str], cancel: Callable[[], bool] | None = None,
+         paused: Callable[[], bool] | None = None) -> None:
+    if cancel is None and paused is None:
         subprocess.run(cmd, check=True, capture_output=True)
         return
     # Un encodage vidéo dure plusieurs minutes : on ne peut pas attendre la fin
-    # du process pour honorer une annulation, il faut le tuer en cours de route.
+    # du process pour honorer une annulation ou une pause, il faut agir dessus
+    # en cours de route.
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL)
-    while True:
-        try:
-            proc.wait(timeout=0.5)
-            break
-        except subprocess.TimeoutExpired:
-            if not cancel():
-                continue
-            proc.terminate()
+    frozen = False
+    try:
+        while True:
             try:
-                proc.wait(timeout=5)
+                proc.wait(timeout=0.5)
+                break
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-            raise Cancelled()
+                pass
+            if cancel and cancel():
+                # Un process gelé n'observe rien : le réveiller avant de le
+                # tuer, sinon le SIGTERM resterait en attente indéfiniment.
+                if frozen:
+                    proc.send_signal(signal.SIGCONT)
+                    frozen = False
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                raise Cancelled()
+            # SIGSTOP fige le process sans rien perdre : il libère le CPU
+            # immédiatement et reprend exactement où il en était au SIGCONT.
+            want = bool(paused and paused())
+            if want and not frozen:
+                proc.send_signal(signal.SIGSTOP)
+                frozen = True
+            elif not want and frozen:
+                proc.send_signal(signal.SIGCONT)
+                frozen = False
+    finally:
+        if frozen and proc.poll() is None:
+            proc.send_signal(signal.SIGCONT)
     if proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
 def render_audio(master_wav: Path, start: float, end: float, out: Path,
-                 cancel: Callable[[], bool] | None = None) -> None:
+                 cancel: Callable[[], bool] | None = None,
+                 paused: Callable[[], bool] | None = None) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     duration = end - start
     _run([
@@ -72,11 +95,12 @@ def render_audio(master_wav: Path, start: float, end: float, out: Path,
         "-i", str(master_wav),
         "-c:a", "libmp3lame", "-q:a", "0",
         str(out),
-    ], cancel)
+    ], cancel, paused)
 
 
 def render_video(master_mkv: Path, start: float, end: float, out: Path,
-                 cancel: Callable[[], bool] | None = None) -> None:
+                 cancel: Callable[[], bool] | None = None,
+                 paused: Callable[[], bool] | None = None) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     duration = end - start
     # Seek d'entrée avant -i (rapide) + re-encode pour coupe frame-accurate.
@@ -95,7 +119,7 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path,
         "-c:a", "aac", "-b:a", "256k",
         "-movflags", "+faststart",
         str(out),
-    ], cancel)
+    ], cancel, paused)
 
 
 def _expected_filenames(m: Manifest, ext: str) -> set[str]:
@@ -120,12 +144,13 @@ def _purge_orphans(dir_: Path, expected: set[str]) -> None:
 
 
 def _render_or_cleanup(fn, src: Path, start, end, out: Path,
-                       cancel: Callable[[], bool] | None) -> None:
+                       cancel: Callable[[], bool] | None,
+                       paused: Callable[[], bool] | None = None) -> None:
     """Un ffmpeg tué laisse un fichier tronqué : sans ce nettoyage, le stage
     étant idempotent par nom de fichier, un rendu relancé après annulation
     conserverait la piste incomplète."""
     try:
-        fn(src, float(start), float(end), out, cancel)
+        fn(src, float(start), float(end), out, cancel, paused)
     except Cancelled:
         out.unlink(missing_ok=True)
         raise
@@ -133,13 +158,16 @@ def _render_or_cleanup(fn, src: Path, start, end, out: Path,
 
 def run(project_dir: str | Path, force: bool = False, video: bool = True,
         on_track: Callable[[int, int, str], None] | None = None,
-        cancel: Callable[[], bool] | None = None) -> dict:
+        cancel: Callable[[], bool] | None = None,
+        paused: Callable[[], bool] | None = None) -> dict:
     """`on_track(done, total, title)` est appelé avant chaque piste : le
     ré-encodage vidéo dure plusieurs minutes par piste, sans ça l'UI reste
     figée sur « en cours… » pendant tout le stage.
 
     `cancel()` est sondé pendant les encodages : s'il passe à True, le ffmpeg
-    en cours est tué, le fichier partiel supprimé, et Cancelled est levée."""
+    en cours est tué, le fichier partiel supprimé, et Cancelled est levée.
+    `paused()` gèle/dégèle le ffmpeg en cours (SIGSTOP/SIGCONT) sans rien
+    perdre du travail déjà effectué."""
     project_dir = Path(project_dir)
     m = Manifest.load(project_dir / "manifest.yaml")
     master_wav = project_dir / m.data["source"]["master_wav"]
@@ -164,14 +192,14 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
         a_out = audio_dir / m.track_filename(track, "mp3")
         if force or not a_out.exists():
             _render_or_cleanup(render_audio, master_wav, start, end,
-                               a_out, cancel)
+                               a_out, cancel, paused)
         rendered["audio"].append(str(a_out))
         # Vidéo (optionnelle : master.mkv peut être absent en test audio-only)
         if video and master_mkv.exists():
             v_out = video_dir / m.track_filename(track, "mp4")
             if force or not v_out.exists():
                 _render_or_cleanup(render_video, master_mkv, start, end,
-                                   v_out, cancel)
+                                   v_out, cancel, paused)
             rendered["video"].append(str(v_out))
 
     if on_track and total:

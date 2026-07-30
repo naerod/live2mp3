@@ -26,7 +26,8 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
                         video: bool = True, gap_seconds: float = 2.0,
                         force: bool = False,
                         progress: ProgressCb = _noop,
-                        cancel: Callable[[], bool] | None = None) -> dict:
+                        cancel: Callable[[], bool] | None = None,
+                        paused: Callable[[], bool] | None = None) -> dict:
     """Exécute render -> tags -> artwork -> disc.
 
     Suppose les timecodes déjà présents (validés via l'UI Peaks.js).
@@ -54,7 +55,8 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
         })
 
     results["render"] = render.run(project_dir, video=video, force=force,
-                                   on_track=_on_track, cancel=cancel)
+                                   on_track=_on_track, cancel=cancel,
+                                   paused=paused)
     progress("render", "done", {"tracks": len(results["render"]["audio"])})
     _check()
 
@@ -76,6 +78,48 @@ def run_render_pipeline(project_dir: str | Path, *, media: str = "audio",
     # désormais assemblé à la volée au téléchargement (cf. main.py).
 
     return results
+
+
+def render_job(*, slug: str, media: str, gap: float, video: bool,
+               republish: bool) -> dict:
+    """Point d'entrée exécuté par le worker RQ (cf. renderqueue.enqueue).
+
+    Vit dans le worker, pas dans l'API : la progression passe donc par Redis,
+    et l'annulation/pause sont lues depuis Redis à chaque sondage.
+    """
+    from pathlib import Path as _Path
+
+    from . import jellyfin, progress, renderqueue
+    from .manifest import PROJECTS_DIR
+
+    project_dir = _Path(PROJECTS_DIR) / slug
+    cb = progress.make_cb(slug)
+    try:
+        run_render_pipeline(
+            project_dir, media=media, gap_seconds=gap, video=video,
+            force=republish, progress=cb,
+            cancel=lambda: renderqueue.cancel_requested(slug),
+            paused=lambda: renderqueue.is_paused(slug),
+        )
+        if republish:
+            # Un album déjà publié qu'on vient de re-rendre doit réapparaître à
+            # jour dans Jellyfin : le symlink existe déjà, sync-media.sh ne voit
+            # pas un changement de contenu interne.
+            jellyfin.refresh_library()
+        progress.publish(slug, {"stage": "all", "status": "complete", "info": {}})
+        return {"ok": True, "slug": slug}
+    except render.Cancelled:
+        progress.publish(slug, {"stage": "all", "status": "cancelled",
+                                "info": {}})
+        return {"ok": False, "slug": slug, "cancelled": True}
+    except Exception as e:
+        progress.publish(slug, {"stage": "error", "status": "error",
+                                "info": {"message": str(e)}})
+        raise
+    finally:
+        renderqueue.clear_cancel(slug)
+        renderqueue.set_paused(slug, False)
+        renderqueue.clear_meta(slug)
 
 
 def run_full_pipeline(project_dir: str | Path, *, download_fn=None,

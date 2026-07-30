@@ -227,12 +227,16 @@ $("btn-create").onclick=async()=>{
 const PREP_STAGES=["download","preview","waveform","ai_markers"];
 const RENDER_STAGES=["render","tags","artwork","disc"];
 
-function runProgress(titleKey,stages,onComplete){
+function runProgress(titleKey,stages,onComplete,onCancelled){
   show("step-progress");
   $("progress-title").textContent=T(titleKey);
   $("progress-err").classList.add("hidden");
   $("progress-actions").classList.add("hidden");
   hideSkip();
+  // Bouton d'arrêt : seulement pendant un rendu (la préparation est courte et
+  // dispose déjà de son propre « passer cette étape »).
+  const cancelBtn=$("btn-cancel-render");
+  if(cancelBtn)cancelBtn.classList.toggle("hidden",currentPhase!=="render");
   const ul=$("stages");ul.innerHTML="";
   const items={};
   stages.forEach(s=>{
@@ -282,6 +286,17 @@ function runProgress(titleKey,stages,onComplete){
       if(ev.stage==="ai_markers"){
         if(running&&(ev.info||{}).skippable)showSkip();else hideSkip();
       }
+    }
+    if(ev.status==="paused"&&li){
+      li.classList.add("indet");
+      li.querySelector(".stage-pct").textContent=T("paused_word");
+    }
+    if(ev.status==="cancelled"){
+      es.close();
+      if($("btn-cancel-render"))$("btn-cancel-render").classList.add("hidden");
+      toast(T("cancelled_msg"));
+      if(onCancelled)onCancelled();
+      return;
     }
     if(ev.status==="complete"){es.close();onComplete();}
     if(ev.status==="error"){
@@ -734,9 +749,25 @@ $("btn-render").onclick=async()=>{
 async function startRender(){
   currentPhase="render";
   const r=await fetch(`/api/jobs/${slug}/render`,{method:"POST"});
-  if(!r.ok){alert(T("err_generic"));return;}
-  runProgress(reedit?"render_title_reedit":"render_title",RENDER_STAGES,finish);
+  if(r.status===409){
+    // Un rendu tourne déjà pour cet album : on rattache l'affichage au lieu
+    // d'en lancer un second, qui écrirait les mêmes fichiers en parallèle.
+    toast(T("already_rendering"),true);
+  }else if(!r.ok){alert(T("err_generic"));return;}
+  runProgress(reedit?"render_title_reedit":"render_title",RENDER_STAGES,finish,
+              ()=>show("step-editor"));
 }
+
+// --- Arrêt du rendu ---
+$("btn-cancel-render").onclick=()=>{
+  confirmDialog(T("cancel_confirm"),async()=>{
+    try{
+      const r=await fetch(`/api/jobs/${slug}/render/cancel`,{method:"POST"});
+      if(!r.ok)throw new Error();
+      // La suite arrive par SSE (statut « cancelled ») : retour à l'éditeur.
+    }catch(e){toast(T("err_generic"),true);}
+  },{icon:"stop_circle",yes:T("cancel_yes"),no:T("cancel_no")});
+};
 
 async function finish(){
   const m=await(await fetch(`/api/jobs/${slug}/manifest`)).json();
@@ -775,6 +806,21 @@ $("btn-again").onclick=()=>{
     if(!r.ok)return;
     const m=await r.json();
     slug=h;
+    // Un rendu en cours reprend la main sur l'éditeur : sans ça, revenir sur la
+    // page pendant un encodage rouvrait l'éditeur, sans aucun moyen de revoir
+    // l'avancement — et un second « Valider » lançait un rendu concurrent.
+    let queued=null;
+    try{
+      const q=await(await fetch("/api/render-queue")).json();
+      queued=(q.items||[]).find(i=>i.slug===h)||null;
+    }catch(e){}
+    if(queued){
+      currentPhase="render";
+      reedit=!!m.published;
+      runProgress(reedit?"render_title_reedit":"render_title",RENDER_STAGES,
+                  finish,()=>show("step-editor"));
+      return;
+    }
     const st=m.pipeline_state||{};
     if(st.download==="done"&&st.ai_markers==="done")openEditor();
     else await startPrepare();
