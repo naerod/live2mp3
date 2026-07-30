@@ -28,7 +28,7 @@
         await fetch("/api/social/notifications/read", { method: "POST",
           headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
       } catch (e) {}
-      document.querySelectorAll("#list .notif-item").forEach(el => {
+      document.querySelectorAll("#list .notif-item:not(.notif-draft)").forEach(el => {
         el.classList.remove("unread"); el.querySelector(".notif-dot")?.remove();
       });
     };
@@ -62,6 +62,8 @@
     document.getElementById("content").addEventListener("click", (e) => {
       const item = e.target.closest(".notif-item"); if (!item) return;
       const id = parseInt(item.dataset.id, 10);
+      // Les rappels de brouillon n'ont pas d'id (synthétiques) : rien à marquer.
+      if (!Number.isInteger(id)) return;
       if (item.classList.contains("unread")) {
         navigator.sendBeacon
           ? navigator.sendBeacon("/api/social/notifications/read",

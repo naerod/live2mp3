@@ -5,7 +5,7 @@ devient une entrée (métadonnées + disponibilité MP3/MP4 + cover + import inf
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import entities
@@ -153,6 +153,61 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
     reverse = sort in ("date_concert", "date_import")  # plus récent en premier
     albums.sort(key=_sort_key, reverse=reverse)
     return albums
+
+
+def list_drafts() -> list[dict]:
+    """Imports commencés mais jamais rendus — invisibles de la vitrine.
+
+    `list_albums` écarte tout projet sans MP3 ni MP4 : un import interrompu
+    avant l'étape de rendu n'apparaît donc nulle part dans l'UI, alors que son
+    dossier occupe le slug (l'utilisateur se retrouve bloqué au réimport par un
+    409 sans pouvoir reprendre ni supprimer). On liste ici exactement le
+    complément : manifest présent, aucun média produit.
+
+    L'étape atteinte vient de `pipeline_state` ; `updated_at` est le mtime du
+    manifest (dernière action réelle sur le brouillon), pas la date d'import,
+    pour que le badge d'ancienneté reflète l'abandon et non la création.
+    """
+    drafts: list[dict] = []
+    if not PROJECTS_DIR.exists():
+        return drafts
+    for pdir in sorted(PROJECTS_DIR.iterdir()):
+        manifest = pdir / "manifest.yaml"
+        if not manifest.is_file():
+            continue
+        if _has_files(pdir / "build" / "audio", "mp3") or \
+           _has_files(pdir / "build" / "video", "mp4"):
+            continue
+        try:
+            m = Manifest.load(manifest)
+        except Exception:
+            continue
+        album = m.data.get("album", {})
+        meta = m.data.get("meta", {})
+        state = m.data.get("pipeline_state", {}) or {}
+        # Dernière étape terminée : repère de reprise affiché dans la liste.
+        done = [s for s in ("download", "waveform", "ai_markers", "render",
+                            "tags", "artwork", "disc") if state.get(s) == "done"]
+        try:
+            updated_at = datetime.fromtimestamp(
+                manifest.stat().st_mtime, tz=timezone.utc
+            ).isoformat(timespec="seconds")
+        except OSError:
+            updated_at = ""
+        drafts.append({
+            "slug": pdir.name,
+            "artist": album.get("artist", ""),
+            "title": album.get("title", ""),
+            "date": album.get("date", ""),
+            "venue": album.get("venue", ""),
+            "tracks": len(m.tracks),
+            "imported_by": meta.get("imported_by", ""),
+            "imported_at": meta.get("imported_at", ""),
+            "updated_at": updated_at,
+            "stage": done[-1] if done else "",
+        })
+    drafts.sort(key=lambda d: d.get("updated_at", ""), reverse=True)
+    return drafts
 
 
 def _labels(album: dict, has_mp3: bool, has_mp4: bool) -> list[str]:

@@ -2,8 +2,8 @@
 
 Boucle sur les pistes du manifest et coupe :
 - Audio : depuis master.wav -> MP3 VBR (`libmp3lame -q:a 0`) dans build/audio/
-- Vidéo : depuis master.mkv -> MP4 (`libx264 -crf 18`, coupe frame-accurate)
-  dans build/video/
+- Vidéo : depuis master.mkv -> MP4 (`libx264 -crf 18 -preset veryfast`,
+  coupe frame-accurate) dans build/video/
 
 Chaque piste dont start/end est renseigné est rendue ; les pistes sans
 timecode sont ignorées. Stage idempotent (skip si le fichier existe déjà
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Callable
 
 from ..manifest import Manifest
 
@@ -36,10 +37,15 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     duration = end - start
     # Seek d'entrée avant -i (rapide) + re-encode pour coupe frame-accurate.
+    # preset veryfast : le CRF (donc la qualité perçue) est inchangé, seule
+    # l'efficacité de compression baisse — fichiers ~20-30 % plus lourds pour
+    # un encodage ~4x plus rapide. Les masters YouTube tournent autour de
+    # 2 Mbps quand la sortie CRF 18 en fait 10 : la qualité est plafonnée par
+    # la source, pas par l'encodeur.
     _run([
         "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(master_mkv),
         "-t", f"{duration:.3f}",
-        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+        "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "256k",
         str(out),
     ])
@@ -66,7 +72,11 @@ def _purge_orphans(dir_: Path, expected: set[str]) -> None:
             f.unlink()
 
 
-def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dict:
+def run(project_dir: str | Path, force: bool = False, video: bool = True,
+        on_track: Callable[[int, int, str], None] | None = None) -> dict:
+    """`on_track(done, total, title)` est appelé avant chaque piste : le
+    ré-encodage vidéo dure plusieurs minutes par piste, sans ça l'UI reste
+    figée sur « en cours… » pendant tout le stage."""
     project_dir = Path(project_dir)
     m = Manifest.load(project_dir / "manifest.yaml")
     master_wav = project_dir / m.data["source"]["master_wav"]
@@ -78,11 +88,15 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dic
     if video:
         _purge_orphans(video_dir, _expected_filenames(m, "mp4"))
 
+    todo = [t for t in m.tracks
+            if t.get("start") is not None and t.get("end") is not None]
+    total = len(todo)
+
     rendered = {"audio": [], "video": []}
-    for track in m.tracks:
-        start, end = track.get("start"), track.get("end")
-        if start is None or end is None:
-            continue
+    for i, track in enumerate(todo):
+        start, end = track["start"], track["end"]
+        if on_track:
+            on_track(i, total, str(track.get("title", "")))
         # Audio
         a_out = audio_dir / m.track_filename(track, "mp3")
         if force or not a_out.exists():
@@ -95,6 +109,8 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True) -> dic
                 render_video(master_mkv, float(start), float(end), v_out)
             rendered["video"].append(str(v_out))
 
+    if on_track and total:
+        on_track(total, total, "")
     m.set_state("render", "done")
     return rendered
 
