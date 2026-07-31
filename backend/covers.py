@@ -103,10 +103,16 @@ def _on_covers_changed(slug: str) -> None:
     """Répercute un changement de classement sur le reste du système.
 
     On se contente de repointer `album.cover` du manifest vers la gagnante :
-    c'est ce que lisent le catalogue et les consommateurs du YAML. L'APIC des
-    MP3 et le ZIP sont volontairement *paresseux* — les recalculer ici
-    réécrirait tous les fichiers de l'album à chaque like. `_zip_media` les
-    rafraîchit au moment du téléchargement, quand la cohérence compte.
+    c'est ce que lisent le catalogue et les consommateurs du YAML. Le ZIP reste
+    volontairement *paresseux* (`_zip_media` le rafraîchit au téléchargement).
+
+    En revanche, si la gagnante *change réellement* pour un album **publié**,
+    on répercute vers le média servi à Jellyfin/Finamp : sinon la pochette
+    resterait figée côté serveur (le cron `sync-media.sh` ne re-scanne que sur
+    apparition/disparition de symlink, jamais sur un changement de contenu).
+    Ce n'est pas coûteux à chaque like : l'early-return sur `album.cover`
+    inchangé ci-dessous garantit qu'on ne propage qu'aux vrais changements de
+    gagnante, événement rare.
     """
     mpath = PROJECTS_DIR / slug / "manifest.yaml"
     if not mpath.exists():
@@ -127,6 +133,35 @@ def _on_covers_changed(slug: str) -> None:
     else:
         album.pop("cover", None)
     m.save()
+    _propagate_cover_to_media(slug, m)
+
+
+def _propagate_cover_to_media(slug: str, m) -> None:
+    """Répercute la pochette d'album vers les fichiers servis à Jellyfin.
+
+    - album à pochette unique → ré-embarque `album.cover` en APIC dans toutes
+      les pistes (vignette d'album et pistes cohérentes) ;
+    - album `per_track_covers` → dépose seulement une image de dossier
+      (`cover.jpg`), **sans toucher aux APIC des pistes** qui ont chacune leur
+      propre pochette ;
+    puis force Jellyfin à ré-extraire les images. Best-effort : ne lève jamais
+    (une pochette non propagée ne doit pas casser un like/upload).
+    """
+    if not m.data.get("published", True):
+        return
+    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
+    if not audio_dir.exists():
+        return  # album pas encore rendu : rien à propager
+    from . import albumfiles, jellyfin
+
+    try:
+        if m.data.get("album", {}).get("per_track_covers"):
+            albumfiles._write_folder_cover(slug, m)
+        else:
+            albumfiles._write_album_cover(slug, m)
+    except Exception:
+        pass
+    jellyfin.refresh_album(slug)
 
 
 def zip_basename(rank: int, username: str) -> str:

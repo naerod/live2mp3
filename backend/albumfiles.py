@@ -203,6 +203,28 @@ def _write_album_cover(slug: str, m: Manifest) -> int:
     return embedded
 
 
+def _write_folder_cover(slug: str, m: Manifest) -> bool:
+    """Dépose `album.cover` comme image de dossier `build/audio/cover.jpg`.
+
+    Sert la vignette d'album à Jellyfin **sans toucher aux APIC des pistes** :
+    indispensable aux albums à pochette par piste (`per_track_covers`), où
+    Jellyfin déduirait sinon la vignette de la 1ʳᵉ piste. Jellyfin préfère un
+    `cover.jpg`/`folder.jpg` présent dans le dossier à l'art embarqué.
+    """
+    audio_dir = _projects_dir() / slug / "build" / "audio"
+    cover_rel = m.data.get("album", {}).get("cover")
+    if not audio_dir.exists() or not cover_rel:
+        return False
+    cover_path = _projects_dir() / slug / cover_rel
+    if not cover_path.exists():
+        return False
+    try:
+        (audio_dir / "cover.jpg").write_bytes(cover_path.read_bytes())
+        return True
+    except OSError:
+        return False
+
+
 def _extract_embedded_cover(slug: str, m: Manifest) -> str | None:
     """Si aucune cover site mais un APIC embarqué existe, l'extrait vers artwork/cover.*.
 

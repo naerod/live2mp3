@@ -422,3 +422,69 @@ def test_track_covers_in_catalogue(client):
     assert len(d["track_covers"]) == 1
     assert d["track_covers"][0]["track_n"] == 1
     assert "/track-cover/" in d["track_covers"][0]["cover_url"]
+
+
+# --- Propagation vers Jellyfin/Finamp sur changement de gagnante -----------
+def test_cover_change_propagates_to_media_and_jellyfin(client, monkeypatch):
+    """Album publié + rendu : un changement de gagnante répercute vers le média
+    servi à Jellyfin (APIC des pistes pour album à pochette unique) et force un
+    refresh Jellyfin ciblé."""
+    from backend import albumfiles, covers, jellyfin
+    c, root = client
+    slug = _album(c)
+    # simule un album déjà rendu
+    (root / slug / "build" / "audio").mkdir(parents=True)
+
+    embedded = []
+    refreshed = []
+    monkeypatch.setattr(albumfiles, "_write_album_cover",
+                        lambda s, m: embedded.append(s) or 1)
+    monkeypatch.setattr(jellyfin, "refresh_album",
+                        lambda s: refreshed.append(s) or True)
+
+    _post_cover(c, slug, USER)  # 1re gagnante -> changement réel
+
+    assert embedded == [slug]
+    assert refreshed == [slug]
+
+
+def test_per_track_album_propagates_folder_cover_only(client, monkeypatch):
+    """Album `per_track_covers` : on dépose l'image de dossier sans jamais
+    ré-embarquer la pochette d'album dans les pistes (elles ont la leur)."""
+    from backend import albumfiles, covers, jellyfin
+    c, root = client
+    slug = _album(c)
+    c.patch(f"/api/albums/{slug}/per-track-covers",
+            json={"per_track_covers": True}, headers=GEST)
+    (root / slug / "build" / "audio").mkdir(parents=True)
+
+    called = {"album": 0, "folder": 0}
+    monkeypatch.setattr(albumfiles, "_write_album_cover",
+                        lambda s, m: called.__setitem__("album", called["album"] + 1))
+    monkeypatch.setattr(albumfiles, "_write_folder_cover",
+                        lambda s, m: called.__setitem__("folder", called["folder"] + 1))
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: True)
+
+    _post_cover(c, slug, USER)
+
+    assert called["folder"] == 1
+    assert called["album"] == 0
+
+
+def test_unpublished_album_does_not_touch_media(client, monkeypatch):
+    """Brouillon : aucune propagation média/Jellyfin (l'album n'est pas monté)."""
+    from backend import albumfiles, jellyfin
+    c, root = client
+    # album non publié
+    payload = {"album": {"artist": "Z", "title": "Draft", "date": "2026-01-01"},
+               "tracks": [{"n": 1, "title": "S", "start": 0.0, "end": 3.0, "locked": True}],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    (root / slug / "build" / "audio").mkdir(parents=True)
+
+    hits = []
+    monkeypatch.setattr(albumfiles, "_write_album_cover", lambda s, m: hits.append(s))
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: hits.append(s))
+
+    _post_cover(c, slug, USER)
+    assert hits == []

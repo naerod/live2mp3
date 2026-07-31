@@ -40,3 +40,59 @@ def refresh_library() -> bool:
         return r.status_code < 400
     except requests.RequestException:
         return False
+
+
+def _find_album_id(slug: str) -> str | None:
+    """Retourne l'Id Jellyfin de l'album monté sous `.../musique/<slug>`."""
+    r = requests.get(
+        f"{JELLYFIN_URL}/Items",
+        params={
+            "Recursive": "true",
+            "IncludeItemTypes": "MusicAlbum",
+            "Fields": "Path",
+        },
+        headers={"X-Emby-Token": JELLYFIN_API_KEY},
+        timeout=_TIMEOUT,
+    )
+    r.raise_for_status()
+    suffix = f"/musique/{slug}"
+    for item in r.json().get("Items", []):
+        path = item.get("Path") or ""
+        if path.rstrip("/").endswith(suffix):
+            return item.get("Id")
+    return None
+
+
+def refresh_album(slug: str) -> bool:
+    """Force Jellyfin à re-scanner un album ET à ré-extraire ses images.
+
+    Un `Library/Refresh` ordinaire ne ré-extrait pas l'art déjà en cache : sur
+    une simple mise à jour de pochette (contenu inchangé par ailleurs) l'image
+    reste figée côté serveur, donc côté Finamp. On cible l'album par son
+    chemin et on impose `ReplaceAllImages` + `FullRefresh` (récursif pour
+    couvrir les pistes, utile aux albums à pochette par piste).
+
+    Best-effort : ne lève jamais. Retourne False si pas de clé, album
+    introuvable ou erreur réseau.
+    """
+    if not JELLYFIN_API_KEY:
+        return False
+    try:
+        item_id = _find_album_id(slug)
+        if not item_id:
+            return False
+        r = requests.post(
+            f"{JELLYFIN_URL}/Items/{item_id}/Refresh",
+            params={
+                "MetadataRefreshMode": "FullRefresh",
+                "ImageRefreshMode": "FullRefresh",
+                "ReplaceAllImages": "true",
+                "ReplaceAllMetadata": "false",
+                "Recursive": "true",
+            },
+            headers={"X-Emby-Token": JELLYFIN_API_KEY},
+            timeout=_TIMEOUT,
+        )
+        return r.status_code < 400
+    except requests.RequestException:
+        return False
