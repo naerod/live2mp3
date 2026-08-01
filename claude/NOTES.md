@@ -751,3 +751,27 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
   Voir workspace/debugging/2026-07-23_ct110-oom-download-bulk-memoire.md
 - Tests adaptés (GET au lieu de POST). 195 passed. Endpoint vérifié : GET 200,
   application/zip, Content-Length OK, magic PK.
+
+2026-07-30 : revue de code complète — preprod v1.15.26 (commit eecf28e).
+- **Suite de tests réparée : 192/203 → 202 passed, 1 skipped.** Les 10 échecs
+  n'étaient pas des régressions produit mais de la dette de la migration de la
+  progression vers Redis :
+  - `tests/test_linktool.py` lisait `main._progress_last`, dictionnaire supprimé
+    lors de cette migration → réécrit sur `progress.history()` / `progress.reset()`.
+    `_progress_last` n'a délibérément **pas** été ressuscité.
+  - `tests/test_t9_api.py` exigeait un Redis réel (absent de CT102) → fixture
+    autouse `fakeredis` dans `conftest.py`, un `FakeServer` partagé entre
+    `progress._client`, `renderqueue._rq_conn` et `_kv_conn`.
+  - **Piège rencontré** : une fois Redis joignable, la suite se bloquait — le
+    rendu partait vraiment en file RQ, sans worker pour l'exécuter, et le flux
+    SSE attendait un évènement final qui n'arrivait jamais. Résolu par une file
+    `is_async=False` (exécution en process). La suite ne dépend plus d'aucun
+    service externe.
+- `except Exception` muets tracés (`renderqueue` ×7, `social`, `covers`, `main` ×2) :
+  `log.warning`/`debug` ajouté, **flux de contrôle inchangé**. Ceux de
+  `progress.py` restent volontaires (documentés).
+- Docstring de `main.py` corrigé : il décrivait un repli d'exécution inline qui
+  n'existe plus depuis le passage au worker.
+- Imports morts retirés ; `backend/` est pyflakes-clean.
+- **À trancher** : `import_drive.py` (21 Ko, racine, non suivi par git, aucun
+  référencement trouvé) — laissé intact, décision utilisateur attendue.
