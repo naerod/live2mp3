@@ -89,7 +89,10 @@ def test_create_job_and_pipeline(client):
             if ev["status"] == "error":
                 pytest.fail(f"pipeline error: {ev['info']}")
     assert completed
-    assert {"render", "tags", "artwork", "disc", "bundle"} <= stages_done
+    # `bundle` ne fait plus partie du pipeline : le ZIP est assemblé à la
+    # demande au téléchargement et supprimé ensuite (13 Go de doublons relevés
+    # le 2026-07-30). Il est couvert par test_bulk_download_auth_and_zip.
+    assert {"render", "tags", "artwork", "disc"} <= stages_done
 
 
 def test_markers_update_locks(client):

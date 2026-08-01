@@ -17,6 +17,7 @@ attendent leur tour et peuvent être réordonnés.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 
@@ -24,6 +25,8 @@ import redis
 from rq import Queue
 from rq.job import Job
 from rq.registry import StartedJobRegistry
+
+log = logging.getLogger(__name__)
 
 QUEUE_NAME = "live2mp3"
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
@@ -138,7 +141,10 @@ def clear_meta(slug: str) -> None:
 def fetch(slug: str) -> Job | None:
     try:
         return Job.fetch(job_id(slug), connection=rq_conn())
-    except Exception:
+    except Exception as exc:
+        # Absence de job est le cas nominal (album jamais rendu) : niveau debug
+        # pour ne pas noyer les logs à chaque consultation de la file.
+        log.debug("fetch(%s) : %s", slug, exc)
         return None
 
 
@@ -149,7 +155,8 @@ def active_status(slug: str) -> str | None:
         return None
     try:
         status = job.get_status(refresh=True)
-    except Exception:
+    except Exception as exc:
+        log.warning("statut du rendu %s illisible : %s", slug, exc)
         return None
     return status if status in ("queued", "started", "deferred") else None
 
@@ -165,8 +172,10 @@ def enqueue(slug: str, *, media: str, gap: float, video: bool,
     if old is not None:
         try:
             old.delete()
-        except Exception:
-            pass
+        except Exception as exc:
+            # Si la purge échoue, l'enqueue qui suit lèvera sur l'id déjà pris :
+            # sans trace, ce refus était impossible à relier à sa cause.
+            log.warning("purge du job terminé %s impossible : %s", slug, exc)
     clear_cancel(slug)
     set_paused(slug, False)
     set_meta(slug, {"slug": slug, "video": bool(video), "media": media,
@@ -197,8 +206,11 @@ def cancel(slug: str) -> str:
             try:
                 job.cancel()
                 job.delete()
-            except Exception:
-                pass
+            except Exception as exc:
+                # Le drapeau d'annulation est déjà posé : le rendu s'arrêtera
+                # de toute façon, on signale seulement le retrait incomplet.
+                log.warning("retrait du rendu %s de la file impossible : %s",
+                            slug, exc)
         clear_meta(slug)
     return status
 
@@ -213,7 +225,8 @@ def _started_slugs() -> list[str]:
     try:
         reg = StartedJobRegistry(QUEUE_NAME, connection=rq_conn())
         ids = [i for i in reg.get_job_ids() if i.startswith(JOB_PREFIX)]
-    except Exception:
+    except Exception as exc:
+        log.warning("registre des rendus en cours illisible : %s", exc)
         return []
     out = []
     for jid in ids:
@@ -221,7 +234,8 @@ def _started_slugs() -> list[str]:
             job = Job.fetch(jid, connection=rq_conn())
             if job.get_status(refresh=True) == "started":
                 out.append(_slug_of(jid))
-        except Exception:
+        except Exception as exc:
+            log.warning("job %s ignoré dans la file : %s", jid, exc)
             continue
     return out
 
@@ -230,7 +244,8 @@ def _queued_slugs() -> list[str]:
     try:
         return [_slug_of(i) for i in queue().job_ids
                 if i.startswith(JOB_PREFIX)]
-    except Exception:
+    except Exception as exc:
+        log.warning("file d'attente illisible : %s", exc)
         return []
 
 

@@ -1,15 +1,13 @@
 """API FastAPI — formulaire, création de jobs, progression SSE, fichiers.
 
 Accès prévu Tailscale only (allowlist Nginx en amont). Les jobs longs sont
-délégués à RQ/Redis ; en l'absence de Redis (dev/test), exécution inline dans
-un thread. La progression est publiée par projet et relue via SSE.
+délégués à RQ/Redis : le rendu tourne dans le worker, pas ici. La progression
+est publiée par projet dans Redis et relue via SSE.
 """
 from __future__ import annotations
 
 import hashlib
-import io
 import json
-import queue
 import shutil
 import threading
 import time
@@ -33,12 +31,10 @@ from pydantic import BaseModel
 
 import re
 from uuid import uuid4
-from . import catalogue, entities, jellyfin, jobs, linktool, llm
+from . import catalogue, entities, linktool, llm
 from . import progress, renderqueue
 from .albumfiles import (
-    _extract_embedded_cover,
     _rename_audio_files,
-    _sanitize_filename,
     _write_album_cover,
     _write_album_tags,
     _write_track_tags,
@@ -80,6 +76,9 @@ from .social import (
 from .follows import router as follows_router
 from . import notifications
 from .notifications import router as notifications_router
+import logging
+
+log = logging.getLogger(__name__)
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -127,8 +126,8 @@ def _startup() -> None:
     # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
     try:
         notifications.ensure_seeded()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("amorçage des notifications impossible : %s", exc)
 
 # --- État de progression (Redis, partagé API <-> worker) ------------------
 # Le rendu s'exécute dans le worker RQ : l'émetteur et le lecteur du flux SSE
@@ -257,7 +256,6 @@ def _list_track_covers_public(slug: str) -> list:
 
 
 # --- Santé & version (public) ---------------------------------------------
-import os
 import httpx
 
 APP_ENV = os.environ.get("APP_ENV", "prod")
@@ -608,7 +606,6 @@ def view_traycard(slug: str, identity: dict = Depends(require_gestionnaire)) -> 
 @app.get("/app/traycard-thumb/{slug}")
 def traycard_thumb(slug: str, identity: dict = Depends(require_gestionnaire)):
     """Thumbnail JPEG page 1 de la tray card (prévisualisation sans iframe)."""
-    from fastapi.responses import Response as _Resp
     from PIL import Image as _Image
     import pypdfium2 as _pdfium
 
@@ -1003,8 +1000,8 @@ def set_published_bulk(payload: BulkPublishIn,
         if payload.published:
             try:
                 notified += notifications.announce_post(slug)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("annonce de %s impossible : %s", slug, exc)
     return {"ok": True, "published": payload.published,
             "updated": updated, "count": len(updated),
             "notified": notified, "missing": missing}

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import linktool, llm
+from backend import linktool, llm, progress
 from backend.pipeline import boundaries
 from backend.pipeline.tags import tag_mp3
 
@@ -349,10 +349,10 @@ def test_prepare_skips_ai_when_timecodes_present(client, monkeypatch, tmp_path):
         raise AssertionError("whisper ne doit pas être appelé")
     monkeypatch.setattr(preanalyze, "transcribe", boom)
 
-    main._progress_last[slug] = []
+    progress.reset(slug)
     main._run_prepare_bg(slug, "g")
 
-    events = main._progress_last[slug]
+    events = progress.history(slug)
     assert any(e["stage"] == "prepare" and e["status"] == "complete"
                for e in events), events
     assert (project_dir / "source" / "waveform.dat").exists()
@@ -393,10 +393,10 @@ def test_prepare_publishes_transcription_progress(client, monkeypatch, tmp_path)
     monkeypatch.setattr(llm, "request_markers", lambda *a, **k: {
         1: {"start": 0.0, "end": 6.0}, 2: {"start": 6.0, "end": 12.0}})
 
-    main._progress_last[slug] = []
+    progress.reset(slug)
     main._run_prepare_bg(slug, "g")
 
-    events = main._progress_last[slug]
+    events = progress.history(slug)
     pct_events = [e for e in events
                   if e["stage"] == "ai_markers"
                   and e["info"].get("phase") == "transcription"
@@ -441,10 +441,10 @@ def test_skip_detection_before_start(client, monkeypatch):
 
     assert c.post(f"/api/jobs/{slug}/skip-detection",
                   headers=GEST).status_code == 200
-    main._progress_last[slug] = []
+    progress.reset(slug)
     main._run_prepare_bg(slug, "g")
 
-    events = main._progress_last[slug]
+    events = progress.history(slug)
     done = [e for e in events
             if e["stage"] == "ai_markers" and e["status"] == "done"]
     assert done and done[0]["info"]["source"] == "skipped", events
@@ -473,11 +473,11 @@ def test_skip_detection_during_transcription(client, monkeypatch):
         raise AssertionError("la transcription aurait dû être interrompue")
     monkeypatch.setattr(preanalyze, "transcribe", fake_transcribe)
 
-    main._progress_last[slug] = []
+    progress.reset(slug)
     main._run_prepare_bg(slug, "g")
 
     assert seen == ["running"]
-    done = [e for e in main._progress_last[slug]
+    done = [e for e in progress.history(slug)
             if e["stage"] == "ai_markers" and e["status"] == "done"]
     assert done and done[0]["info"]["source"] == "skipped"
     assert slug not in main._skip_detection

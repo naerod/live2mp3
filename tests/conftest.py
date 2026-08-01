@@ -8,10 +8,46 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import fakeredis
 import pytest
 
 # 4 pistes de 3 s chacune -> master de 12 s. Timecodes connus.
 TRACK_SPANS = [(0.0, 3.0), (3.0, 6.0), (6.0, 9.0), (9.0, 12.0)]
+
+
+@pytest.fixture(autouse=True)
+def fake_redis(monkeypatch):
+    """Redis en mémoire pour toute la suite.
+
+    La progression et la file de rendu sont passées par Redis quand le rendu a
+    quitté le process API pour le worker RQ. Sans ce doublon, la suite exige un
+    serveur Redis joignable et échoue hors docker.
+
+    Un seul `FakeServer` pour les trois connexions : `renderqueue` en ouvre deux
+    (binaire pour RQ, décodée pour ses propres clés) et elles doivent voir le
+    même espace de clés, sinon le garde-fou anti-doublon ne relit pas ce que la
+    mise en file a écrit.
+
+    La file est en mode synchrone (`is_async=False`) : aucun worker RQ ne tourne
+    pendant les tests, donc un rendu mis en file ne serait jamais exécuté et le
+    flux SSE attendrait indéfiniment un évènement final. En synchrone, le rendu
+    s'exécute dans l'appel à `enqueue`, et le rejeu de l'historique par
+    `/events` trouve la progression déjà complète.
+    """
+    server = fakeredis.FakeServer()
+    from rq import Queue
+
+    from backend import progress, renderqueue
+
+    monkeypatch.setattr(progress, "_client",
+                        fakeredis.FakeRedis(server=server, decode_responses=True))
+    monkeypatch.setattr(renderqueue, "_rq_conn",
+                        fakeredis.FakeRedis(server=server))
+    monkeypatch.setattr(renderqueue, "_kv_conn",
+                        fakeredis.FakeRedis(server=server, decode_responses=True))
+    monkeypatch.setattr(renderqueue, "queue", lambda: Queue(
+        renderqueue.QUEUE_NAME, connection=renderqueue.rq_conn(),
+        default_timeout=renderqueue.JOB_TIMEOUT, is_async=False))
 
 
 def _make_master_wav(path: Path) -> None:

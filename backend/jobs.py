@@ -5,12 +5,10 @@ un callback (branché sur SSE côté API, ou Redis pub/sub côté worker).
 """
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Callable
 
-from .manifest import Manifest
 from .pipeline import artwork, disc, preanalyze, render, tags
 
 ProgressCb = Callable[[str, str, dict], None]

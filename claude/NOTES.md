@@ -1,3 +1,28 @@
+
+2026-07-31 : **Propagation pochette album → Jellyfin/Finamp** (prod v1.19.0,
+preprod v1.15.25). Incident : covers mises à jour sur albums publiés
+n'apparaissaient pas dans Finamp même en forçant la sync.
+- Cause : `_on_covers_changed` ne mettait à jour que le manifest ; `sync-media.sh`
+  ne re-scanne Jellyfin que sur apparition/disparition de symlink, jamais sur un
+  changement de contenu. Jellyfin servait l'ancienne image en cache → Finamp aussi.
+- Fix code : `_on_covers_changed` → `_propagate_cover_to_media` quand la gagnante
+  change réellement ET album publié :
+  - pochette unique → ré-embarque `album.cover` (APIC) dans toutes les pistes ;
+  - `per_track_covers` → dépose `build/audio/cover.jpg` (vignette album) SANS
+    toucher aux APIC des pistes ;
+  puis `jellyfin.refresh_album(slug)` = refresh **par item** avec
+  `ReplaceAllImages=true`+`FullRefresh` (un `Library/Refresh` ordinaire ne
+  ré-extrait PAS l'art déjà en cache — point clé).
+- **`JELLYFIN_API_KEY` désormais injectée dans le `.env` PROD** (était vide → le
+  refresh auto était mort en prod). Le « reste à faire » du 2026-07-25 est levé.
+- Remédiation manuelle prod (avant le fix) sur les 4 albums touchés : halftime,
+  twenty-one-pilots, falling-in-reverse (nouvel album), live-crossovers. Ce
+  dernier est **per-track** : build pas ré-rendu → mapping piste→pochette
+  reconstruit via le cache d'images Jellyfin (match perceptuel), pochettes
+  individuelles ré-embarquées, cover.jpg dossier ajouté pour la vignette.
+- ⚠️ Finamp garde un cache d'images CLIENT qui ne s'invalide pas seul : vider le
+  cache d'images de l'app pour voir les nouvelles pochettes.
+- 3 tests ajoutés (propagation album / folder-cover per-track / no-op brouillon).
 # Notes
 
 2026-07-25 : **Réouverture de l'éditeur audio sur un album déjà publié**
