@@ -35,12 +35,15 @@ def test_apic_cover_embedded(synth_project):
 
 
 def test_mp4_metadata(synth_project):
+    """Le MP4 complet (un seul fichier pour tout le concert) porte les
+    métadonnées de l'ALBUM, pas d'une piste — il n'y a plus de notion de
+    piste au niveau du fichier vidéo depuis le 2026-08-02."""
     render.run(synth_project, video=True)
     tags.run(synth_project)
     mp4s = sorted((synth_project / "build" / "video").glob("*.mp4"))
-    assert mp4s
+    assert len(mp4s) == 1
     meta = MP4(str(mp4s[0]))
-    assert meta.tags["\xa9nam"][0] == "01. Overcompensate"
+    assert meta.tags["\xa9nam"][0].startswith("The Clancy Tour")
     assert meta.tags["\xa9ART"][0] == "Twenty One Pilots"
     assert meta.tags["\xa9gen"][0] == "Live"
 

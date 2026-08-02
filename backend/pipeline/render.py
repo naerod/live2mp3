@@ -1,13 +1,18 @@
 """Stage 4 — Render clips.
 
 Boucle sur les pistes du manifest et coupe :
-- Audio : depuis master.wav -> MP3 VBR (`libmp3lame -q:a 0`) dans build/audio/
-- Vidéo : depuis master.mkv -> MP4 (H.264 CRF 23 veryfast par défaut,
-  coupe frame-accurate) dans build/video/
+- Audio : depuis master.wav -> MP3 VBR (`libmp3lame -q:a 0`) dans build/audio/,
+  une piste à la fois.
+- Vidéo : depuis master.mkv -> **un seul MP4** couvrant tout le concert
+  (du début de la 1re piste à la fin de la dernière — pas de découpe par
+  piste), dans build/video/. Décision du 2026-08-02 : la lecture "morceau par
+  morceau" (playlist/série) sur Jellyfin est pénible pour l'utilisateur ; un
+  fichier complet évite aussi de re-render la vidéo à chaque ajustement de
+  timecode d'une piste (seul l'audio en dépend encore).
 
-Chaque piste dont start/end est renseigné est rendue ; les pistes sans
-timecode sont ignorées. Stage idempotent (skip si le fichier existe déjà
-et --force absent).
+Chaque piste dont start/end est renseigné est rendue (audio) ; les pistes
+sans timecode sont ignorées, y compris pour le calcul des bornes vidéo.
+Stage idempotent (skip si le fichier existe déjà et --force absent).
 """
 from __future__ import annotations
 
@@ -17,7 +22,7 @@ import subprocess
 from pathlib import Path
 from typing import Callable
 
-from ..manifest import Manifest
+from ..manifest import Manifest, download_stem
 
 # Réglages d'encodage vidéo, surchargeables sans redéploiement.
 #
@@ -133,9 +138,10 @@ def _expected_filenames(m: Manifest, ext: str) -> set[str]:
 
 def _purge_orphans(dir_: Path, expected: set[str]) -> None:
     """Retire les fichiers d'un rendu précédent qui ne correspondent plus à
-    aucune piste courante (piste renommée, fusionnée ou supprimée depuis un
-    précédent rendu). Sans ça, un re-rendu sur un album déjà publié laisse des
-    pistes fantômes dans le ZIP et dans la bibliothèque Jellyfin."""
+    ce qui est attendu (piste renommée/supprimée, ou changement de nom du
+    fichier vidéo complet suite à une modif d'artiste/titre/date). Sans ça,
+    un re-rendu sur un album déjà publié laisse des fichiers fantômes dans le
+    ZIP et dans la bibliothèque Jellyfin."""
     if not dir_.exists():
         return
     for f in dir_.iterdir():
@@ -156,13 +162,21 @@ def _render_or_cleanup(fn, src: Path, start, end, out: Path,
         raise
 
 
+def video_filename(m: Manifest, project_slug: str) -> str:
+    """Nom du MP4 complet : suit le même schéma que les ZIP de téléchargement
+    (`download_stem`) pour rester cohérent et se renommer automatiquement en
+    cas de correction d'artiste/titre/date."""
+    return f"{download_stem(m.data, project_slug)}_concert-complet.mp4"
+
+
 def run(project_dir: str | Path, force: bool = False, video: bool = True,
         on_track: Callable[[int, int, str], None] | None = None,
         cancel: Callable[[], bool] | None = None,
         paused: Callable[[], bool] | None = None) -> dict:
-    """`on_track(done, total, title)` est appelé avant chaque piste : le
-    ré-encodage vidéo dure plusieurs minutes par piste, sans ça l'UI reste
-    figée sur « en cours… » pendant tout le stage.
+    """`on_track(done, total, title)` est appelé avant chaque piste audio, puis
+    une dernière fois pour le rendu vidéo complet (étape à part, hors boucle
+    par piste) : le ré-encodage vidéo dure plusieurs minutes, sans ça l'UI
+    reste figée sur « en cours… » pendant tout le stage.
 
     `cancel()` est sondé pendant les encodages : s'il passe à True, le ffmpeg
     en cours est tué, le fichier partiel supprimé, et Cancelled est levée.
@@ -176,8 +190,6 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
     video_dir = project_dir / "build" / "video"
 
     _purge_orphans(audio_dir, _expected_filenames(m, "mp3"))
-    if video:
-        _purge_orphans(video_dir, _expected_filenames(m, "mp4"))
 
     todo = [t for t in m.tracks
             if t.get("start") is not None and t.get("end") is not None]
@@ -188,22 +200,33 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
         start, end = track["start"], track["end"]
         if on_track:
             on_track(i, total, str(track.get("title", "")))
-        # Audio
         a_out = audio_dir / m.track_filename(track, "mp3")
         if force or not a_out.exists():
             _render_or_cleanup(render_audio, master_wav, start, end,
                                a_out, cancel, paused)
         rendered["audio"].append(str(a_out))
-        # Vidéo (optionnelle : master.mkv peut être absent en test audio-only)
-        if video and master_mkv.exists():
-            v_out = video_dir / m.track_filename(track, "mp4")
-            if force or not v_out.exists():
-                _render_or_cleanup(render_video, master_mkv, start, end,
-                                   v_out, cancel, paused)
-            rendered["video"].append(str(v_out))
 
     if on_track and total:
         on_track(total, total, "")
+
+    # Vidéo : un seul fichier, du début de la 1re piste à la fin de la
+    # dernière (master.mkv peut être absent en test audio-only).
+    if video and master_mkv.exists() and todo:
+        v_start, v_end = todo[0]["start"], todo[-1]["end"]
+        v_name = video_filename(m, project_dir.name)
+        _purge_orphans(video_dir, {v_name})
+        if on_track:
+            on_track(0, 1, "Vidéo complète")
+        v_out = video_dir / v_name
+        if force or not v_out.exists():
+            _render_or_cleanup(render_video, master_mkv, v_start, v_end,
+                               v_out, cancel, paused)
+        rendered["video"].append(str(v_out))
+        if on_track:
+            on_track(1, 1, "")
+    elif video:
+        _purge_orphans(video_dir, set())
+
     m.set_state("render", "done")
     return rendered
 

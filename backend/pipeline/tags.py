@@ -2,6 +2,10 @@
 
 Écrit les métadonnées ID3 (+ cover art APIC) sur chaque MP3 via mutagen,
 et les métadonnées MP4 via ffmpeg -metadata.
+
+Le MP3 reste tagué piste par piste. Le MP4 est désormais un fichier unique
+pour tout le concert (cf. pipeline/render.py) : il porte les métadonnées de
+l'album (titre, artiste, genre, date), pas celles d'une piste.
 """
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ from mutagen.id3 import (
 from mutagen.mp3 import MP3
 
 from ..manifest import Manifest, numbered_title
+from .render import video_filename
 
 
 def _cover_bytes(project_dir: Path, manifest: Manifest) -> tuple[bytes | None, str]:
@@ -63,7 +68,7 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
     audio.save(v2_version=3)
 
 
-def tag_mp4(path: Path, track: dict, album: dict, total: int) -> None:
+def tag_video_full(path: Path, album: dict) -> None:
     tmp = path.with_suffix(".tagged.mp4")
     # `+faststart` obligatoire ici aussi : cette réécriture en copie de flux
     # reconstruit le conteneur et replacerait sinon l'index en fin de fichier,
@@ -71,10 +76,8 @@ def tag_mp4(path: Path, track: dict, album: dict, total: int) -> None:
     cmd = [
         "ffmpeg", "-y", "-i", str(path),
         "-map_metadata", "-1", "-c", "copy", "-movflags", "+faststart",
-        "-metadata", f"title={numbered_title(track['n'], track['title'])}",
-        "-metadata", f"track={track['n']}/{total}",
-        "-metadata", f"album={album.get('title', '')}",
-        "-metadata", f"artist={track.get('artist') or album.get('artist', '')}",
+        "-metadata", f"title={album.get('title', '')}",
+        "-metadata", f"artist={album.get('artist', '')}",
         "-metadata", f"album_artist={album.get('artist', '')}",
         "-metadata", "genre=Live",
     ]
@@ -102,10 +105,11 @@ def run(project_dir: str | Path) -> dict:
         if mp3.exists():
             tag_mp3(mp3, track, album, total, cover, cover_mime)
             tagged["audio"].append(str(mp3))
-        mp4 = video_dir / m.track_filename(track, "mp4")
-        if mp4.exists():
-            tag_mp4(mp4, track, album, total)
-            tagged["video"].append(str(mp4))
+
+    mp4 = video_dir / video_filename(m, project_dir.name)
+    if mp4.exists():
+        tag_video_full(mp4, album)
+        tagged["video"].append(str(mp4))
 
     m.set_state("tags", "done")
     return tagged
