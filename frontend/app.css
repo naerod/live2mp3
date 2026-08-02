@@ -386,6 +386,10 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   color:var(--fg);border:1px solid var(--run);
   background:color-mix(in srgb,var(--run) 14%,transparent)}
 .disc-warn .material-symbols-outlined{color:var(--run);font-size:22px;flex-shrink:0}
+/* Indicateur discret d'enregistrement du brouillon de coupes */
+.draft-saved{display:flex;align-items:center;gap:7px;margin:0 0 10px;
+  font-size:12.5px;color:var(--muted)}
+.draft-saved .material-symbols-outlined{font-size:18px;color:var(--ok,var(--accent))}
 /* Bandeau de session SSO expirée (lecteur audio bloqué) */
 .session-warn{display:flex;align-items:center;gap:10px;margin:0 0 14px;
   padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.4;

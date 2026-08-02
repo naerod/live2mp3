@@ -412,11 +412,15 @@ async function openEditor(){
   // « Réinitialiser » ne ramènerait plus à l'analyse IA d'origine.
   EDIT_ORIG=JSON.parse(JSON.stringify(EDIT));
   // Reprise d'un travail non validé (F5, onglet fermé, session SSO expirée).
+  // En création, le brouillon serveur est écrit en continu : le manifeste fait
+  // foi et la copie locale ne sert que s'il n'a rien reçu (première session
+  // hors ligne). En ré-édition, rien n'est autosauvé côté serveur — la copie
+  // locale est alors la seule reprise possible.
   const localEdit=loadEditLocal(slug);
-  if(localEdit){
+  if(localEdit&&(reedit||!EDIT.length)){
     EDIT=localEdit.edit;
     toast(T("edit_restored"));
-  }
+  }else if(localEdit)clearEditLocal(slug);
   relinkEnds();
   renderRows();
   updateDiscMarker();
@@ -536,6 +540,41 @@ function commitEdit(){
   syncPeaks();
   updateDiscMarker();
   saveEditLocal();
+  scheduleDraftSave();
+}
+
+// --- Brouillon serveur des coupes ----------------------------------------
+// Attendu de longue date mais jamais branché : le backend expose de quoi
+// écrire les coupes sans rien déclencher, mais l'éditeur ne les envoyait
+// qu'au clic sur « Valider ». Fermer l'onglet perdait tout le découpage.
+// On enregistre donc en continu (débounce), et le brouillon rouvert repart de
+// l'état réel plutôt que de l'analyse IA.
+// Exception : la ré-édition d'un album publié n'écrit rien tant que
+// l'utilisateur n'a pas validé — on ne modifie pas un album en ligne à chaque
+// glissement de marqueur. La copie locale suffit dans ce cas.
+let draftTimer=null;
+function scheduleDraftSave(){
+  if(reedit||!slug)return;
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(saveDraft,3000);
+}
+async function saveDraft(){
+  if(reedit||!slug||!EDIT.length)return;
+  // Le serveur refuse une piste sans titre ou à bornes inversées : tant que
+  // l'édition est dans un état intermédiaire, on garde juste la copie locale.
+  if(EDIT.some(t=>!t.title.trim()||t.end<=t.start))return;
+  const tracks=EDIT.map(t=>({title:t.title.trim(),artist:(t.artist||"").trim(),
+                             start:t.start,end:t.end}));
+  try{
+    const r=await fetch(`/api/jobs/${slug}/setlist`,{method:"PUT",
+      redirect:"manual",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({tracks})});
+    if(r.type==="opaqueredirect"||!r.ok){showSessionBanner();return;}
+    hideSessionBanner();
+    $("draft-saved").classList.remove("hidden");
+    clearTimeout(saveDraft._hide);
+    saveDraft._hide=setTimeout(()=>$("draft-saved").classList.add("hidden"),2500);
+  }catch(e){/* réseau : la copie locale reste le filet */}
 }
 
 // --- Sauvegarde locale des coupes en cours d'édition ---------------------
