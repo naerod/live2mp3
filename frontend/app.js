@@ -704,15 +704,16 @@ function buildEditRow(t,i){
     <input class="t-title" placeholder="${T('tr_title_ph')}">
     <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
-      <input class="t-time t-start seekable" value="${fmtTime(t.start)}" title="${T('seek_tc')}">
       <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"><span class="material-symbols-outlined">first_page</span></button>
+      <input class="t-time t-start seekable" value="${fmtTime(t.start)}" title="${T('seek_tc')}">
       <span class="t-sep">→</span>
+      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
       <input class="t-time t-end${endLocked?'':' seekable'}" value="${fmtTime(t.end)}"${endLocked?' disabled':` title="${T('seek_tc')}"`}>
       ${canLock
         ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_end'):T('link_end')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
         : `<span class="t-lock-spacer"></span>`}
-      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
     </span>
+    <span class="t-actions-sep"></span>
     <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
     <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title;
