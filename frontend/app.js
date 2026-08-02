@@ -404,10 +404,19 @@ async function openEditor(){
   applyI18n(LANG());
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
+  wireMediaResilience();
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
   EDIT=buildEditFromTracks(m.tracks);
   // Copie profonde figée : référence pour le bouton « Réinitialiser ».
+  // Toujours prise sur le manifeste, jamais sur la reprise locale : sinon
+  // « Réinitialiser » ne ramènerait plus à l'analyse IA d'origine.
   EDIT_ORIG=JSON.parse(JSON.stringify(EDIT));
+  // Reprise d'un travail non validé (F5, onglet fermé, session SSO expirée).
+  const localEdit=loadEditLocal(slug);
+  if(localEdit){
+    EDIT=localEdit.edit;
+    toast(T("edit_restored"));
+  }
   relinkEnds();
   renderRows();
   updateDiscMarker();
@@ -526,6 +535,97 @@ function commitEdit(){
   renderRows();
   syncPeaks();
   updateDiscMarker();
+  saveEditLocal();
+}
+
+// --- Sauvegarde locale des coupes en cours d'édition ---------------------
+// Rien n'est persisté côté serveur avant « Valider » : une session SSO
+// expirée, un onglet fermé ou un crash effaçaient une heure d'ajustements.
+// On garde donc une copie locale, réécrite à chaque modification et relue à
+// l'ouverture de l'éditeur. Purgée seulement après un envoi réussi.
+const EDIT_KEY=s=>`l2m-edit-${s}`;
+function saveEditLocal(){
+  if(!slug||!EDIT.length)return;
+  try{localStorage.setItem(EDIT_KEY(slug),
+    JSON.stringify({at:Date.now(),edit:EDIT}));}catch(e){}
+}
+function loadEditLocal(s){
+  try{
+    const d=JSON.parse(localStorage.getItem(EDIT_KEY(s))||"null");
+    return d&&Array.isArray(d.edit)&&d.edit.length?d:null;
+  }catch(e){return null;}
+}
+function clearEditLocal(s){try{localStorage.removeItem(EDIT_KEY(s));}catch(e){}}
+
+// --- Survie du lecteur à une expiration de session SSO --------------------
+// L'audio de travail est streamé par plages : chaque avance dans la forme
+// d'onde refait une requête HTTP, et chacune repasse par le forward-auth
+// Authentik. Session expirée => 302 vers la page de login : un <audio> ne sait
+// pas suivre une redirection d'authentification, il reçoit du HTML, coupe le
+// son, gèle Peaks.js et remet currentTime à 0 (lecteur grisé, durée 0:00).
+// On détecte, on répare tout seul si c'était juste le réseau, et on propose une
+// reconnexion en nouvel onglet sinon — jamais un rechargement, qui viderait
+// l'éditeur.
+let lastGoodTime=0;       // dernière position lue, l'erreur média remet à 0
+let mediaRecovering=false;
+let sessionPoll=null;
+
+// `redirect:"manual"` : un 302 d'Authentik donne une réponse opaque
+// (type "opaqueredirect") au lieu d'être suivi en cross-origin — c'est le
+// signal d'expiration, sans dépendre du contenu de la réponse.
+async function sessionAlive(){
+  try{
+    const r=await fetch("/api/me",{redirect:"manual",cache:"no-store"});
+    if(r.type==="opaqueredirect"||!r.ok)return false;
+    const d=await r.json().catch(()=>({}));
+    return !!d.authenticated;
+  }catch(e){return false;}
+}
+
+function showSessionBanner(){$("session-warn").classList.remove("hidden");}
+function hideSessionBanner(){$("session-warn").classList.add("hidden");}
+
+async function recoverMedia(){
+  if(mediaRecovering||!slug)return;
+  mediaRecovering=true;
+  try{
+    if(!await sessionAlive()){showSessionBanner();return;}
+    hideSessionBanner();
+    // Session valide : coupure passagère. On recharge la source et on revient
+    // où on en était (le paramètre ne sert qu'à contourner le cache).
+    const a=$("ed-audio");
+    const t=lastGoodTime;
+    a.src=`/api/jobs/${slug}/audio?r=${Date.now()}`;
+    a.addEventListener("loadedmetadata",()=>{
+      try{a.currentTime=t;}catch(e){}
+    },{once:true});
+    a.load();
+  }finally{mediaRecovering=false;}
+}
+
+function wireMediaResilience(){
+  const a=$("ed-audio");
+  if(a.dataset.resilient)return;   // openEditor() peut être rappelé
+  a.dataset.resilient="1";
+  a.addEventListener("timeupdate",()=>{if(a.currentTime>0)lastGoodTime=a.currentTime;});
+  a.addEventListener("error",recoverMedia);
+  $("btn-session-relogin").onclick=()=>{
+    // Nouvel onglet, jamais une navigation : l'éditeur courant garde ses
+    // coupes en mémoire et redevient fonctionnel dès le cookie réémis.
+    window.open("/outpost.goauthentik.io/start?rd=/app","_blank","noopener");
+    const iv=setInterval(async()=>{
+      if(await sessionAlive()){clearInterval(iv);hideSessionBanner();recoverMedia();}
+    },2000);
+    setTimeout(()=>clearInterval(iv),120000);
+  };
+  // Sonde périodique : prévenir pendant que l'éditeur répond encore, plutôt
+  // que de laisser l'utilisateur découvrir la panne sur un lecteur mort.
+  clearInterval(sessionPoll);
+  sessionPoll=setInterval(async()=>{
+    if($("step-editor").classList.contains("hidden"))return;
+    if(await sessionAlive())hideSessionBanner();
+    else showSessionBanner();
+  },60000);
 }
 
 function syncPeaks(){
@@ -754,6 +854,9 @@ $("btn-render").onclick=async()=>{
       const d=await r.json().catch(()=>({}));
       throw new Error(d.detail||`HTTP ${r.status}`);
     }
+    // Coupes acceptées par le serveur : la copie de secours n'a plus lieu
+    // d'être (et rouvrir l'éditeur doit repartir du manifeste).
+    clearEditLocal(slug);
     $("ed-audio").pause();
     await startRender();
   }catch(e){

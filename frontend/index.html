@@ -123,6 +123,11 @@
       <span class="zoom-spacer"></span>
       <button class="icon-btn" id="btn-reset-cuts" data-i18n-title="reset_cuts_title" title="Rétablir les coupes de l'analyse IA d'origine"><span class="material-symbols-outlined">restart_alt</span> <span data-i18n="reset_cuts">Réinitialiser</span></button>
     </div>
+    <div id="session-warn" class="session-warn hidden">
+      <span class="material-symbols-outlined">lock_clock</span>
+      <span class="session-warn-txt" data-i18n="session_expired">Session expirée : le lecteur audio est bloqué. Vos coupes sont conservées — reconnectez-vous pour continuer.</span>
+      <button id="btn-session-relogin" class="icon-btn"><span class="material-symbols-outlined">refresh</span> <span data-i18n="session_relogin">Se reconnecter</span></button>
+    </div>
     <audio id="ed-audio" controls preload="metadata"></audio>
     <div id="disc-warn" class="disc-warn hidden">
       <span class="material-symbols-outlined">album</span>
