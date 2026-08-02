@@ -5,12 +5,31 @@ devient une entrée (métadonnées + disponibilité MP3/MP4 + cover + import inf
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import entities
 from .db import get_conn
 from .manifest import Manifest, PROJECTS_DIR
+
+
+APP_ENV = os.environ.get("APP_ENV", "prod")
+
+
+def hidden_by_env(data: dict) -> bool:
+    """Album créé en preprod : invisible depuis la prod tant qu'il n'est pas poussé.
+
+    Le stockage des albums est physiquement **partagé** entre prod et preprod
+    (même bind-mount, cf. `workspace/infra/stockage.md`). Sans ce filtre, le
+    moindre essai fait en preprod apparaît aussitôt dans le catalogue et les
+    brouillons de la production.
+
+    Champ absent = album de production : les albums existants restent visibles
+    sans aucune migration. La preprod, elle, voit tout — c'est son rôle.
+    """
+    origin = data.get("origin_env")
+    return APP_ENV == "prod" and bool(origin) and origin != "prod"
 
 
 def _has_files(d: Path, ext: str) -> bool:
@@ -77,6 +96,8 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         try:
             m = Manifest.load(manifest)
         except Exception:
+            continue
+        if hidden_by_env(m.data):
             continue
         published = m.data.get("published", True)
         if not published and not include_drafts:
@@ -181,6 +202,8 @@ def list_drafts() -> list[dict]:
         try:
             m = Manifest.load(manifest)
         except Exception:
+            continue
+        if hidden_by_env(m.data):
             continue
         album = m.data.get("album", {})
         meta = m.data.get("meta", {})

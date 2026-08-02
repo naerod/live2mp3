@@ -240,6 +240,13 @@
           <span class="publish-status" id="publish-status"></span>
           <button id="btn-publish"><span class="material-symbols-outlined">visibility</span><span id="t-btn-publish">Publier</span></button>
         </div>
+        <!-- Portée : prod et preprod partagent le même stockage d'albums. Un
+             album créé en preprod porte une étiquette qui le masque du
+             catalogue prod ; la « pousser en prod » ne fait que la retirer. -->
+        <div class="publish-row hidden" id="scope-row" style="margin-top:12px">
+          <span class="publish-status" id="scope-status"></span>
+          <button id="btn-promote"><span class="material-symbols-outlined">rocket_launch</span><span id="t-btn-promote">Pousser en prod</span></button>
+        </div>
       </div>
     </div>
 
@@ -347,6 +354,11 @@ const TT={
       new_track:"Nouveau titre…",add_label:"Ajouter un label…",
       del_t:"Supprimer",ptc_label:"Dissocier les pistes",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
+      promote_btn:"Pousser en prod",demote_btn:"Retirer de la prod",
+      scope_preprod:"Album de preprod — invisible en production",
+      scope_prod:"Visible en production",
+      promote_done:"Album poussé en production",
+      demote_done:"Album retiré de la production",
       status_pub:"Visible dans la vitrine",
       status_draft:"Dépublié — visible uniquement des gestionnaires",
       open_editor:"Ouvrir l'éditeur audio",
@@ -371,6 +383,11 @@ const TT={
       cover_hint:"Import cover",cover_replace:"Replace cover",
       new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Split tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
+      promote_btn:"Push to production",demote_btn:"Pull from production",
+      scope_preprod:"Preprod album — not visible in production",
+      scope_prod:"Visible in production",
+      promote_done:"Album pushed to production",
+      demote_done:"Album pulled from production",
       status_pub:"Visible in the catalogue",
       status_draft:"Unpublished — visible to managers only",
       open_editor:"Open the audio editor",
@@ -425,6 +442,7 @@ function applyLang(){
   document.getElementById("newlabel").placeholder=t.add_label;
   document.getElementById("t-btn-open-editor").textContent=t.open_editor;
   refreshOpenEditorBtn();
+  refreshScopeRow();
   if(DATA){renderDL();renderTraycard();}
 }
 
@@ -442,6 +460,52 @@ function refreshOpenEditorBtn(){
 }
 document.getElementById("btn-open-editor").onclick=()=>{
   location.href=`/app#${encodeURIComponent(SLUG)}`;
+};
+
+// --- Portée d'environnement ------------------------------------------------
+// Le bloc n'apparaît qu'en preprod : en production il n'y a rien à pousser, et
+// l'API refuse l'opération de toute façon (`can_promote` faux).
+function refreshScopeRow(){
+  const row=document.getElementById("scope-row");
+  if(!row||!DATA)return;
+  const t=TT[L()];
+  // Servi par la production : il n'y a rien à pousser, on masque le bloc.
+  if(DATA.env==="prod"){row.classList.add("hidden");return;}
+  const isPreprod=DATA.origin_env&&DATA.origin_env!=="prod";
+  row.classList.remove("hidden");
+  const btn=document.getElementById("btn-promote");
+  const lbl=document.getElementById("t-btn-promote");
+  const ic=btn.querySelector(".material-symbols-outlined");
+  const st=document.getElementById("scope-status");
+  if(isPreprod){
+    st.textContent=t.scope_preprod;
+    lbl.textContent=t.promote_btn; ic.textContent="rocket_launch";
+    btn.className="primary";
+  }else{
+    st.textContent=t.scope_prod;
+    lbl.textContent=t.demote_btn; ic.textContent="undo";
+    btn.className="";
+  }
+}
+document.getElementById("btn-promote").onclick=async()=>{
+  const t=TT[L()];
+  const isPreprod=DATA&&DATA.origin_env&&DATA.origin_env!=="prod";
+  const btn=document.getElementById("btn-promote");
+  btn.disabled=true;
+  try{
+    const r=await fetch(`/api/albums/${encodeURIComponent(SLUG)}/`
+      +(isPreprod?"promote":"demote"),{method:"POST"});
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      throw new Error(d.detail||`HTTP ${r.status}`);
+    }
+    const d=await r.json();
+    DATA.origin_env=d.origin_env;
+    refreshScopeRow();
+    toast(isPreprod?t.promote_done:t.demote_done);
+  }catch(e){
+    toast(e.message||"Erreur",true);
+  }finally{btn.disabled=false;}
 };
 
 
@@ -894,6 +958,7 @@ async function saveTmModal(){
 
 async function load(){
   DATA=await(await fetch(`/api/albums/${SLUG}`)).json();
+  refreshScopeRow();
   const a=DATA.album||{};
   document.title=`live2mp3 — ${a.title||SLUG}`;
   document.getElementById("e-title").value=a.title||"";

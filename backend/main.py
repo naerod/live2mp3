@@ -726,6 +726,8 @@ def album_detail(slug: str,
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    if catalogue.hidden_by_env(m.data):
+        raise HTTPException(404, "album introuvable")
     album = m.data.get("album", {})
     src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
@@ -747,6 +749,10 @@ def album_detail(slug: str,
         "has_mp4": cat.get("has_mp4", False),
         # L'éditeur de coupes a besoin du master : seuls les albums importés
         # via l'outil lien (pas les imports manuels) le conservent.
+        # `env` = environnement qui sert la fiche ; `origin_env` = portée de
+        # l'album. Le bloc de portée n'a de sens que servi hors production.
+        "env": APP_ENV,
+        "origin_env": m.data.get("origin_env") or "prod",
         "has_editor_source": (src_dir / "preview.mp3").exists()
                               or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
@@ -1127,6 +1133,11 @@ def create_job(job: JobIn,
         "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "import_source": "url",
     }
+    # Portée : un album créé hors production reste invisible du catalogue prod
+    # (stockage partagé, cf. workspace/infra/stockage.md) jusqu'à sa promotion.
+    # On n'écrit rien en prod : champ absent = album de production.
+    if APP_ENV != "prod":
+        m.data["origin_env"] = APP_ENV
     if job.setlistfm_url:
         # L'attribution suit la donnée : affichée sur la fiche album (ToS).
         m.data["meta"]["setlistfm_url"] = job.setlistfm_url
@@ -1478,6 +1489,48 @@ def delete_job(slug: str,
     shutil.rmtree(project_dir, ignore_errors=True)
     progress.reset(slug)
     return {"ok": True}
+
+
+@app.post("/api/albums/{slug}/promote")
+def promote_album(slug: str,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Rend visible en production un album créé en preprod.
+
+    Aucun fichier n'est déplacé : prod et preprod partagent le même stockage,
+    seule l'étiquette de portée disparaît. L'opération est donc atomique et
+    réversible (cf. `demote`), là où une copie de ~1,5 Go par album exposerait
+    une fenêtre d'échec partiel.
+    """
+    if APP_ENV == "prod":
+        raise HTTPException(400, "déjà en production")
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    if not m.data.get("origin_env"):
+        raise HTTPException(400, "cet album est déjà visible en production")
+    m.data.pop("origin_env", None)
+    m.save()
+    return {"ok": True, "slug": slug, "origin_env": "prod"}
+
+
+@app.post("/api/albums/{slug}/demote")
+def demote_album(slug: str,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Retire un album de la production (retour à la portée preprod).
+
+    Filet de la promotion : une erreur se corrige en remettant l'étiquette,
+    sans toucher aux médias.
+    """
+    if APP_ENV == "prod":
+        raise HTTPException(400, "opération réservée à la preprod")
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    m.data["origin_env"] = APP_ENV
+    m.save()
+    return {"ok": True, "slug": slug, "origin_env": APP_ENV}
 
 
 @app.put("/api/jobs/{slug}/markers")
