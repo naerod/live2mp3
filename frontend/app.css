@@ -363,7 +363,8 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   color:var(--muted);font-size:12px;min-width:52px}
 .track-row .t-badge .material-symbols-outlined{font-size:15px}
 .track-row .t-times{display:flex;gap:5px;align-items:center}
-.track-row .t-time{width:66px;text-align:center;font-variant-numeric:tabular-nums}
+.track-row .t-time{width:98px;text-align:center;font-variant-numeric:tabular-nums;
+  padding-left:4px;padding-right:4px}
 .track-row .t-time:disabled{opacity:.5;cursor:not-allowed;
   background:var(--bg);border-style:dashed}
 .track-row .t-sep{color:var(--muted)}

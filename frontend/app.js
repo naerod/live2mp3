@@ -117,11 +117,15 @@ function fmtDur(s){
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
   return(h?`${h}:${String(m).padStart(2,"0")}`:m)+":"+String(sec).padStart(2,"0");
 }
+// Timecodes de l'éditeur : HH:MM:SS.XX, largeur fixe. Le format MM:SS.X
+// précédent débordait du champ passé une heure de concert (« 100:39 » tronqué),
+// et masquait les centièmes alors que c'est la précision qu'on ajuste.
 function fmtTime(s){
   if(s==null||isNaN(s))return"";
   s=Math.max(0,s);
-  const m=Math.floor(s/60),sec=(s%60);
-  return`${m}:${sec<10?"0":""}${sec.toFixed(1)}`;
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:`
+       +`${sec<10?"0":""}${sec.toFixed(2)}`;
 }
 function parseTime(v){
   v=(v||"").trim();if(!v)return null;
@@ -178,7 +182,7 @@ function addFormRow(t){
     <span class="tn"></span>
     <input class="t-title" placeholder="${T("tr_title_ph")}" value="">
     <input class="t-artist" placeholder="${T("tr_artist_ph")}" value="">
-    <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtTime(t.start).split(".")[0]}`:""}</span>
+    <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtDur(t.start)}`:""}</span>
     <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title||"";
   row.querySelector(".t-artist").value=t.artist||"";
