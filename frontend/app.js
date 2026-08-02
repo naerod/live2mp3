@@ -230,13 +230,26 @@ $("btn-create").onclick=async()=>{
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
-      throw new Error(d.detail||`HTTP ${r.status}`);
+      const err=new Error(d.detail||`HTTP ${r.status}`);
+      err.status=r.status;
+      throw err;
     }
     slug=(await r.json()).slug;
     location.hash=slug;   // reprise possible si l'onglet se ferme
     await startPrepare();
   }catch(e){
-    alert(e.message||T("err_generic"));
+    // 409 = un brouillon ou album existe déjà sous ce slug : plutôt qu'un
+    // simple message d'erreur, on propose d'aller directement le reprendre
+    // dans les brouillons (sinon l'utilisateur doit deviner où il est parti).
+    if(e.status===409){
+      confirmDialog(e.message||T("err_generic"),()=>{location.href="/app/drafts";},{
+        icon:"drafts",
+        yes:T("dup_goto_drafts"),
+        no:T("dup_close"),
+      });
+    }else{
+      alert(e.message||T("err_generic"));
+    }
   }finally{
     $("btn-create").disabled=false;
   }

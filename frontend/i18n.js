@@ -64,10 +64,11 @@ const I18N = {
     reset_confirm:"Réinitialiser toutes les coupes à l'analyse IA d'origine ? Vos ajustements manuels seront perdus.",
     reset_done:"Coupes réinitialisées à l'analyse IA.",
     dlg_yes:"Oui, réinitialiser",dlg_no:"Annuler",
-    mp4_warn:"L'export MP4 ré-encode l'intégralité de la vidéo, piste par piste : "+
+    dup_goto_drafts:"Aller aux brouillons",dup_close:"Fermer",
+    mp4_warn:"L'export MP4 ré-encode l'intégralité du concert en un seul fichier : "+
       "comptez 30 min à 2 h de rendu selon la durée du concert, contre environ "+
       "5 min pour un rendu MP3 seul.\n\nLe MP3 est produit dans les deux cas — "+
-      "la case ajoute uniquement les clips vidéo.",
+      "la case ajoute uniquement la vidéo complète.",
     mp4_warn_yes:"Garder le MP4",mp4_warn_no:"Annuler",
     cancel_render:"Annuler le rendu",
     cancel_confirm:"Arrêter le rendu en cours ?\n\nLes pistes déjà encodées seront supprimées et vous reviendrez à l'éditeur pour reprendre vos modifications.",
@@ -148,10 +149,11 @@ const I18N = {
     reset_confirm:"Reset all cuts to the original AI analysis? Your manual adjustments will be lost.",
     reset_done:"Cuts reset to the AI analysis.",
     dlg_yes:"Yes, reset",dlg_no:"Cancel",
-    mp4_warn:"MP4 export re-encodes the entire video, track by track: expect "+
+    dup_goto_drafts:"Go to drafts",dup_close:"Close",
+    mp4_warn:"MP4 export re-encodes the whole concert into a single file: expect "+
       "30 min to 2 h of rendering depending on the length of the show, versus "+
       "about 5 min for an MP3-only render.\n\nMP3 files are produced either way — "+
-      "this option only adds the video clips.",
+      "this option only adds the full video.",
     mp4_warn_yes:"Keep MP4",mp4_warn_no:"Cancel",
     cancel_render:"Cancel render",
     cancel_confirm:"Stop the render in progress?\n\nTracks already encoded will be removed and you will return to the editor to resume your changes.",
