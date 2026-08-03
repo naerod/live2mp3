@@ -1,3 +1,29 @@
+2026-08-03 (suite 2) : **Ajout de pistes depuis le bouton « Importer »**
+(preprod v1.20.6). Le panneau d'ajout n'existait que dans la page de gestion :
+il fallait déjà savoir où l'on allait.
+- `social.js::openImportChoice` passe de 1 à 3 étapes, rendues dans la même
+  fenêtre (contenu remplacé, pas empilé) : source (dépôt / lien) → destination
+  (album neuf / album existant) → sélecteur d'album (recherche + pochettes,
+  alimenté par `GET /api/catalogue`). Le parcours se termine sur
+  `/app/album/{slug}?add=link|file`, qui ouvre le bon panneau et nettoie l'URL
+  (`history.replaceState`) — plutôt que de dupliquer les formulaires.
+- Le point d'entrée dans la page de gestion est **conservé** (demande
+  utilisateur) : les deux chemins mènent au même panneau.
+- **Pendant « fichiers » de l'ajout depuis un lien** :
+  `POST /api/albums/{slug}/tracks/upload` (MP3 déjà découpés, titre lu dans
+  TIT2 sinon dans le nom de fichier, pochette de piste extraite de l'APIC).
+  Les fichiers transitent par une zone de travail avant mise en place : un
+  dépôt refusé en cours de route ne laisse ni piste ni fichier derrière lui.
+  Ces pistes portent aussi `track.source` → mêmes garde-fous rendu/éditeur.
+- **Bouton « Retirer de la prod » supprimé** de la page de gestion : la preprod
+  ne propose plus que « pousser en prod ». La route `POST /demote` reste
+  disponible pour un rattrapage en ligne de commande.
+- Tests : 16 cas dans `tests/test_addtrack.py` (dont dépôt de fichiers, refus
+  d'un non-MP3 sans effet de bord, survie au re-rendu). Suite complète
+  246 passés, 1 échec préexistant (`test_t5_preanalyze`).
+- Rendu vérifié aux 3 étapes en clair/EN et sombre/FR, plus l'ouverture
+  automatique du panneau sur `live-crossovers` (lecture seule).
+
 2026-08-03 (suite) : **Ajout d'une piste à un album existant depuis un lien**
 (preprod v1.20.4). Les deux parcours de création produisaient un album entier ;
 la compilation enrichie au fil de l'eau (« Live Crossovers ») n'était couverte
