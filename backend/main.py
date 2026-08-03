@@ -1,15 +1,13 @@
 """API FastAPI — formulaire, création de jobs, progression SSE, fichiers.
 
 Accès prévu Tailscale only (allowlist Nginx en amont). Les jobs longs sont
-délégués à RQ/Redis ; en l'absence de Redis (dev/test), exécution inline dans
-un thread. La progression est publiée par projet et relue via SSE.
+délégués à RQ/Redis : le rendu tourne dans le worker, pas ici. La progression
+est publiée par projet dans Redis et relue via SSE.
 """
 from __future__ import annotations
 
 import hashlib
-import io
 import json
-import queue
 import shutil
 import threading
 import time
@@ -33,12 +31,10 @@ from pydantic import BaseModel
 
 import re
 from uuid import uuid4
-from . import catalogue, entities, jellyfin, jobs, linktool, llm
+from . import catalogue, entities, linktool, llm
 from . import progress, renderqueue
 from .albumfiles import (
-    _extract_embedded_cover,
     _rename_audio_files,
-    _sanitize_filename,
     _write_album_cover,
     _write_album_tags,
     _write_track_tags,
@@ -80,6 +76,9 @@ from .social import (
 from .follows import router as follows_router
 from . import notifications
 from .notifications import router as notifications_router
+import logging
+
+log = logging.getLogger(__name__)
 
 # Labels dérivés automatiquement de la disponibilité média (non éditables).
 DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
@@ -127,8 +126,8 @@ def _startup() -> None:
     # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
     try:
         notifications.ensure_seeded()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("amorçage des notifications impossible : %s", exc)
 
 # --- État de progression (Redis, partagé API <-> worker) ------------------
 # Le rendu s'exécute dans le worker RQ : l'émetteur et le lecteur du flux SSE
@@ -257,7 +256,6 @@ def _list_track_covers_public(slug: str) -> list:
 
 
 # --- Santé & version (public) ---------------------------------------------
-import os
 import httpx
 
 APP_ENV = os.environ.get("APP_ENV", "prod")
@@ -608,7 +606,6 @@ def view_traycard(slug: str, identity: dict = Depends(require_gestionnaire)) -> 
 @app.get("/app/traycard-thumb/{slug}")
 def traycard_thumb(slug: str, identity: dict = Depends(require_gestionnaire)):
     """Thumbnail JPEG page 1 de la tray card (prévisualisation sans iframe)."""
-    from fastapi.responses import Response as _Resp
     from PIL import Image as _Image
     import pypdfium2 as _pdfium
 
@@ -729,6 +726,8 @@ def album_detail(slug: str,
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    if catalogue.hidden_by_env(m.data):
+        raise HTTPException(404, "album introuvable")
     album = m.data.get("album", {})
     src = m.data.get("source", {}) or {}
     cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
@@ -750,6 +749,10 @@ def album_detail(slug: str,
         "has_mp4": cat.get("has_mp4", False),
         # L'éditeur de coupes a besoin du master : seuls les albums importés
         # via l'outil lien (pas les imports manuels) le conservent.
+        # `env` = environnement qui sert la fiche ; `origin_env` = portée de
+        # l'album. Le bloc de portée n'a de sens que servi hors production.
+        "env": APP_ENV,
+        "origin_env": m.data.get("origin_env") or "prod",
         "has_editor_source": (src_dir / "preview.mp3").exists()
                               or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
@@ -1003,8 +1006,8 @@ def set_published_bulk(payload: BulkPublishIn,
         if payload.published:
             try:
                 notified += notifications.announce_post(slug)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("annonce de %s impossible : %s", slug, exc)
     return {"ok": True, "published": payload.published,
             "updated": updated, "count": len(updated),
             "notified": notified, "missing": missing}
@@ -1130,6 +1133,11 @@ def create_job(job: JobIn,
         "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "import_source": "url",
     }
+    # Portée : un album créé hors production reste invisible du catalogue prod
+    # (stockage partagé, cf. workspace/infra/stockage.md) jusqu'à sa promotion.
+    # On n'écrit rien en prod : champ absent = album de production.
+    if APP_ENV != "prod":
+        m.data["origin_env"] = APP_ENV
     if job.setlistfm_url:
         # L'attribution suit la donnée : affichée sur la fiche album (ToS).
         m.data["meta"]["setlistfm_url"] = job.setlistfm_url
@@ -1483,6 +1491,48 @@ def delete_job(slug: str,
     return {"ok": True}
 
 
+@app.post("/api/albums/{slug}/promote")
+def promote_album(slug: str,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Rend visible en production un album créé en preprod.
+
+    Aucun fichier n'est déplacé : prod et preprod partagent le même stockage,
+    seule l'étiquette de portée disparaît. L'opération est donc atomique et
+    réversible (cf. `demote`), là où une copie de ~1,5 Go par album exposerait
+    une fenêtre d'échec partiel.
+    """
+    if APP_ENV == "prod":
+        raise HTTPException(400, "déjà en production")
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    if not m.data.get("origin_env"):
+        raise HTTPException(400, "cet album est déjà visible en production")
+    m.data.pop("origin_env", None)
+    m.save()
+    return {"ok": True, "slug": slug, "origin_env": "prod"}
+
+
+@app.post("/api/albums/{slug}/demote")
+def demote_album(slug: str,
+                 identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Retire un album de la production (retour à la portée preprod).
+
+    Filet de la promotion : une erreur se corrige en remettant l'étiquette,
+    sans toucher aux médias.
+    """
+    if APP_ENV == "prod":
+        raise HTTPException(400, "opération réservée à la preprod")
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    m = Manifest.load(path)
+    m.data["origin_env"] = APP_ENV
+    m.save()
+    return {"ok": True, "slug": slug, "origin_env": APP_ENV}
+
+
 @app.put("/api/jobs/{slug}/markers")
 def update_markers(slug: str, payload: dict,
                    identity: dict = Depends(require_gestionnaire)) -> dict:
@@ -1545,15 +1595,17 @@ def cancel_render(slug: str,
     Le ffmpeg courant est tué et son fichier partiel supprimé (cf.
     pipeline/render.py) : un rendu relancé ensuite repart proprement.
     """
-    state = renderqueue.cancel(slug)
+    kind = renderqueue.active_kind(slug)
+    state = renderqueue.cancel(slug, kind)
     if state == "none":
         raise HTTPException(404, "aucun rendu en cours pour cet album")
     if state in ("queued", "deferred"):
         # Retiré de la file : personne ne publiera l'évènement final, l'API
         # s'en charge pour que l'interface réagisse tout de suite.
-        progress.publish(slug, {"stage": "all", "status": "cancelled",
-                                "info": {}})
-    return {"ok": True, "was": state}
+        progress.publish(slug, {
+            "stage": "video_all" if kind == renderqueue.KIND_VIDEO else "all",
+            "status": "cancelled", "info": {}})
+    return {"ok": True, "was": state, "kind": kind}
 
 
 class QueueOrderIn(BaseModel):
@@ -1573,11 +1625,20 @@ def render_queue(identity: dict = Depends(require_gestionnaire)) -> dict:
             except Exception:
                 m = None
         album = (m or {}).get("album", {})
+        # Les formats décrivent ce que *ce* job produit : la phase 2 ne rend
+        # que le MP4, l'annoncer « mp3 + mp4 » laisserait croire que l'album
+        # audio n'est pas encore là alors qu'il est déjà écoutable.
+        kind = it.get("kind", renderqueue.KIND_RENDER)
+        if kind == renderqueue.KIND_VIDEO:
+            formats = ["mp4"]
+        else:
+            formats = ["mp3", "mp4"] if it.get("video") else ["mp3"]
         items.append({
             **it,
+            "kind": kind,
             "artist": album.get("artist", ""),
             "title": album.get("title", "") or it["slug"],
-            "formats": ["mp3", "mp4"] if it.get("video") else ["mp3"],
+            "formats": formats,
         })
     return {"items": items}
 
@@ -1595,13 +1656,15 @@ def pause_render(slug: str, paused: bool = True,
 
     Rien n'est perdu : le process reprend exactement où il s'était arrêté.
     """
-    if renderqueue.active_status(slug) is None:
+    kind = renderqueue.active_kind(slug)
+    if kind is None:
         raise HTTPException(404, "aucun rendu en cours pour cet album")
-    renderqueue.set_paused(slug, paused)
-    progress.publish(slug, {"stage": "render",
+    renderqueue.set_paused(slug, paused, kind)
+    progress.publish(slug, {"stage": "video" if kind == renderqueue.KIND_VIDEO
+                            else "render",
                             "status": "paused" if paused else "running",
                             "info": {"paused": paused}})
-    return {"ok": True, "paused": paused}
+    return {"ok": True, "paused": paused, "kind": kind}
 
 
 @app.get("/api/jobs/{slug}/events")

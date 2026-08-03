@@ -42,6 +42,11 @@ const L2M = (function () {
       notif_done_msg: a => `Le rendu de l'album ${a} est terminé !`,
       notif_done_cta: "Cliquez ici pour accéder à sa page (non publiée)",
       notif_draft_msg: "Vous avez un import à terminer",
+      // Phase 2 : le MP4 s'encode alors que l'album audio est déjà écoutable.
+      notif_video_tag: "Rendu vidéo en cours",
+      notif_video_msg: "Album audio prêt, la vidéo s'encode en arrière-plan",
+      notif_vdone_tag: "Vidéo terminée",
+      notif_vdone_msg: a => `La vidéo du concert ${a} est disponible.`,
     },
     en: {
       comments: "Comments", write_ph: "Share your thoughts on this show, the tracks…",
@@ -82,6 +87,10 @@ const L2M = (function () {
       notif_done_msg: a => `The render of ${a} is complete!`,
       notif_done_cta: "Click here to open its (unpublished) page",
       notif_draft_msg: "You have an import to finish",
+      notif_video_tag: "Video render in progress",
+      notif_video_msg: "Audio album ready, video encoding in the background",
+      notif_vdone_tag: "Video ready",
+      notif_vdone_msg: a => `The video of ${a} is available.`,
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -566,27 +575,39 @@ const L2M = (function () {
   // Rendu en cours — entrée « silencieuse » : listée, jamais comptée, sans
   // pastille (cf. backend/notifications.py::render_activity).
   function notifRenderItem(n) {
+    // Phase 2 : l'album audio est déjà livré, seule la vidéo travaille encore.
+    // Le libellé doit le dire, sinon l'entrée laisse croire que l'album entier
+    // est encore indisponible pendant les ~20 min d'encodage.
+    const video = n.kind === "video";
     const state = n.state === "paused" ? t("notif_render_paused")
                 : n.state === "queued" ? t("notif_render_queued")
-                : t("notif_render_tag");
+                : video ? t("notif_video_tag") : t("notif_render_tag");
+    const pct = n.pct == null ? "" :
+      `<span class="notif-fmt">${Math.round(n.pct)} %</span>`;
     const tags = (n.formats || []).map(f => `<span class="notif-fmt">${f}</span>`).join("");
-    return `<a class="notif-item notif-render" href="/app#${encodeURIComponent(n.slug)}">
-      ${artistThumb(n, "sync")}
+    return `<a class="notif-item notif-render${video ? " notif-video" : ""}" href="/app#${encodeURIComponent(n.slug)}">
+      ${artistThumb(n, video ? "movie" : "sync")}
       <span class="notif-body">
-        <span class="notif-draft-tag"><span class="material-symbols-outlined">sync</span>${esc(state)}${tags}</span>
-        <span class="notif-reason">${esc(t("notif_render_msg"))}</span>
+        <span class="notif-draft-tag"><span class="material-symbols-outlined">${video ? "movie" : "sync"}</span>${esc(state)}${tags}${pct}</span>
+        <span class="notif-reason">${esc(t(video ? "notif_video_msg" : "notif_render_msg"))}</span>
         <span class="notif-post">${esc(n.title)}${n.subtitle ? " · " + esc(n.subtitle) : ""}</span>
       </span>
     </a>`;
   }
 
   // Fin de rendu — vraie notification, comptée et marquable comme lue.
+  // `video_done` est un type distinct : quand il arrive, l'album audio est déjà
+  // publié/écouté depuis un moment, annoncer « l'album est prêt » une seconde
+  // fois serait faux.
   function notifRenderDoneItem(n) {
+    const video = n.type === "video_done";
+    const dict = TXT[LANG()] || TXT.fr;
+    const msg = video ? dict.notif_vdone_msg : dict.notif_done_msg;
     return `<a class="notif-item${n.read ? "" : " unread"}" href="/app/album/${encodeURIComponent(n.slug)}">
-      ${artistThumb(n, "check_circle")}
+      ${artistThumb(n, video ? "movie" : "check_circle")}
       <span class="notif-body">
-        <span class="notif-draft-tag"><span class="material-symbols-outlined">check_circle</span>${t("notif_done_tag")}</span>
-        <span class="notif-reason">${esc(T[LANG()].notif_done_msg((n.subtitle ? n.subtitle + " — " : "") + n.title))}</span>
+        <span class="notif-draft-tag"><span class="material-symbols-outlined">${video ? "movie" : "check_circle"}</span>${video ? t("notif_vdone_tag") : t("notif_done_tag")}</span>
+        <span class="notif-reason">${esc(msg((n.subtitle ? n.subtitle + " — " : "") + n.title))}</span>
         <span class="notif-post">${esc(t("notif_done_cta"))}</span>
         <span class="notif-time">${timeAgo(n.created_at)}</span>
       </span>
@@ -661,7 +682,8 @@ const L2M = (function () {
       let d = { items: [] };
       try { d = await api("GET", "/api/social/notifications?limit=5"); } catch (e) { return; }
       for (const n of d.items) {
-        if (n.type !== "render_done" || n.read || announced.has(n.id)) continue;
+        if ((n.type !== "render_done" && n.type !== "video_done")
+            || n.read || announced.has(n.id)) continue;
         announced.add(n.id);
         renderToast(n);
       }
@@ -672,9 +694,14 @@ const L2M = (function () {
       el.className = "nrd-rtoast";
       el.href = `/app/album/${encodeURIComponent(n.slug)}`;
       const who = (n.subtitle ? n.subtitle + " — " : "") + n.title;
-      el.innerHTML = `<span class="material-symbols-outlined">check_circle</span>
+      // `TXT`, pas `T` : la variable n'existe pas dans ce module et le toast
+      // levait donc une ReferenceError au lieu de s'afficher — la notification
+      // de fin de rendu n'a jamais été annoncée à l'écran.
+      const dict = TXT[LANG()] || TXT.fr;
+      const video = n.type === "video_done";
+      el.innerHTML = `<span class="material-symbols-outlined">${video ? "movie" : "check_circle"}</span>
         <span class="nrd-rtoast-body">
-          <b>${esc(T[LANG()].notif_done_msg(who))}</b>
+          <b>${esc((video ? dict.notif_vdone_msg : dict.notif_done_msg)(who))}</b>
           <span>${esc(t("notif_done_cta"))}</span>
         </span>
         <button class="nrd-rtoast-x" aria-label="fermer"><span class="material-symbols-outlined">close</span></button>`;

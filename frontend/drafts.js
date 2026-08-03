@@ -21,11 +21,18 @@
       stage_ai_markers: "Coupes détectées", stage_render: "Rendu",
       stage_tags: "Tags", stage_artwork: "Pochette", stage_disc: "Disque",
       stage_none: "À peine commencé",
-      q_title: "Rendus en cours", q_sub: "File d'attente des albums en cours de création. Glissez une ligne pour changer l'ordre.",
+      q_title: "Rendus en cours", q_sub: "Albums en cours de création ou d'encodage vidéo. Glissez une ligne pour changer l'ordre.",
       q_running: "En cours", q_paused: "En pause", q_queued: "En attente",
       q_pause: "Mettre en pause", q_resume: "Reprendre", q_cancel: "Arrêter ce rendu",
       q_confirm: (t) => `Arrêter le rendu de « ${t} » ?\n\nLes pistes déjà encodées seront supprimées.`,
+      q_confirm_video: (t) => `Arrêter le rendu vidéo de « ${t} » ?\n\nL'album audio est déjà en place et n'est pas touché ; seul le MP4 en cours d'encodage est abandonné.`,
       q_err: "Action impossible",
+      q_kind_audio: "Album audio", q_kind_video: "Rendu vidéo",
+      q_empty: "Aucun rendu en cours.",
+      q_step: "Étape", q_open: "Voir le détail du rendu",
+      qs_render: "Découpe et encodage des pistes", qs_tags: "Métadonnées MP3",
+      qs_artwork: "Pochettes PDF", qs_disc: "Image disque",
+      qs_video: "Ré-encodage de la vidéo",
     },
     en: {
       back: "Back", title: "Drafts",
@@ -44,6 +51,20 @@
       stage_ai_markers: "Cuts detected", stage_render: "Rendered",
       stage_tags: "Tags", stage_artwork: "Cover", stage_disc: "Disc",
       stage_none: "Barely started",
+      // La rubrique file d'attente n'avait jamais été traduite : un
+      // gestionnaire en anglais y lisait les clés brutes (« q_title »).
+      q_title: "Renders in progress", q_sub: "Albums being created or video-encoded. Drag a row to reorder.",
+      q_running: "Running", q_paused: "Paused", q_queued: "Queued",
+      q_pause: "Pause", q_resume: "Resume", q_cancel: "Stop this render",
+      q_confirm: (t) => `Stop rendering "${t}"?\n\nTracks already encoded will be deleted.`,
+      q_confirm_video: (t) => `Stop the video render of "${t}"?\n\nThe audio album is already in place and stays untouched; only the MP4 being encoded is discarded.`,
+      q_err: "Action failed",
+      q_kind_audio: "Audio album", q_kind_video: "Video render",
+      q_empty: "No render in progress.",
+      q_step: "Step", q_open: "View render details",
+      qs_render: "Cutting & encoding tracks", qs_tags: "MP3 metadata",
+      qs_artwork: "PDF artwork", qs_disc: "Disc image",
+      qs_video: "Video re-encoding",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -118,11 +139,33 @@
     const active = it.state === "running" || it.state === "paused";
     const pauseIco = it.state === "paused" ? "play_arrow" : "pause";
     const pauseLbl = it.state === "paused" ? t("q_resume") : t("q_pause");
-    return `<div class="q-row q-${it.state}" data-slug="${esc(it.slug)}" draggable="${!active}">
-      <span class="material-symbols-outlined q-ico">${active ? "sync" : "schedule"}</span>
-      <span class="q-body">
+    // Depuis le découplage du 2026-08-03, une ligne dit *quelle* étape tourne :
+    // l'album audio d'un rendu vidéo est déjà écoutable, ne pas le distinguer
+    // laissait croire qu'il restait indisponible pendant tout l'encodage.
+    const video = it.kind === "video";
+    const kindLbl = video ? t("q_kind_video") : t("q_kind_audio");
+    // Étape en cours (« Étape 2/4 · Métadonnées MP3 ») : sans elle, une barre
+    // seule ne dit pas ce que la machine est en train de faire.
+    const st2 = it.step;
+    const stageTxt = st2
+      ? `${t("q_step")} ${st2.index}/${st2.total} · ${t("qs_" + st2.stage)}`
+      : "";
+    // Progression réelle (ffmpeg / compteur de pistes) quand le worker en
+    // publie une ; sinon barre indéterminée — un « 0 % » figé se lit comme un
+    // blocage.
+    const p = it.pct;
+    const bar = active ? `<div class="q-bar${p == null ? " q-indet" : ""}">
+        <div class="q-fill" style="${p == null ? "" : `width:${Math.round(p)}%`}"></div>
+      </div>` : "";
+    return `<div class="q-row q-${it.state}" data-slug="${esc(it.slug)}" data-kind="${esc(it.kind || "render")}" draggable="${!active}">
+      <span class="material-symbols-outlined q-ico">${active ? (video ? "movie" : "sync") : "schedule"}</span>
+      <span class="q-body q-open" role="button" tabindex="0" title="${esc(t("q_open"))}">
         <span class="q-title">${esc(it.artist || "")}${it.artist ? " — " : ""}${esc(it.title || it.slug)}</span>
-        <span class="q-meta"><span class="q-state">${esc(st)}</span>${tags}</span>
+        <span class="q-meta"><span class="q-state">${esc(st)}</span>
+          <span class="q-kind">${esc(kindLbl)}</span>${tags}
+          ${stageTxt ? `<span class="q-stage">${esc(stageTxt)}</span>` : ""}
+          ${active && p != null ? `<span class="q-pct">${Math.round(p)} %</span>` : ""}</span>
+        ${bar}
       </span>
       ${active ? `<button class="icon-btn icon-only q-pause" data-slug="${esc(it.slug)}" title="${esc(pauseLbl)}"><span class="material-symbols-outlined">${pauseIco}</span></button>` : ""}
       <button class="icon-btn icon-only q-cancel" data-slug="${esc(it.slug)}" title="${esc(t("q_cancel"))}"><span class="material-symbols-outlined">stop_circle</span></button>
@@ -137,7 +180,8 @@
     } catch (e) { /* la file est un confort : son absence ne casse pas la page */ }
     const host = document.getElementById("queue-slot");
     if (!host) return;
-    if (!items.length) { host.innerHTML = ""; return; }
+    // Section toujours présente, même vide : elle a vocation à l'être la
+    // plupart du temps, et sa disparition faisait douter de son existence.
     host.innerHTML = `
       <div class="card q-card">
         <div class="dr-head">
@@ -145,16 +189,33 @@
           <h1>${esc(t("q_title"))}</h1>
         </div>
         <p class="dr-sub">${esc(t("q_sub"))}</p>
-        <div class="q-list">${items.map(queueRow).join("")}</div>
+        ${items.length ? `<div class="q-list">${items.map(queueRow).join("")}</div>`
+          : `<div class="q-none"><span class="material-symbols-outlined">done_all</span>${esc(t("q_empty"))}</div>`}
       </div>`;
-    wireQueue(items);
+    if (items.length) wireQueue(items);
   }
 
   function wireQueue(items) {
-    const byId = Object.fromEntries(items.map(i => [i.slug, i]));
+    // Clé (slug, nature) et non slug seul : à la bascule audio→vidéo, le job
+    // audio est encore « started » quand le job vidéo entre en file — le même
+    // album apparaît alors brièvement sur deux lignes.
+    const key = (i) => `${i.slug}|${i.kind || "render"}`;
+    const byId = Object.fromEntries(items.map(i => [key(i), i]));
+    const of = (b) => byId[`${b.dataset.slug}|${b.closest(".q-row").dataset.kind}`] || {};
+    // Rouvrir le détail du rendu. Seul le corps de la ligne est cliquable, pas
+    // la ligne entière : pause et arrêt sont des boutons voisins, et un clic
+    // destructeur ne doit jamais partir d'un geste de navigation.
+    document.querySelectorAll(".q-open").forEach(body => {
+      const slug = body.closest(".q-row").dataset.slug;
+      const open = () => { location.href = `/app#${encodeURIComponent(slug)}`; };
+      body.addEventListener("click", open);
+      body.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+    });
     document.querySelectorAll(".q-pause").forEach(b => b.addEventListener("click", async () => {
       const slug = b.dataset.slug;
-      const want = byId[slug] && byId[slug].state !== "paused";
+      const want = of(b).state !== "paused";
       b.disabled = true;
       try {
         const r = await fetch(`/api/jobs/${encodeURIComponent(slug)}/render/pause?paused=${want}`, { method: "POST" });
@@ -164,8 +225,10 @@
     }));
     document.querySelectorAll(".q-cancel").forEach(b => b.addEventListener("click", async () => {
       const slug = b.dataset.slug;
-      const it = byId[slug] || {};
-      if (!confirm(T[LANG()].q_confirm(it.title || slug))) return;
+      const it = of(b);
+      const dict = T[LANG()] || T.fr;
+      const ask = it.kind === "video" ? dict.q_confirm_video : dict.q_confirm;
+      if (!confirm(ask(it.title || slug))) return;
       b.disabled = true;
       try {
         const r = await fetch(`/api/jobs/${encodeURIComponent(slug)}/render/cancel`, { method: "POST" });

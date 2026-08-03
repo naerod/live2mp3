@@ -117,11 +117,15 @@ function fmtDur(s){
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
   return(h?`${h}:${String(m).padStart(2,"0")}`:m)+":"+String(sec).padStart(2,"0");
 }
+// Timecodes de l'éditeur : HH:MM:SS.XX, largeur fixe. Le format MM:SS.X
+// précédent débordait du champ passé une heure de concert (« 100:39 » tronqué),
+// et masquait les centièmes alors que c'est la précision qu'on ajuste.
 function fmtTime(s){
   if(s==null||isNaN(s))return"";
   s=Math.max(0,s);
-  const m=Math.floor(s/60),sec=(s%60);
-  return`${m}:${sec<10?"0":""}${sec.toFixed(1)}`;
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:`
+       +`${sec<10?"0":""}${sec.toFixed(2)}`;
 }
 function parseTime(v){
   v=(v||"").trim();if(!v)return null;
@@ -178,7 +182,7 @@ function addFormRow(t){
     <span class="tn"></span>
     <input class="t-title" placeholder="${T("tr_title_ph")}" value="">
     <input class="t-artist" placeholder="${T("tr_artist_ph")}" value="">
-    <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtTime(t.start).split(".")[0]}`:""}</span>
+    <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtDur(t.start)}`:""}</span>
     <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title||"";
   row.querySelector(".t-artist").value=t.artist||"";
@@ -226,13 +230,26 @@ $("btn-create").onclick=async()=>{
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
-      throw new Error(d.detail||`HTTP ${r.status}`);
+      const err=new Error(d.detail||`HTTP ${r.status}`);
+      err.status=r.status;
+      throw err;
     }
     slug=(await r.json()).slug;
     location.hash=slug;   // reprise possible si l'onglet se ferme
     await startPrepare();
   }catch(e){
-    alert(e.message||T("err_generic"));
+    // 409 = un brouillon ou album existe déjà sous ce slug : plutôt qu'un
+    // simple message d'erreur, on propose d'aller directement le reprendre
+    // dans les brouillons (sinon l'utilisateur doit deviner où il est parti).
+    if(e.status===409){
+      confirmDialog(e.message||T("err_generic"),()=>{location.href="/app/drafts";},{
+        icon:"drafts",
+        yes:T("dup_goto_drafts"),
+        no:T("dup_close"),
+      });
+    }else{
+      alert(e.message||T("err_generic"));
+    }
   }finally{
     $("btn-create").disabled=false;
   }
@@ -404,10 +421,23 @@ async function openEditor(){
   applyI18n(LANG());
   const audio=$("ed-audio");
   audio.src=`/api/jobs/${slug}/audio`;
+  wireMediaResilience();
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
   EDIT=buildEditFromTracks(m.tracks);
   // Copie profonde figée : référence pour le bouton « Réinitialiser ».
+  // Toujours prise sur le manifeste, jamais sur la reprise locale : sinon
+  // « Réinitialiser » ne ramènerait plus à l'analyse IA d'origine.
   EDIT_ORIG=JSON.parse(JSON.stringify(EDIT));
+  // Reprise d'un travail non validé (F5, onglet fermé, session SSO expirée).
+  // En création, le brouillon serveur est écrit en continu : le manifeste fait
+  // foi et la copie locale ne sert que s'il n'a rien reçu (première session
+  // hors ligne). En ré-édition, rien n'est autosauvé côté serveur — la copie
+  // locale est alors la seule reprise possible.
+  const localEdit=loadEditLocal(slug);
+  if(localEdit&&(reedit||!EDIT.length)){
+    EDIT=localEdit.edit;
+    toast(T("edit_restored"));
+  }else if(localEdit)clearEditLocal(slug);
   relinkEnds();
   renderRows();
   updateDiscMarker();
@@ -526,6 +556,240 @@ function commitEdit(){
   renderRows();
   syncPeaks();
   updateDiscMarker();
+  saveEditLocal();
+  scheduleDraftSave();
+}
+
+// --- Brouillon serveur des coupes ----------------------------------------
+// Attendu de longue date mais jamais branché : le backend expose de quoi
+// écrire les coupes sans rien déclencher, mais l'éditeur ne les envoyait
+// qu'au clic sur « Valider ». Fermer l'onglet perdait tout le découpage.
+// On enregistre donc en continu (débounce), et le brouillon rouvert repart de
+// l'état réel plutôt que de l'analyse IA.
+// Exception : la ré-édition d'un album publié n'écrit rien tant que
+// l'utilisateur n'a pas validé — on ne modifie pas un album en ligne à chaque
+// glissement de marqueur. La copie locale suffit dans ce cas.
+// Chaque modification déclenche son enregistrement (demande du 2026-08-03) :
+// un timecode changé, un cadenas, un ajout, une suppression, un marqueur glissé
+// sont tous des actions ponctuelles, enregistrées **immédiatement**. Le délai de
+// 3 s d'origine ne servait qu'à absorber les rafales, mais il laissait une
+// fenêtre pendant laquelle quitter la page perdait la dernière action.
+//
+// Seule exception : la frappe au clavier (titre, artiste), qui émet un
+// évènement par lettre. Enregistrer à chaque touche réécrirait le manifest
+// des dizaines de fois pour un seul mot, sur un stockage partagé avec la prod —
+// on attend donc une brève pause dans la saisie.
+const SAVE_NOW=0, SAVE_TYPING=700;
+let draftTimer=null, draftInFlight=false, draftDirty=false;
+function scheduleDraftSave(delay){
+  if(reedit||!slug)return;
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(runDraftSave,delay==null?SAVE_NOW:delay);
+}
+// Un enregistrement à la fois : sans ce verrou, glisser un marqueur émettrait
+// des requêtes concurrentes dont l'ordre d'arrivée n'est pas garanti — la plus
+// ancienne pourrait écraser la plus récente. Toute modification survenue
+// pendant l'envoi est reprise juste après.
+async function runDraftSave(){
+  if(draftInFlight){draftDirty=true;return;}
+  draftInFlight=true;
+  try{await saveDraft();}
+  finally{
+    draftInFlight=false;
+    if(draftDirty){draftDirty=false;scheduleDraftSave(SAVE_NOW);}
+  }
+}
+async function saveDraft(opts){
+  opts=opts||{};
+  if(reedit||!slug||!EDIT.length)return false;
+  // Le serveur refuse une piste sans titre ou à bornes inversées. On n'envoie
+  // donc pas, mais **on le dit** : cet abandon était muet, si bien qu'une seule
+  // piste sans titre suffisait à bloquer tous les enregistrements d'une session
+  // entière sans le moindre signal (2026-08-03, concert Linkin Park).
+  const noTitle=EDIT.some(t=>!t.title.trim());
+  const badTimes=EDIT.some(t=>t.end<=t.start);
+  if(noTitle||badTimes){
+    draftState("blocked",noTitle?"draft_blocked_title":"draft_blocked_times");
+    return false;
+  }
+  // `n` est obligatoire côté serveur (SetlistTrackIn) : l'omettre faisait
+  // échouer chaque autosave en 422, silencieusement. Même charge utile que le
+  // bouton « Valider », artiste omis plutôt qu'envoyé vide.
+  const tracks=EDIT.map((t,i)=>{
+    const o={n:i+1,title:t.title.trim(),start:t.start,end:t.end};
+    if((t.artist||"").trim())o.artist=t.artist.trim();
+    return o;
+  });
+  try{
+    const r=await fetch(`/api/jobs/${slug}/setlist`,{method:"PUT",
+      redirect:"manual",headers:{"Content-Type":"application/json"},
+      // `keepalive` : la requête survit à la navigation. Sans lui, quitter la
+      // page (clic sur le logo) annulait l'envoi en vol et perdait les
+      // dernières coupes — le cas exact rapporté le 2026-08-03.
+      keepalive:!!opts.flush,
+      body:JSON.stringify({tracks})});
+    // Distinguer les deux causes : une redirection ou un 401/403 = session
+    // expirée ; tout autre code = refus applicatif. Les confondre affichait
+    // « Session expirée » sur une erreur de validation, et surtout laissait
+    // croire à un simple souci d'authentification alors que rien ne
+    // s'enregistrait.
+    if(r.type==="opaqueredirect"||r.status===401||r.status===403){
+      showSessionBanner();draftState("err");return false;
+    }
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      console.warn("brouillon non enregistré:",r.status,d.detail||d);
+      draftState("err");return false;
+    }
+    hideSessionBanner();
+    draftState("ok");
+    return true;
+  }catch(e){draftState("err");/* réseau : la copie locale reste le filet */}
+  return false;
+}
+
+// Quitter la page ne doit plus rien perdre : le débounce de 3 s laissait
+// systématiquement une fenêtre pendant laquelle un clic sur le logo emportait
+// les dernières coupes. `pagehide` couvre la navigation et la fermeture ;
+// `visibilitychange` rattrape les cas où `pagehide` n'est pas émis (mobile).
+function flushDraftSave(){
+  if(reedit||!slug||!EDIT.length)return;
+  clearTimeout(draftTimer);
+  saveDraft({flush:true});
+}
+window.addEventListener("pagehide",flushDraftSave);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden")flushDraftSave();
+});
+
+// État visible de l'enregistrement. Un échec doit se voir : c'est l'absence de
+// signal qui a fait perdre une heure de découpage le 2026-08-02.
+// `blocked` = rien n'a été envoyé (état d'édition invalide) ; distinct d'un
+// échec réseau, et surtout jamais silencieux.
+function draftState(kind,reasonKey){
+  const el=$("draft-saved");
+  if(!el)return;
+  const ic=el.querySelector(".material-symbols-outlined");
+  const tx=el.querySelector("[data-i18n]");
+  el.classList.remove("hidden","err");
+  clearTimeout(draftState._hide);
+  if(kind==="ok"){
+    ic.textContent="cloud_done";
+    if(tx)tx.textContent=T("draft_saved");
+    draftState._hide=setTimeout(()=>el.classList.add("hidden"),2500);
+  }else if(kind==="blocked"){
+    el.classList.add("err");
+    ic.textContent="cloud_alert";
+    if(tx)tx.textContent=T(reasonKey||"draft_blocked_title");
+  }else{
+    el.classList.add("err");
+    ic.textContent="cloud_off";
+    if(tx)tx.textContent=T("draft_failed");
+  }
+}
+
+// --- Sauvegarde locale des coupes en cours d'édition ---------------------
+// Rien n'est persisté côté serveur avant « Valider » : une session SSO
+// expirée, un onglet fermé ou un crash effaçaient une heure d'ajustements.
+// On garde donc une copie locale, réécrite à chaque modification et relue à
+// l'ouverture de l'éditeur. Purgée seulement après un envoi réussi.
+const EDIT_KEY=s=>`l2m-edit-${s}`;
+function saveEditLocal(){
+  if(!slug||!EDIT.length)return;
+  try{localStorage.setItem(EDIT_KEY(slug),
+    JSON.stringify({at:Date.now(),edit:EDIT}));}catch(e){}
+}
+function loadEditLocal(s){
+  try{
+    const d=JSON.parse(localStorage.getItem(EDIT_KEY(s))||"null");
+    return d&&Array.isArray(d.edit)&&d.edit.length?d:null;
+  }catch(e){return null;}
+}
+function clearEditLocal(s){try{localStorage.removeItem(EDIT_KEY(s));}catch(e){}}
+
+// --- Survie du lecteur à une expiration de session SSO --------------------
+// L'audio de travail est streamé par plages : chaque avance dans la forme
+// d'onde refait une requête HTTP, et chacune repasse par le forward-auth
+// Authentik. Session expirée => 302 vers la page de login : un <audio> ne sait
+// pas suivre une redirection d'authentification, il reçoit du HTML, coupe le
+// son, gèle Peaks.js et remet currentTime à 0 (lecteur grisé, durée 0:00).
+// On détecte, on répare tout seul si c'était juste le réseau, et on propose une
+// reconnexion en nouvel onglet sinon — jamais un rechargement, qui viderait
+// l'éditeur.
+let lastGoodTime=0;       // dernière position lue, l'erreur média remet à 0
+let mediaRecovering=false;
+let sessionPoll=null;
+
+// `redirect:"manual"` : un 302 d'Authentik donne une réponse opaque
+// (type "opaqueredirect") au lieu d'être suivi en cross-origin — c'est le
+// signal d'expiration, sans dépendre du contenu de la réponse.
+// Le verdict porte sur la **session**, donc sur la présence d'une identité —
+// pas sur `authenticated`, qui exige en plus l'appartenance au groupe
+// `live2mp3-user`. L'outpost Authentik de la preprod ne transmet pas toujours
+// l'en-tête de groupes (constaté le 2026-07-20, revu le 2026-08-03) : le
+// bandeau « Session expirée » s'affichait alors que la session était valide et
+// que le lecteur audio fonctionnait — un faux positif à chaque sonde.
+async function sessionAlive(){
+  try{
+    const r=await fetch("/api/me",{redirect:"manual",cache:"no-store"});
+    if(r.type==="opaqueredirect"||!r.ok)return false;
+    const d=await r.json().catch(()=>null);
+    // Réponse non-JSON = page de login servie à la place de l'API : session
+    // bel et bien perdue, même si le code HTTP est 200.
+    if(!d)return false;
+    return !!(d.username||d.authenticated);
+  }catch(e){return false;}
+}
+
+function showSessionBanner(){$("session-warn").classList.remove("hidden");}
+function hideSessionBanner(){$("session-warn").classList.add("hidden");}
+
+async function recoverMedia(){
+  if(mediaRecovering||!slug)return;
+  mediaRecovering=true;
+  try{
+    if(!await sessionAlive()){showSessionBanner();return;}
+    hideSessionBanner();
+    // Session valide : coupure passagère. On recharge la source et on revient
+    // où on en était (le paramètre ne sert qu'à contourner le cache).
+    const a=$("ed-audio");
+    const t=lastGoodTime;
+    a.src=`/api/jobs/${slug}/audio?r=${Date.now()}`;
+    a.addEventListener("loadedmetadata",()=>{
+      try{a.currentTime=t;}catch(e){}
+    },{once:true});
+    a.load();
+  }finally{mediaRecovering=false;}
+}
+
+function wireMediaResilience(){
+  const a=$("ed-audio");
+  if(a.dataset.resilient)return;   // openEditor() peut être rappelé
+  a.dataset.resilient="1";
+  a.addEventListener("timeupdate",()=>{if(a.currentTime>0)lastGoodTime=a.currentTime;});
+  a.addEventListener("error",recoverMedia);
+  $("btn-session-relogin").onclick=()=>{
+    // Nouvel onglet, jamais une navigation : l'éditeur courant garde ses
+    // coupes en mémoire et redevient fonctionnel dès le cookie réémis.
+    window.open("/outpost.goauthentik.io/start?rd=/app","_blank","noopener");
+    const iv=setInterval(async()=>{
+      if(await sessionAlive()){clearInterval(iv);hideSessionBanner();recoverMedia();}
+    },2000);
+    setTimeout(()=>clearInterval(iv),120000);
+  };
+  // Sonde périodique : prévenir pendant que l'éditeur répond encore, plutôt
+  // que de laisser l'utilisateur découvrir la panne sur un lecteur mort.
+  // Deux échecs consécutifs avant d'alarmer : une coupure réseau d'une seconde
+  // ou un aller-retour un peu long ne sont pas une session expirée, et le
+  // bandeau ne se retire qu'à la sonde suivante — le faux positif restait donc
+  // affiché une minute pour rien.
+  clearInterval(sessionPoll);
+  let misses=0;
+  sessionPoll=setInterval(async()=>{
+    if($("step-editor").classList.contains("hidden"))return;
+    if(await sessionAlive()){misses=0;hideSessionBanner();}
+    else if(++misses>=2)showSessionBanner();
+  },60000);
 }
 
 function syncPeaks(){
@@ -561,15 +825,16 @@ function buildEditRow(t,i){
     <input class="t-title" placeholder="${T('tr_title_ph')}">
     <input class="t-artist" placeholder="${T('tr_artist_ph')}">
     <span class="t-times">
-      <input class="t-time t-start seekable" value="${fmtTime(t.start)}" title="${T('seek_tc')}">
       <button class="icon-btn icon-only mini t-setstart" title="${T('set_start')}"><span class="material-symbols-outlined">first_page</span></button>
+      <input class="t-time t-start seekable" value="${fmtTime(t.start)}" title="${T('seek_tc')}">
       <span class="t-sep">→</span>
+      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
       <input class="t-time t-end${endLocked?'':' seekable'}" value="${fmtTime(t.end)}"${endLocked?' disabled':` title="${T('seek_tc')}"`}>
       ${canLock
         ? `<button class="icon-btn icon-only mini t-lock${t.linked?' on':''}" title="${t.linked?T('unlink_end'):T('link_end')}"><span class="material-symbols-outlined">${t.linked?'lock':'lock_open'}</span></button>`
         : `<span class="t-lock-spacer"></span>`}
-      <button class="icon-btn icon-only mini t-setend" title="${T('set_end')}"><span class="material-symbols-outlined">last_page</span></button>
     </span>
+    <span class="t-actions-sep"></span>
     <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
     <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title;
@@ -579,9 +844,15 @@ function buildEditRow(t,i){
     EDIT[i].title=e.target.value;
     if(peaksInstance){const s=peaksInstance.segments.getSegment("t"+i);
       if(s)s.update({labelText:(i+1)+". "+e.target.value});}
+    // Ces champs ne passent pas par commitEdit() (qui reconstruit les lignes et
+    // ferait perdre le focus en pleine frappe) : sans planification explicite,
+    // saisir un titre n'enregistrait rien. Combiné au garde-fou ci-dessous, qui
+    // bloque tant qu'une piste est sans titre, une piste ajoutée puis nommée
+    // laissait le brouillon définitivement non enregistré (2026-08-03).
+    scheduleDraftSave(SAVE_TYPING);
   });
   row.querySelector(".t-artist").addEventListener("input",e=>{
-    EDIT[i].artist=e.target.value;});
+    EDIT[i].artist=e.target.value;scheduleDraftSave(SAVE_TYPING);});
   // Clic sur un timecode → place le curseur d'écoute pile dessus (et recadre
   // la vue zoomée) pour vérifier la coupe, sans empêcher l'édition manuelle.
   const seekTo=sec=>{const a=$("ed-audio");a.currentTime=Math.max(0,sec);};
@@ -754,6 +1025,9 @@ $("btn-render").onclick=async()=>{
       const d=await r.json().catch(()=>({}));
       throw new Error(d.detail||`HTTP ${r.status}`);
     }
+    // Coupes acceptées par le serveur : la copie de secours n'a plus lieu
+    // d'être (et rouvrir l'éditeur doit repartir du manifeste).
+    clearEditLocal(slug);
     $("ed-audio").pause();
     await startRender();
   }catch(e){
@@ -804,9 +1078,70 @@ async function finish(){
     applyI18n(LANG());
   }
   show("step-done");
+  watchVideoRender();
+}
+
+// --- Rendu vidéo de phase 2 (arrière-plan) --------------------------------
+// Depuis le découplage du 2026-08-03, l'écran final s'affiche dès que l'album
+// audio est prêt ; le MP4 continue dans un job séparé. On ne bloque donc plus
+// l'utilisateur, mais on lui montre où en est ce rendu — avec un vrai
+// pourcentage, lu sur la file (le worker y publie l'avancement ffmpeg réel).
+let videoPoll=null;
+function stopVideoWatch(){clearInterval(videoPoll);videoPoll=null;}
+
+async function videoJob(){
+  try{
+    const q=await(await fetch("/api/render-queue")).json();
+    return (q.items||[]).find(i=>i.slug===slug&&i.kind==="video")||null;
+  }catch(e){return undefined;}   // undefined = indéterminé (réseau), pas « fini »
+}
+
+function paintVideo(job){
+  const card=$("video-progress");
+  if(!card)return;
+  card.classList.remove("hidden","vp-queued","vp-running","vp-done");
+  const pctEl=card.querySelector(".vp-pct"),fill=$("vp-fill");
+  const lbl=card.querySelector(".vp-label");
+  if(!job){   // plus dans la file = terminé
+    card.classList.add("vp-done");
+    lbl.setAttribute("data-i18n","video_done_title");
+    card.querySelector(".vp-note").setAttribute("data-i18n","video_done_note");
+    fill.style.width="100%";pctEl.textContent="";
+    applyI18n(LANG());
+    return;
+  }
+  const queued=job.state==="queued",paused=job.state==="paused";
+  card.classList.add(queued?"vp-queued":"vp-running");
+  lbl.setAttribute("data-i18n",queued?"video_queued_title":"video_running_title");
+  card.querySelector(".vp-note").setAttribute("data-i18n","video_running_note");
+  // `pct` est nul tant que ffmpeg n'a pas émis sa première mesure (ouverture du
+  // fichier source) : afficher « 0 % » laisserait croire à un blocage.
+  const p=job.pct;
+  fill.style.width=(p==null?0:Math.round(p))+"%";
+  pctEl.textContent=paused?T("paused_word")
+    :(p==null?T("running_word"):Math.round(p)+" %");
+  applyI18n(LANG());
+}
+
+async function watchVideoRender(){
+  stopVideoWatch();
+  const first=await videoJob();
+  // Aucun rendu vidéo pour cet album (import audio-only, ou déjà terminé) :
+  // le bloc reste masqué plutôt que d'annoncer une fin qui n'a pas eu lieu.
+  if(!first)return;
+  paintVideo(first);
+  videoPoll=setInterval(async()=>{
+    if($("step-done").classList.contains("hidden")){stopVideoWatch();return;}
+    const job=await videoJob();
+    if(job===undefined)return;    // réseau : on garde le dernier état affiché
+    paintVideo(job);
+    if(!job)stopVideoWatch();
+  },4000);
 }
 
 $("btn-again").onclick=()=>{
+  stopVideoWatch();
+  $("video-progress").classList.add("hidden");
   slug=null;videoInfo=null;
   $("l-url").value="";
   history.replaceState(null,"",location.pathname);
@@ -831,6 +1166,14 @@ $("btn-again").onclick=()=>{
       const q=await(await fetch("/api/render-queue")).json();
       queued=(q.items||[]).find(i=>i.slug===h)||null;
     }catch(e){}
+    if(queued&&queued.kind==="video"){
+      // Phase 2 seule : l'audio est déjà rendu, l'album est complet côté son.
+      // On revient donc à l'écran final (qui affiche l'avancement du MP4),
+      // surtout pas à l'écran de progression du rendu audio.
+      reedit=!!m.published;
+      await finish();
+      return;
+    }
     if(queued){
       currentPhase="render";
       reedit=!!m.published;

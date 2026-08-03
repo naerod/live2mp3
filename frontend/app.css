@@ -93,6 +93,24 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 @media(prefers-reduced-motion:reduce){
   .stages li.indet .stage-fill{animation:none;width:100%;opacity:.5}
 }
+/* Rendu vidéo de phase 2 sur l'écran final : l'album audio est déjà livré,
+   ce bloc informe sans rien bloquer. Sa barre réutilise .stage-bar/.stage-fill
+   mais hors de la liste .stages, d'où l'affichage forcé. */
+.vp-card{margin-top:18px;padding:14px 16px;border-radius:12px;
+  border:1px solid var(--border);background:var(--card)}
+.vp-card .stage-bar{display:block;margin-top:12px}
+.vp-head{display:flex;align-items:center;gap:9px}
+.vp-ico{color:var(--accent);font-size:22px}
+.vp-card.vp-queued .vp-ico,.vp-card.vp-running .vp-ico{
+  animation:l2m-vp-pulse 1.8s ease-in-out infinite}
+.vp-card.vp-done .vp-ico{color:var(--ok);animation:none}
+.vp-card.vp-done .stage-fill{background:var(--ok)}
+@keyframes l2m-vp-pulse{50%{opacity:.45}}
+.vp-label{font-weight:600;font-size:14.5px}
+.vp-pct{margin-left:auto;font-size:13px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.vp-note{margin:10px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+@media(prefers-reduced-motion:reduce){.vp-ico{animation:none!important}}
 #peaks-container{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}
@@ -363,10 +381,15 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   color:var(--muted);font-size:12px;min-width:52px}
 .track-row .t-badge .material-symbols-outlined{font-size:15px}
 .track-row .t-times{display:flex;gap:5px;align-items:center}
-.track-row .t-time{width:66px;text-align:center;font-variant-numeric:tabular-nums}
+.track-row .t-time{width:98px;text-align:center;font-variant-numeric:tabular-nums;
+  padding-left:4px;padding-right:4px}
 .track-row .t-time:disabled{opacity:.5;cursor:not-allowed;
   background:var(--bg);border-style:dashed}
 .track-row .t-sep{color:var(--muted)}
+/* Séparateur entre le groupe des timecodes et les actions de la ligne
+   (écouter / supprimer), pour qu'on ne les lise pas comme un même bloc. */
+.track-row .t-actions-sep{width:1px;height:22px;flex-shrink:0;margin:0 4px;
+  background:var(--border)}
 .track-row .icon-btn{margin:0;height:38px;flex-shrink:0}
 /* Boutons compacts en ligne (cadenas, définir début/fin, écouter, supprimer) */
 .track-row .icon-btn.mini{height:32px;width:32px;padding:0;border-radius:9px}
@@ -386,6 +409,20 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   color:var(--fg);border:1px solid var(--run);
   background:color-mix(in srgb,var(--run) 14%,transparent)}
 .disc-warn .material-symbols-outlined{color:var(--run);font-size:22px;flex-shrink:0}
+/* Indicateur discret d'enregistrement du brouillon de coupes */
+.draft-saved{display:flex;align-items:center;gap:7px;margin:0 0 10px;
+  font-size:12.5px;color:var(--muted)}
+.draft-saved .material-symbols-outlined{font-size:18px;color:var(--ok,var(--accent))}
+.draft-saved.err{color:var(--like);font-weight:600}
+.draft-saved.err .material-symbols-outlined{color:var(--like)}
+/* Bandeau de session SSO expirée (lecteur audio bloqué) */
+.session-warn{display:flex;align-items:center;gap:10px;margin:0 0 14px;
+  padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.4;
+  color:var(--fg);border:1px solid var(--like);
+  background:color-mix(in srgb,var(--like) 14%,transparent)}
+.session-warn .material-symbols-outlined{color:var(--like);font-size:22px;flex-shrink:0}
+.session-warn .session-warn-txt{flex:1}
+.session-warn .icon-btn{flex-shrink:0}
 /* Toast bas d'écran */
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);
   background:var(--card);border:1px solid var(--border);color:var(--fg);

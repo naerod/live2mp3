@@ -16,6 +16,7 @@ pointeur legacy vers la gagnante, pour les consommateurs qui lisent le YAML.
 from __future__ import annotations
 
 import io
+import logging
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -25,7 +26,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from mutagen.id3 import ID3, ID3NoHeaderError
+from mutagen.id3 import ID3
 from .albumfiles import MIME_EXT, _file_track_n
 from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
@@ -38,6 +39,8 @@ from .social import (
     _is_moderator,
     _profiles_map,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -159,8 +162,10 @@ def _propagate_cover_to_media(slug: str, m) -> None:
             albumfiles._write_folder_cover(slug, m)
         else:
             albumfiles._write_album_cover(slug, m)
-    except Exception:
-        pass
+    except Exception as exc:
+        # La pochette est un confort : un échec ne doit pas bloquer la
+        # republication, mais il doit laisser une trace.
+        log.warning("écriture de la pochette de %s impossible : %s", slug, exc)
     jellyfin.refresh_album(slug)
 
 

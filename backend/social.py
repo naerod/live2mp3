@@ -18,9 +18,8 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -36,6 +35,9 @@ from .auth import (
 )
 from .db import AVATARS_DIR, get_conn
 from .manifest import PROJECTS_DIR
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -154,8 +156,8 @@ def _album_label(slug: str, cat: dict[str, dict]) -> dict:
             from .manifest import Manifest
             alb = Manifest.load(mpath).data.get("album", {})
             return {"title": alb.get("title", slug), "artist": alb.get("artist", "")}
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("manifeste illisible pour %s : %s", slug, exc)
     return {"title": slug, "artist": ""}
 
 

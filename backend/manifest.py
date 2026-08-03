@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,9 @@ STAGES = [
     "tags",
     "artwork",
     "disc",
+    # Rendu MP4, découplé de l'audio le 2026-08-03 : il s'exécute dans un job
+    # séparé, bien après que l'album audio est prêt, et a donc son propre état.
+    "video",
 ]
 
 VALID_TARGETS = {"data_disc", "audio_cd"}  # dvd_video hors V1

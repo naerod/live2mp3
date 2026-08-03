@@ -77,7 +77,7 @@
     <p id="setlist-src" class="setlist-src hidden"></p>
     <div id="track-rows" class="track-rows"></div>
     <button id="btn-add-track" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
-    <label class="opt-check"><input type="checkbox" id="f-video"> <span data-i18n="video_opt">Télécharger aussi la vidéo (clips MP4 — beaucoup plus long)</span></label>
+    <label class="opt-check"><input type="checkbox" id="f-video" checked> <span data-i18n="video_opt">Télécharger aussi la vidéo (MP4 complet) (Conseillé)</span></label>
     <div class="actions" style="margin-top:18px;justify-content:space-between">
       <button id="btn-back-link" class="btn-secondary"><span class="material-symbols-outlined">arrow_back</span> <span data-i18n="back">Retour</span></button>
       <button id="btn-create" class="primary"><span class="material-symbols-outlined">rocket_launch</span> <span data-i18n="start_prep">Lancer la préparation</span></button>
@@ -123,6 +123,15 @@
       <span class="zoom-spacer"></span>
       <button class="icon-btn" id="btn-reset-cuts" data-i18n-title="reset_cuts_title" title="Rétablir les coupes de l'analyse IA d'origine"><span class="material-symbols-outlined">restart_alt</span> <span data-i18n="reset_cuts">Réinitialiser</span></button>
     </div>
+    <div id="draft-saved" class="draft-saved hidden">
+      <span class="material-symbols-outlined">cloud_done</span>
+      <span data-i18n="draft_saved">Brouillon enregistré</span>
+    </div>
+    <div id="session-warn" class="session-warn hidden">
+      <span class="material-symbols-outlined">lock_clock</span>
+      <span class="session-warn-txt" data-i18n="session_expired">Session expirée : le lecteur audio est bloqué. Vos coupes sont conservées — reconnectez-vous pour continuer.</span>
+      <button id="btn-session-relogin" class="icon-btn"><span class="material-symbols-outlined">refresh</span> <span data-i18n="session_relogin">Se reconnecter</span></button>
+    </div>
     <audio id="ed-audio" controls preload="metadata"></audio>
     <div id="disc-warn" class="disc-warn hidden">
       <span class="material-symbols-outlined">album</span>
@@ -139,6 +148,17 @@
   <section id="step-done" class="card hidden">
     <h1><span class="material-symbols-outlined step-ico" style="color:var(--ok)">celebration</span><span data-i18n="done_title">Album créé</span></h1>
     <div id="summary"></div>
+    <!-- Phase 2 : le MP4 continue en arrière-plan. Bloc masqué tant qu'aucun
+         rendu vidéo n'est en file — un import audio-only n'en a jamais. -->
+    <div id="video-progress" class="vp-card hidden">
+      <div class="vp-head">
+        <span class="material-symbols-outlined vp-ico">movie</span>
+        <span class="vp-label" data-i18n="video_running_title">Rendu vidéo en cours</span>
+        <span class="vp-pct"></span>
+      </div>
+      <div class="stage-bar"><div class="stage-fill" id="vp-fill"></div></div>
+      <p class="vp-note" data-i18n="video_running_note">Votre album audio est prêt : vous pouvez fermer cette page. Le MP4 se termine en arrière-plan et une notification vous préviendra.</p>
+    </div>
     <div class="actions" style="margin-top:16px;flex-wrap:wrap">
       <a id="btn-album" class="primary" href="#"><span class="material-symbols-outlined">library_music</span> <span data-i18n="view_album">Voir l'album</span></a>
       <a id="btn-manage" class="icon-btn" href="#"><span class="material-symbols-outlined">settings</span> <span data-i18n="manage_album">Gérer / publier</span></a>

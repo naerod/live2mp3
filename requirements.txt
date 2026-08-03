@@ -10,6 +10,7 @@ requests
 python-multipart
 jinja2
 pytest
+fakeredis
 faster-whisper
 numpy
 httpx
