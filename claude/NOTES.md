@@ -23,6 +23,14 @@ v1.15.38). Session complète de découpage perdue sur `linkin-park-2025-11-16`
 - **Données remédiées** : les 32 timecodes de l'utilisateur réinjectés depuis ses
   captures via `PUT /setlist`, chaînage fin→début vérifié sur les 32 pistes,
   2 h 02 min 43,74 s. Album toujours non publié.
+- **v1.15.39 — enregistrement à chaque modification** (demande utilisateur) :
+  action ponctuelle (timecode, cadenas, ajout, suppression, marqueur glissé) →
+  envoi **immédiat** via `commitEdit()`. Exception : la frappe (titre/artiste)
+  émet un évènement par lettre → 700 ms, sinon le manifest serait réécrit des
+  dizaines de fois pour un seul mot, sur un stockage partagé avec la prod.
+  ⚠️ **Verrou `draftInFlight`/`draftDirty`** indispensable : le serveur remplace
+  la setlist ENTIÈRE à chaque appel, deux écritures qui se croisent ne se
+  fondent pas. Mesuré : 3 modifs = 3 envois ; 18 caractères tapés = 1 envoi.
 - `tools/webshot/measure.mjs` : nouvelle option `--lang` (la langue vit dans
   `localStorage`, elle ne peut pas être posée après chargement comme le thème ;
   le sélecteur est dans le menu avatar, cliquable en deux temps et fragile).
