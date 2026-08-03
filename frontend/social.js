@@ -585,7 +585,7 @@ const L2M = (function () {
     const pct = n.pct == null ? "" :
       `<span class="notif-fmt">${Math.round(n.pct)} %</span>`;
     const tags = (n.formats || []).map(f => `<span class="notif-fmt">${f}</span>`).join("");
-    return `<a class="notif-item notif-render" href="/app#${encodeURIComponent(n.slug)}">
+    return `<a class="notif-item notif-render${video ? " notif-video" : ""}" href="/app#${encodeURIComponent(n.slug)}">
       ${artistThumb(n, video ? "movie" : "sync")}
       <span class="notif-body">
         <span class="notif-draft-tag"><span class="material-symbols-outlined">${video ? "movie" : "sync"}</span>${esc(state)}${tags}${pct}</span>

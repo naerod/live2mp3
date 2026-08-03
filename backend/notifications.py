@@ -269,7 +269,10 @@ def render_activity(username: str) -> list[dict]:
             "title": album.get("title", "") or it["slug"],
             "subtitle": album.get("artist", ""),
             "state": it.get("state", "queued"),
-            "formats": ["mp3", "mp4"] if it.get("video") else ["mp3"],
+            # Ce que *ce* job produit : la phase 2 n'encode que le MP4, annoncer
+            # « mp3 + mp4 » laisserait croire que l'album audio manque encore.
+            "formats": (["mp4"] if it.get("kind") == "video"
+                        else ["mp3", "mp4"] if it.get("video") else ["mp3"]),
             "read": False,
             "created_at": it.get("queued_at") or time.time(),
         })
