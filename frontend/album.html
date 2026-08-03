@@ -126,8 +126,10 @@
   .fu-vsub{font-size:11.5px;color:var(--muted);margin-top:2px}
   .fu-fields{display:flex;flex-direction:column;gap:10px}
   .fu-trim{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .fu-check{display:flex;align-items:center;gap:8px;font-size:12.5px;
-    color:var(--muted);cursor:pointer}
+  /* `flex-direction` explicite : la règle globale `label` d'app.css empile en
+     colonne, ce qui posait la case au-dessus de son texte. */
+  .fu-check{display:flex;flex-direction:row;align-items:center;gap:8px;
+    align-self:flex-start;font-size:12.5px;color:var(--muted);cursor:pointer}
   .fu-check input{margin:0}
   .fu-status{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:0}
   .fu-status.err{color:var(--danger,#e57373)}
