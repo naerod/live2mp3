@@ -118,6 +118,10 @@
   .add-track-row input{flex:1;margin:0;padding:6px 10px;font-size:13px}
   /* Ajout d'une piste depuis un lien vidéo (albums-compilations). */
   .from-url{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+  .fu-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .fu-actions .icon-btn{margin:0}
+  .fx-panel{margin-top:10px;display:flex;flex-direction:column;gap:10px;
+    align-items:flex-start}
   .fu-panel{margin-top:10px;display:flex;flex-direction:column;gap:10px}
   .fu-preview{display:flex;gap:10px;align-items:center;background:var(--bg);
     border:1px solid var(--border);border-radius:10px;padding:8px}
@@ -338,9 +342,20 @@
         <!-- Ajout d'une piste depuis un lien vidéo : le morceau est téléchargé,
              rogné et encodé côté serveur, puis rattaché à cet album. -->
         <div class="from-url">
-          <button class="icon-btn" id="fu-toggle" type="button" style="margin:0">
-            <span class="material-symbols-outlined">playlist_add</span><span id="t-fu-toggle"></span>
-          </button>
+          <div class="fu-actions">
+            <button class="icon-btn" id="fu-toggle" type="button">
+              <span class="material-symbols-outlined">playlist_add</span><span id="t-fu-toggle"></span>
+            </button>
+            <button class="icon-btn" id="fx-toggle" type="button">
+              <span class="material-symbols-outlined">upload_file</span><span id="t-fx-toggle"></span>
+            </button>
+          </div>
+          <div class="fx-panel hidden" id="fx-panel">
+            <p class="meta-legend"><span class="material-symbols-outlined">info</span><span id="t-fx-hint"></span></p>
+            <input type="file" id="fx-file" accept="audio/mpeg,.mp3" multiple style="display:none">
+            <button class="primary" id="fx-pick" type="button"><span class="material-symbols-outlined">upload</span><span id="t-fx-pick"></span></button>
+            <p class="fu-status hidden" id="fx-status"></p>
+          </div>
           <div class="fu-panel hidden" id="fu-panel">
             <p class="meta-legend"><span class="material-symbols-outlined">info</span><span id="t-fu-hint"></span></p>
             <div class="add-track-row">
@@ -430,7 +445,12 @@ const TT={
       fu_err_title:"Titre de piste requis.",
       fu_err_trim:"Rognage : la fin doit être après le début.",
       fu_err_time:"Durée non reconnue — utilisez « 1:23 » ou « 83 ».",
-      fu_track_src:"Piste ajoutée depuis un lien"},
+      fu_track_src:"Piste ajoutée depuis un lien",
+      fx_toggle:"Déposer des MP3",
+      fx_hint:"Des MP3 déjà découpés sont ajoutés à la suite de la tracklist. Le titre est lu dans les tags ID3, à défaut dans le nom du fichier — vous pourrez le corriger ensuite.",
+      fx_pick:"Choisir des fichiers MP3",
+      fx_uploading:n=>`Envoi de ${n} fichier${n>1?"s":""}…`,
+      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
@@ -475,7 +495,12 @@ const TT={
       fu_err_title:"Track title required.",
       fu_err_trim:"Trim: the end must come after the start.",
       fu_err_time:"Duration not recognised — use “1:23” or “83”.",
-      fu_track_src:"Track added from a link"}
+      fu_track_src:"Track added from a link",
+      fx_toggle:"Upload MP3s",
+      fx_hint:"Already-split MP3s are appended to the tracklist. The title is read from the ID3 tags, or from the filename — you can fix it afterwards.",
+      fx_pick:"Choose MP3 files",
+      fx_uploading:n=>`Uploading ${n} file${n>1?"s":""}…`,
+      fx_done:n=>`${n} track${n>1?"s":""} added`}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
@@ -532,6 +557,9 @@ function applyLang(){
   document.getElementById("t-fu-end").textContent=t.fu_end;
   document.getElementById("t-fu-cover").textContent=t.fu_cover;
   document.getElementById("t-fu-add").textContent=t.fu_add;
+  document.getElementById("t-fx-toggle").textContent=t.fx_toggle;
+  document.getElementById("t-fx-hint").textContent=t.fx_hint;
+  document.getElementById("t-fx-pick").textContent=t.fx_pick;
   refreshOpenEditorBtn();
   refreshScopeRow();
   if(DATA){renderDL();renderTraycard();}
@@ -572,10 +600,15 @@ function refreshScopeRow(){
     st.textContent=t.scope_preprod;
     lbl.textContent=t.promote_btn; ic.textContent="rocket_launch";
     btn.className="primary";
+    btn.classList.remove("hidden");
   }else{
+    // Album déjà servi par la production : on l'indique, sans proposer de l'en
+    // retirer. Le seul geste offert par la preprod est « pousser en prod » —
+    // dépublier un album public est une décision qui se prend sur la prod.
+    // La route `POST /api/albums/{slug}/demote` existe toujours pour un
+    // rattrapage en ligne de commande.
     st.textContent=t.scope_prod;
-    lbl.textContent=t.demote_btn; ic.textContent="undo";
-    btn.className="";
+    btn.classList.add("hidden");
   }
 }
 document.getElementById("btn-promote").onclick=async()=>{
@@ -885,6 +918,66 @@ function fuWatch(token,n,title,url){
     const pct=job.stage==="download"&&job.pct?` ${Math.round(job.pct)} %`:"";
     fuStatus(label+pct,{spin:true});
   },1500);
+}
+
+// ── Déposer des MP3 déjà découpés ───────────────────────────────────────────
+function fxStatus(msg,{err=false,spin=false}={}){
+  const el=fuEl("fx-status");
+  if(!msg){el.classList.add("hidden");el.innerHTML="";return;}
+  el.classList.remove("hidden");
+  el.classList.toggle("err",err);
+  const ico=err?"error":(spin?"progress_activity":"check_circle");
+  el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
+  el.lastChild.textContent=msg;
+}
+
+fuEl("fx-toggle").onclick=()=>fuEl("fx-panel").classList.toggle("hidden");
+fuEl("fx-pick").onclick=()=>fuEl("fx-file").click();
+
+fuEl("fx-file").onchange=async()=>{
+  const t=TT[L()];
+  const input=fuEl("fx-file");
+  const files=[...input.files];
+  if(!files.length)return;
+  const fd=new FormData();
+  files.forEach(f=>fd.append("files",f));
+  fuEl("fx-pick").disabled=true;
+  fxStatus(t.fx_uploading(files.length),{spin:true});
+  try{
+    const r=await fetch(`/api/albums/${SLUG}/tracks/upload`,{method:"POST",body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+    // Ajout local plutôt que rechargement : les modifications en cours de
+    // saisie (titres, labels) ne doivent pas être perdues.
+    (d.added||[]).forEach(a=>{
+      if(!tracks.some(x=>x.n===a.n))
+        tracks.push({n:a.n,title:a.title,start:null,end:null,locked:false,
+                     source:{file:a.file}});
+    });
+    if(PER_TRACK)await loadTrackCovers();
+    renderTracks();
+    fxStatus(t.fx_done((d.added||[]).length));
+    toast(t.fx_done((d.added||[]).length));
+  }catch(e){
+    fxStatus(e.message||"",{err:true});
+  }finally{
+    fuEl("fx-pick").disabled=false;
+    input.value="";   // re-déposer le même fichier doit redéclencher `change`
+  }
+};
+
+// Arrivée depuis la fenêtre « Importer » : ?add=link | ?add=file ouvre
+// directement le bon panneau, la destination ayant déjà été choisie là-bas.
+function openRequestedPanel(){
+  const add=new URLSearchParams(location.search).get("add");
+  if(add!=="link"&&add!=="file")return;
+  const panel=fuEl(add==="link"?"fu-panel":"fx-panel");
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({behavior:"smooth",block:"center"});
+  if(add==="link")setTimeout(()=>fuEl("fu-url").focus(),300);
+  // L'URL est nettoyée : un rechargement ne doit pas rouvrir le panneau
+  // indéfiniment, et le lien copié depuis la barre d'adresse reste propre.
+  history.replaceState(null,"",location.pathname);
 }
 
 // Labels
@@ -1230,6 +1323,7 @@ async function load(){
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
   _bindTcvEvents();
   refreshUrlBtn();
+  openRequestedPanel();
 }
 
 // ── Corriger l'URL (slug) ────────────────────────────────────────────────────

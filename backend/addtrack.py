@@ -50,7 +50,8 @@ from typing import Any
 from uuid import uuid4
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from mutagen.id3 import ID3
 from pydantic import BaseModel
 
 from . import jellyfin
@@ -408,6 +409,123 @@ def add_track_from_url(slug: str, payload: AddTrackIn,
                            identity.get("username") or ""),
                      daemon=True).start()
     return {"ok": True, "token": token, "n": n, "title": title}
+
+
+# --- Dépôt de fichiers dans un album existant ------------------------------
+# Pendant de `add_track_from_url` pour l'autre source de pistes : des MP3 déjà
+# découpés. Symétrique de `import_album`, mais vers un album existant plutôt
+# que vers un album neuf — et sans staging ni formulaire, puisqu'il n'y a
+# aucune métadonnée d'album à deviner.
+MAX_UPLOAD_BYTES = 512 * 1024 * 1024   # par fichier
+MAX_UPLOAD_FILES = 50
+
+
+def _cover_from_apic(slug: str, n: int, mp3: Path, username: str) -> int | None:
+    """Pochette embarquée (APIC) du MP3 déposé -> pochette de la piste."""
+    try:
+        apic = ID3(str(mp3)).getall("APIC")[0]
+    except Exception:
+        return None
+    ext = {"image/jpeg": ".jpg", "image/png": ".png",
+           "image/webp": ".webp"}.get(apic.mime, ".jpg")
+    now = _now()
+    key = uuid4().hex
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        existing = conn.execute(
+            "SELECT * FROM track_covers WHERE slug=? AND track_n=?",
+            (slug, n)).fetchone()
+        if existing:
+            return existing["id"]
+        track_covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        track_cover_file(slug, key, ext).write_bytes(apic.data)
+        cur = conn.execute(
+            "INSERT INTO track_covers(slug, track_n, username, file_key, "
+            "cover_ext, created_at, updated_at) VALUES(?,?,?,?,?,?,?)",
+            (slug, n, username, key, ext, now, now))
+        return cur.lastrowid
+
+
+@router.post("/api/albums/{slug}/tracks/upload")
+async def upload_tracks(
+    slug: str,
+    files: list[UploadFile] = File(...),
+    identity: dict = Depends(require_gestionnaire),
+) -> dict:
+    """Ajoute un ou plusieurs MP3 déjà découpés en fin de tracklist."""
+    if not files:
+        raise HTTPException(400, "aucun fichier")
+    if len(files) > MAX_UPLOAD_FILES:
+        raise HTTPException(400, f"{MAX_UPLOAD_FILES} fichiers au maximum")
+    _, m = _album_manifest(slug)
+    username = identity.get("username") or ""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    audio_dir = PROJECTS_DIR / slug / "build" / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    staging = _work_dir(uuid4().hex)
+    staging.mkdir(parents=True, exist_ok=True)
+    added: list[dict] = []
+    try:
+        tracks = m.data.setdefault("tracks", [])
+        # Les fichiers sont d'abord écrits en zone de travail : un dépôt refusé
+        # en cours de route ne doit pas laisser la moitié des pistes en place.
+        pending: list[tuple[Path, str]] = []
+        for up in files:
+            name = Path(up.filename or "").name
+            if Path(name).suffix.lower() != ".mp3":
+                raise HTTPException(400, f"« {name} » : seuls les MP3 sont acceptés")
+            data = await up.read()
+            if len(data) > MAX_UPLOAD_BYTES:
+                raise HTTPException(400, f"« {name} » : fichier trop volumineux")
+            tmp = staging / f"{uuid4().hex}.mp3"
+            tmp.write_bytes(data)
+            pending.append((tmp, name))
+
+        for tmp, name in pending:
+            title = _title_from_upload(tmp, name)
+            n = max((int(t.get("n", 0)) for t in tracks), default=0) + 1
+            entry = {"n": n, "title": title, "start": None, "end": None,
+                     "locked": False,
+                     "source": {"file": name, "added_by": username,
+                                "added_at": now}}
+            tracks.append(entry)
+            dest = audio_dir / m.track_filename(entry, "mp3")
+            shutil.move(str(tmp), dest)
+            added.append({"n": n, "title": title, "file": dest.name})
+        m.save()
+
+        _write_track_tags(slug, m)
+        _write_album_tags(slug, m)
+        if m.data.get("album", {}).get("per_track_covers"):
+            for a in added:
+                _cover_from_apic(slug, a["n"], audio_dir / a["file"], username)
+        try:
+            jellyfin.refresh_album(slug)
+        except Exception:
+            pass
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return {"ok": True, "added": added}
+
+
+def _title_from_upload(mp3: Path, filename: str) -> str:
+    """Titre de la piste : tag TIT2 s'il existe, sinon le nom du fichier nettoyé.
+
+    Le numéro que le pipeline préfixe aux titres qu'il écrit (« 01. Titre »)
+    est retiré : il sera reposé par `_write_track_tags` selon la position
+    réelle dans l'album de destination, qui n'est pas celle d'origine.
+    """
+    title = ""
+    try:
+        v = ID3(str(mp3)).get("TIT2")
+        title = str(v.text[0]).strip() if v and v.text else ""
+    except Exception:
+        title = ""
+    if not title:
+        title = Path(filename).stem
+    title = re.sub(r"^\s*\d{1,3}\s*[-._)\s]+", "", title).replace("_", " ")
+    return re.sub(r"\s+", " ", title).strip() or Path(filename).stem
 
 
 @router.get("/api/albums/{slug}/tracks/from-url/{token}")

@@ -152,20 +152,42 @@ const L2M = (function () {
     const ovl = document.createElement("div");
     ovl.id = "imp-choice-ovl";
     ovl.className = "imp-choice-ovl";
-    const card = (act, icon, t, d) => `
-      <button class="imp-card${gest ? "" : " locked"}" data-act="${act}"${gest ? "" : " disabled"}>
+    ovl.innerHTML = `<div class="imp-choice" role="dialog" aria-modal="true"></div>`;
+    const box = ovl.querySelector(".imp-choice");
+    document.body.appendChild(ovl);
+    requestAnimationFrame(() => ovl.classList.add("show"));
+    const close = () => { ovl.classList.remove("show"); setTimeout(() => ovl.remove(), 180); };
+    ovl.onclick = e => { if (e.target === ovl) close(); };
+    document.addEventListener("keydown", function onEsc(e) {
+      if (e.key === "Escape") { close(); document.removeEventListener("keydown", onEsc); }
+    });
+
+    const chrome = (title, body, onBack) => `
+      <button class="imp-choice-x icon-btn icon-only" title="${tx.close}"><span class="material-symbols-outlined">close</span></button>
+      ${onBack ? `<button class="imp-choice-back icon-btn"><span class="material-symbols-outlined">arrow_back</span>${tx.back}</button>` : ""}
+      <h2 class="imp-choice-h">${title}</h2>
+      ${body}`;
+    // Recâble les boutons communs après chaque rendu : le contenu de la
+    // fenêtre est remplacé d'une étape à l'autre, pas empilé.
+    const wire = (onBack) => {
+      box.querySelector(".imp-choice-x").onclick = close;
+      const back = box.querySelector(".imp-choice-back");
+      if (back) back.onclick = onBack;
+    };
+    const card = (act, icon, t, d, locked) => `
+      <button class="imp-card${locked ? " locked" : ""}" data-act="${act}"${locked ? " disabled" : ""}>
         <span class="material-symbols-outlined imp-card-ic">${icon}</span>
         <span class="imp-card-t">${t}</span>
         <span class="imp-card-d">${d}</span>
-        ${gest ? "" : `<span class="imp-card-lock"><span class="material-symbols-outlined">lock</span>${tx.need_role}</span>`}
+        ${locked ? `<span class="imp-card-lock"><span class="material-symbols-outlined">lock</span>${tx.need_role}</span>` : ""}
       </button>`;
-    ovl.innerHTML = `
-      <div class="imp-choice" role="dialog" aria-modal="true">
-        <button class="imp-choice-x icon-btn icon-only" title="${tx.close}"><span class="material-symbols-outlined">close</span></button>
-        <h2 class="imp-choice-h">${tx.title}</h2>
+
+    /* Étape 1 — quelle source de pistes. */
+    function stepSource() {
+      box.innerHTML = chrome(tx.title, `
         <div class="imp-choice-grid">
-          ${card("manual", "upload_file", tx.manual_t, tx.manual_d)}
-          ${card("tool", "auto_fix_high", tx.tool_t, tx.tool_d)}
+          ${card("manual", "upload_file", tx.manual_t, tx.manual_d, !gest)}
+          ${card("tool", "auto_fix_high", tx.tool_t, tx.tool_d, !gest)}
         </div>
         <button class="imp-card imp-card-wide${gest ? "" : " locked"}" data-act="drafts"${gest ? "" : " disabled"}>
           <span class="material-symbols-outlined imp-card-ic">drafts</span>
@@ -176,25 +198,95 @@ const L2M = (function () {
           <span class="material-symbols-outlined">info</span>
           <span>${anon ? tx.note_anon : tx.note_user}</span>
           ${anon ? `<a class="primary imp-choice-login" href="/outpost.goauthentik.io/start?rd=${encodeURIComponent(location.pathname)}">${tx.login}</a>` : ""}
-        </div>`}
-      </div>`;
-    document.body.appendChild(ovl);
-    requestAnimationFrame(() => ovl.classList.add("show"));
-    const close = () => { ovl.classList.remove("show"); setTimeout(() => ovl.remove(), 180); };
-    ovl.querySelector(".imp-choice-x").onclick = close;
-    ovl.onclick = e => { if (e.target === ovl) close(); };
-    document.addEventListener("keydown", function esc(e) {
-      if (e.key === "Escape") { close(); document.removeEventListener("keydown", esc); }
-    });
-    if (gest) ovl.querySelectorAll(".imp-card").forEach(b => {
-      b.onclick = () => {
-        close();
-        const act = b.dataset.act;
-        if (act === "tool") location.href = "/app";
-        else if (act === "drafts") location.href = "/app/drafts";
-        else (opts.onImport || (() => { location.href = "/?import=1"; }))();
+        </div>`}`);
+      wire(null);
+      if (!gest) return;
+      box.querySelectorAll(".imp-card").forEach(b => {
+        b.onclick = () => {
+          const act = b.dataset.act;
+          if (act === "drafts") { close(); location.href = "/app/drafts"; }
+          else stepTarget(act);
+        };
+      });
+    }
+
+    /* Étape 2 — album neuf, ou piste ajoutée à un album existant. */
+    function stepTarget(mode) {
+      const isTool = mode === "tool";
+      box.innerHTML = chrome(isTool ? tx.tool_t : tx.manual_t, `
+        <p class="imp-choice-sub">${tx.target_sub}</p>
+        <div class="imp-choice-grid">
+          ${card("new", "album", tx.new_t, isTool ? tx.new_d_tool : tx.new_d_manual)}
+          ${card("existing", "playlist_add", tx.exist_t, isTool ? tx.exist_d_tool : tx.exist_d_manual)}
+        </div>`, stepSource);
+      wire(stepSource);
+      box.querySelectorAll(".imp-card").forEach(b => {
+        b.onclick = () => {
+          if (b.dataset.act === "new") {
+            close();
+            if (isTool) location.href = "/app";
+            else (opts.onImport || (() => { location.href = "/?import=1"; }))();
+          } else {
+            stepPick(mode);
+          }
+        };
+      });
+    }
+
+    /* Étape 3 — choix de l'album de destination. */
+    async function stepPick(mode) {
+      box.innerHTML = chrome(tx.pick_t, `
+        <p class="imp-choice-sub">${tx.pick_sub}</p>
+        <div class="imp-pick-search">
+          <span class="material-symbols-outlined">search</span>
+          <input id="imp-pick-q" type="search" placeholder="${tx.pick_ph}" autocomplete="off">
+        </div>
+        <div class="imp-pick-list" id="imp-pick-list">
+          <p class="imp-pick-empty">${tx.loading}</p>
+        </div>`, () => stepTarget(mode));
+      wire(() => stepTarget(mode));
+      const list = box.querySelector("#imp-pick-list");
+      let albums = [];
+      try {
+        albums = await api("GET", "/api/catalogue?sort=artist");
+      } catch (e) {
+        list.innerHTML = `<p class="imp-pick-empty">${tx.pick_err}</p>`;
+        return;
+      }
+      const draw = (q) => {
+        const needle = (q || "").trim().toLowerCase();
+        const hits = albums.filter(a => !needle ||
+          `${a.artist} ${a.title} ${a.date}`.toLowerCase().includes(needle));
+        if (!hits.length) { list.innerHTML = `<p class="imp-pick-empty">${tx.pick_none}</p>`; return; }
+        list.innerHTML = hits.map(a => `
+          <button class="imp-pick-row" data-slug="${esc(a.slug)}">
+            ${a.has_cover
+              ? `<img class="imp-pick-cov" src="/cover/${encodeURIComponent(a.slug)}?v=${a.cover_v || 0}" alt="" loading="lazy">`
+              : `<span class="imp-pick-cov ph"><span class="material-symbols-outlined">album</span></span>`}
+            <span class="imp-pick-meta">
+              <span class="imp-pick-t">${esc(a.title || a.slug)}</span>
+              <span class="imp-pick-d">${esc([a.artist, a.date].filter(Boolean).join(" · "))}</span>
+            </span>
+            <span class="imp-pick-n">${a.tracks} ${a.tracks > 1 ? tx.tracks_p : tx.tracks_s}</span>
+            ${a.published ? "" : `<span class="imp-pick-draft">${tx.unpublished}</span>`}
+          </button>`).join("");
+        list.querySelectorAll(".imp-pick-row").forEach(r => {
+          r.onclick = () => {
+            close();
+            // La page de gestion sait ouvrir le bon panneau d'ajout : tout se
+            // termine là, plutôt que de dupliquer le formulaire ici.
+            location.href = `/app/album/${encodeURIComponent(r.dataset.slug)}`
+              + `?add=${mode === "tool" ? "link" : "file"}`;
+          };
+        });
       };
-    });
+      draw("");
+      const q = box.querySelector("#imp-pick-q");
+      q.oninput = () => draw(q.value);
+      q.focus();
+    }
+
+    stepSource();
   }
 
   /* ---------------- Navigation instantanée (pré-rendu spéculatif) ----------------
@@ -252,7 +344,21 @@ const L2M = (function () {
     // Textes de la fenêtre de choix d'import (partagée par toutes les pages).
     const IT = {
       fr: {
-        title: "Importer un album", close: "Fermer",
+        title: "Importer un album", close: "Fermer", back: "Retour",
+        loading: "Chargement…",
+        target_sub: "Ces pistes forment-elles un nouvel album, ou rejoignent-elles un album déjà en ligne ?",
+        new_t: "Créer un nouvel album",
+        new_d_manual: "Un album complet à partir des fichiers déposés.",
+        new_d_tool: "Un concert entier, découpé piste par piste depuis le lien.",
+        exist_t: "Ajouter à un album existant",
+        exist_d_manual: "Pistes individuelles ajoutées à la suite d'un album ou d'une compilation.",
+        exist_d_tool: "Un morceau isolé (featuring, invité) ajouté à une compilation existante.",
+        pick_t: "Choisir l'album de destination",
+        pick_sub: "La ou les pistes seront ajoutées à la fin de sa tracklist.",
+        pick_ph: "Rechercher un album, un artiste…",
+        pick_none: "Aucun album ne correspond.",
+        pick_err: "Impossible de charger la liste des albums.",
+        tracks_s: "piste", tracks_p: "pistes", unpublished: "Dépublié",
         manual_t: "Importer manuellement",
         manual_d: "Déposez des MP3 déjà découpés (ou un ZIP) et complétez les informations.",
         tool_t: "Depuis un lien (assisté par IA)",
@@ -265,7 +371,21 @@ const L2M = (function () {
         login: "Se connecter",
       },
       en: {
-        title: "Import an album", close: "Close",
+        title: "Import an album", close: "Close", back: "Back",
+        loading: "Loading…",
+        target_sub: "Do these tracks make a new album, or do they join one that is already online?",
+        new_t: "Create a new album",
+        new_d_manual: "A complete album from the files you upload.",
+        new_d_tool: "A whole concert, split track by track from the link.",
+        exist_t: "Add to an existing album",
+        exist_d_manual: "Individual tracks appended to an album or a compilation.",
+        exist_d_tool: "A single song (feature, guest) appended to an existing compilation.",
+        pick_t: "Choose the destination album",
+        pick_sub: "The track(s) will be appended to the end of its tracklist.",
+        pick_ph: "Search an album, an artist…",
+        pick_none: "No album matches.",
+        pick_err: "Could not load the album list.",
+        tracks_s: "track", tracks_p: "tracks", unpublished: "Unpublished",
         manual_t: "Import manually",
         manual_d: "Upload already-split MP3s (or a ZIP) and fill in the details.",
         tool_t: "From a link (AI-assisted)",

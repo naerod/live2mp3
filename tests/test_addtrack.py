@@ -257,3 +257,79 @@ def test_add_track_requires_gestionnaire(api):
                              "X-authentik-groups": "live2mp3-user"},
                     json={"url": VIDEO["webpage_url"], "title": "X"})
     assert r.status_code in (401, 403)
+
+
+# --- Dépôt de MP3 dans un album existant -----------------------------------
+
+def _make_mp3(path: Path, seconds: float = 2.0, title: str = "") -> Path:
+    """Petit MP3 réel (ffmpeg) — les tags sont relus par l'endpoint."""
+    import subprocess
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cmd = ["ffmpeg", "-y", "-f", "lavfi", "-i",
+           f"sine=frequency=440:duration={seconds}",
+           "-c:a", "libmp3lame", "-q:a", "9"]
+    if title:
+        cmd += ["-metadata", f"title={title}"]
+    cmd.append(str(path))
+    subprocess.run(cmd, check=True, capture_output=True)
+    return path
+
+
+def test_upload_appends_tracks_with_id3_titles(api, tmp_path):
+    client, project = api
+    slug = project.name
+    before = len(Manifest.load(project / "manifest.yaml").tracks)
+    a = _make_mp3(tmp_path / "up" / "01 - whatever.mp3", title="Empire State of Mind")
+    b = _make_mp3(tmp_path / "up" / "Bad_Habits_live.mp3")   # sans tag titre
+
+    with a.open("rb") as fa, b.open("rb") as fb:
+        r = client.post(f"/api/albums/{slug}/tracks/upload", headers=GEST,
+                        files=[("files", ("01 - whatever.mp3", fa, "audio/mpeg")),
+                               ("files", ("Bad_Habits_live.mp3", fb, "audio/mpeg"))])
+    assert r.status_code == 200, r.text
+    added = r.json()["added"]
+    assert [t["title"] for t in added] == ["Empire State of Mind", "Bad Habits live"]
+
+    tracks = Manifest.load(project / "manifest.yaml").tracks
+    assert len(tracks) == before + 2
+    assert tracks[-1]["source"]["file"] == "Bad_Habits_live.mp3"
+    assert tracks[-1]["source"]["added_by"] == "g"
+    assert tracks[-1]["start"] is None
+    for t in added:
+        assert (project / "build" / "audio" / t["file"]).exists()
+
+
+def test_upload_rejects_non_mp3_without_touching_the_album(api, tmp_path):
+    """Un dépôt refusé ne doit rien laisser derrière lui : les fichiers sont
+    d'abord écrits en zone de travail, le manifeste n'est touché qu'après."""
+    client, project = api
+    slug = project.name
+    before = Manifest.load(project / "manifest.yaml").data["tracks"]
+    ok = _make_mp3(tmp_path / "up" / "good.mp3", title="Good")
+    bad = tmp_path / "up" / "notes.txt"
+    bad.write_text("pas un mp3")
+
+    with ok.open("rb") as fo, bad.open("rb") as fb:
+        r = client.post(f"/api/albums/{slug}/tracks/upload", headers=GEST,
+                        files=[("files", ("good.mp3", fo, "audio/mpeg")),
+                               ("files", ("notes.txt", fb, "text/plain"))])
+    assert r.status_code == 400
+    after = Manifest.load(project / "manifest.yaml").data["tracks"]
+    assert after == before
+    assert not list((project / "build" / "audio").glob("*Good*"))
+
+
+def test_uploaded_track_survives_a_rerender(api, tmp_path):
+    """Même garde-fou que pour les pistes venues d'un lien : le MP3 déposé
+    n'a pas de timecodes d'album et serait purgé comme orphelin."""
+    client, project = api
+    up = _make_mp3(tmp_path / "up" / "guest.mp3", title="Guest Song")
+    with up.open("rb") as f:
+        r = client.post(f"/api/albums/{project.name}/tracks/upload", headers=GEST,
+                        files=[("files", ("guest.mp3", f, "audio/mpeg"))])
+    mp3 = project / "build" / "audio" / r.json()["added"][0]["file"]
+    assert mp3.exists()
+
+    render.run(project, video=False, force=True)
+
+    assert mp3.exists(), "le MP3 déposé a été purgé par le rendu"
