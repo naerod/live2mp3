@@ -1,4 +1,48 @@
 
+2026-08-03 : **Rendu MP4 découplé du rendu MP3** (preprod v1.15.37).
+Les 28 MP3 d'un concert sortent en quelques minutes, le MP4 demande 15 à 20 min
+de x264 : dans un seul job RQ, l'album audio n'était livré à personne avant la
+fin de la vidéo. Voir
+`workspace/debugging/2026-08-03_live2mp3-rendu-mp4-bloquant-et-faux-positif-session.md`.
+- **Deux natures de job** dans `renderqueue` : `render` (audio + tags + pochettes
+  + disque) et `video`. Identifiants RQ distincts et **clés d'état Redis
+  indexées par nature** (`l2m:{cancel,pause,job,pct}:<kind>:<slug>`) — sans quoi
+  le `finally` du job audio effaçait les métadonnées du job vidéo qu'il venait
+  d'enfiler. `enqueue_video` contourne volontairement le garde-fou anti-doublon :
+  le job audio est encore `started` quand il enfile sa suite.
+- Rendus audio **enfilés en tête** (`at_front`) : worker unique, un MP4 en
+  attente ne doit pas faire patienter l'audio d'un import suivant.
+  ⚠️ **Limite** : un MP4 *déjà en cours* retarde encore l'audio (pause possible
+  depuis la file). Correctif propre = 2e worker sur une file `video`, donc modif
+  de `docker-compose.yml` (patché localement sur CT110, cf. DEPLOY.md).
+- **Publication toujours manuelle** (arbitrage utilisateur) : stockage partagé
+  prod↔preprod, publier automatiquement rendrait public un album jamais relu et
+  le pousserait dans Finamp sous 10 min.
+- **Progression MP4 réelle** : `ffmpeg -progress pipe:1`, thread lecteur,
+  `out_time_ms` — ⚠️ en **microsecondes** malgré son nom. Publiée sur le pub/sub
+  *et* dans une clé `l2m:pct:` que lit `/api/render-queue` (la page brouillons
+  interroge sans flux ouvert).
+- ⚠️ **`render.run(video=False)` ne purge jamais `build/video`** : la phase 1
+  tourne ainsi et détruirait sinon le MP4 déjà encodé, sur le volume de prod.
+  Verrouillé par `test_audio_only_render_preserves_existing_mp4`.
+- `catalogue.list_drafts()` **inchangé** : le sens de « brouillon » (import
+  interrompu) est préservé, la phase 2 est portée par la file de rendu. La page
+  `/app/drafts` a deux sections : « Rendus en cours » (toujours présente, même
+  vide) puis « Brouillons ».
+- Notif `video_done` distincte de `render_done` ; entrée silencieuse « rendu
+  vidéo en cours » avec %. i18n FR/EN complet — la rubrique file d'attente de la
+  page brouillons n'avait **jamais** été traduite.
+- **Faux positif « Session expirée » corrigé** : `sessionAlive()` concluait sur
+  `authenticated`, faux dès que l'outpost preprod n'envoie pas les groupes
+  (défaut connu depuis le 2026-07-20). Il porte désormais sur l'identité, avec
+  2 échecs consécutifs avant d'alarmer.
+- **Bug latent** : `renderToast()` (social.js) référençait `T[LANG()]` au lieu de
+  `TXT` → `ReferenceError`, le toast de fin de rendu ne s'était jamais affiché.
+- Vérifié E2E réel sur preprod (audio prêt à 3 s, vidéo séparée finie à 66 s,
+  progression 5,3 → 97,5 % monotone, MP4 intact après un rendu audio forcé) +
+  contrôles Chromium (brouillons sombre/clair/EN, écran final, notification).
+  Projet de test entièrement purgé. 225 tests verts (+13).
+
 2026-07-31 : **Propagation pochette album → Jellyfin/Finamp** (prod v1.19.0,
 preprod v1.15.25). Incident : covers mises à jour sur albums publiés
 n'apparaissaient pas dans Finamp même en forçant la sync.
