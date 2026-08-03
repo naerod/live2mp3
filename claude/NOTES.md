@@ -1,3 +1,42 @@
+2026-08-03 (suite) : **Ajout d'une piste à un album existant depuis un lien**
+(preprod v1.20.4). Les deux parcours de création produisaient un album entier ;
+la compilation enrichie au fil de l'eau (« Live Crossovers ») n'était couverte
+par rien.
+- Backend `backend/addtrack.py` : `POST /api/tool/probe-track` (sonde seule, ni
+  LLM ni setlist.fm — un morceau unique ne les justifie pas) puis
+  `POST /api/albums/{slug}/tracks/from-url` (téléchargement, rognage, encodage
+  `libmp3lame -q:a 0`, tags, miniature en pochette de piste, refresh Jellyfin).
+  Exécution en thread du process API + suivi par sondage (`GET .../{token}`) :
+  yt-dlp dépasse la minute, une requête synchrone se ferait couper par
+  Cloudflare (100 s).
+- **Modèle** : la piste porte sa propre source (`track.source` : url, rognage,
+  auteur, date) au lieu de dépendre du master de l'album. D'où deux garde-fous,
+  sans lesquels la fonctionnalité détruisait du travail existant :
+  (1) `render._expected_filenames` ignorait les pistes sans timecodes → la purge
+  des orphelins aurait effacé le MP3 de la piste externe **à chaque re-rendu** ;
+  (2) `PUT /jobs/{slug}/setlist` remplace la liste ENTIÈRE par ce que l'éditeur
+  a produit — or l'éditeur ne connaît que le master : `preserve_external_tracks`
+  les recolle en fin de liste (avec renumérotation des pochettes de piste, index
+  unique (slug, track_n) → passage par des numéros négatifs).
+- Un ajout en échec retire son entrée du manifeste (pas de piste fantôme, qui
+  décalerait la numérotation ID3 de toutes les suivantes).
+- Front : panneau « Ajouter une piste depuis un lien » sur `/app/album/{slug}`
+  (destination sans ambiguïté, contrairement à l'outil de création qui aurait
+  demandé un sélecteur d'album). i18n FR/EN, thèmes clair/sombre vérifiés au
+  rendu. Repère 🔗 sur les pistes venues d'un lien — a nécessité d'exposer
+  `source` dans `GET /api/albums/{slug}` (l'API ne renvoyait que n/titre/artiste).
+- ⚠️ **CSS** : `label{flex-direction:column}` est global dans app.css — toute
+  case à cocher en ligne doit redéclarer `flex-direction:row`.
+- Tests : `tests/test_addtrack.py` (13 cas). Suite complète 243 passés,
+  1 échec **préexistant** (`test_t5_preanalyze::test_waveform_dat_format`,
+  vérifié identique sur la preprod non modifiée).
+- Validé de bout en bout sur un album jetable en preprod avec la vraie vidéo
+  Coldplay/Ed Sheeran : MP3 de 307,2 s (= durée exacte de la source), tags et
+  pochette de piste corrects. Album de test supprimé depuis.
+- ⚠️ **`live-crossovers` n'a pas été touché** : `PROJECTS_DIR` est le **même**
+  chemin en prod et en preprod (`/opt/data/live2mp3/projects`) — y ajouter une
+  piste depuis la preprod modifie l'album public. En attente d'autorisation.
+
 
 2026-08-03 (suite) : **L'éditeur n'enregistrait rien du tout** (preprod
 v1.15.38). Session complète de découpage perdue sur `linkin-park-2025-11-16`
