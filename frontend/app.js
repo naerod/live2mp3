@@ -575,11 +575,19 @@ function scheduleDraftSave(){
   clearTimeout(draftTimer);
   draftTimer=setTimeout(saveDraft,3000);
 }
-async function saveDraft(){
-  if(reedit||!slug||!EDIT.length)return;
-  // Le serveur refuse une piste sans titre ou à bornes inversées : tant que
-  // l'édition est dans un état intermédiaire, on garde juste la copie locale.
-  if(EDIT.some(t=>!t.title.trim()||t.end<=t.start))return;
+async function saveDraft(opts){
+  opts=opts||{};
+  if(reedit||!slug||!EDIT.length)return false;
+  // Le serveur refuse une piste sans titre ou à bornes inversées. On n'envoie
+  // donc pas, mais **on le dit** : cet abandon était muet, si bien qu'une seule
+  // piste sans titre suffisait à bloquer tous les enregistrements d'une session
+  // entière sans le moindre signal (2026-08-03, concert Linkin Park).
+  const noTitle=EDIT.some(t=>!t.title.trim());
+  const badTimes=EDIT.some(t=>t.end<=t.start);
+  if(noTitle||badTimes){
+    draftState("blocked",noTitle?"draft_blocked_title":"draft_blocked_times");
+    return false;
+  }
   // `n` est obligatoire côté serveur (SetlistTrackIn) : l'omettre faisait
   // échouer chaque autosave en 422, silencieusement. Même charge utile que le
   // bouton « Valider », artiste omis plutôt qu'envoyé vide.
@@ -591,6 +599,10 @@ async function saveDraft(){
   try{
     const r=await fetch(`/api/jobs/${slug}/setlist`,{method:"PUT",
       redirect:"manual",headers:{"Content-Type":"application/json"},
+      // `keepalive` : la requête survit à la navigation. Sans lui, quitter la
+      // page (clic sur le logo) annulait l'envoi en vol et perdait les
+      // dernières coupes — le cas exact rapporté le 2026-08-03.
+      keepalive:!!opts.flush,
       body:JSON.stringify({tracks})});
     // Distinguer les deux causes : une redirection ou un 401/403 = session
     // expirée ; tout autre code = refus applicatif. Les confondre affichait
@@ -598,21 +610,39 @@ async function saveDraft(){
     // croire à un simple souci d'authentification alors que rien ne
     // s'enregistrait.
     if(r.type==="opaqueredirect"||r.status===401||r.status===403){
-      showSessionBanner();draftState("err");return;
+      showSessionBanner();draftState("err");return false;
     }
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
       console.warn("brouillon non enregistré:",r.status,d.detail||d);
-      draftState("err");return;
+      draftState("err");return false;
     }
     hideSessionBanner();
     draftState("ok");
+    return true;
   }catch(e){draftState("err");/* réseau : la copie locale reste le filet */}
+  return false;
 }
+
+// Quitter la page ne doit plus rien perdre : le débounce de 3 s laissait
+// systématiquement une fenêtre pendant laquelle un clic sur le logo emportait
+// les dernières coupes. `pagehide` couvre la navigation et la fermeture ;
+// `visibilitychange` rattrape les cas où `pagehide` n'est pas émis (mobile).
+function flushDraftSave(){
+  if(reedit||!slug||!EDIT.length)return;
+  clearTimeout(draftTimer);
+  saveDraft({flush:true});
+}
+window.addEventListener("pagehide",flushDraftSave);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden")flushDraftSave();
+});
 
 // État visible de l'enregistrement. Un échec doit se voir : c'est l'absence de
 // signal qui a fait perdre une heure de découpage le 2026-08-02.
-function draftState(kind){
+// `blocked` = rien n'a été envoyé (état d'édition invalide) ; distinct d'un
+// échec réseau, et surtout jamais silencieux.
+function draftState(kind,reasonKey){
   const el=$("draft-saved");
   if(!el)return;
   const ic=el.querySelector(".material-symbols-outlined");
@@ -623,6 +653,10 @@ function draftState(kind){
     ic.textContent="cloud_done";
     if(tx)tx.textContent=T("draft_saved");
     draftState._hide=setTimeout(()=>el.classList.add("hidden"),2500);
+  }else if(kind==="blocked"){
+    el.classList.add("err");
+    ic.textContent="cloud_alert";
+    if(tx)tx.textContent=T(reasonKey||"draft_blocked_title");
   }else{
     el.classList.add("err");
     ic.textContent="cloud_off";
@@ -786,9 +820,15 @@ function buildEditRow(t,i){
     EDIT[i].title=e.target.value;
     if(peaksInstance){const s=peaksInstance.segments.getSegment("t"+i);
       if(s)s.update({labelText:(i+1)+". "+e.target.value});}
+    // Ces champs ne passent pas par commitEdit() (qui reconstruit les lignes et
+    // ferait perdre le focus en pleine frappe) : sans planification explicite,
+    // saisir un titre n'enregistrait rien. Combiné au garde-fou ci-dessous, qui
+    // bloque tant qu'une piste est sans titre, une piste ajoutée puis nommée
+    // laissait le brouillon définitivement non enregistré (2026-08-03).
+    scheduleDraftSave();
   });
   row.querySelector(".t-artist").addEventListener("input",e=>{
-    EDIT[i].artist=e.target.value;});
+    EDIT[i].artist=e.target.value;scheduleDraftSave();});
   // Clic sur un timecode → place le curseur d'écoute pile dessus (et recadre
   // la vue zoomée) pour vérifier la coupe, sans empêcher l'édition manuelle.
   const seekTo=sec=>{const a=$("ed-audio");a.currentTime=Math.max(0,sec);};
