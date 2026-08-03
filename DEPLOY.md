@@ -52,11 +52,23 @@
 - Routes : `/api/social/*` (API), `/u/{username}` (page profil), `/avatar/{username}`.
   Lectures publiques (identité optionnelle), écritures = `require_user` (401 si anonyme).
 
-### ⚠️ Promotion en prod — étape nginx OBLIGATOIRE (one-shot)
-Sur la prod, tout chemin non listé tombe dans `location /` qui **supprime** les
-en-têtes d'identité. Il faut donc ajouter un bloc **soft-auth** pour `/api/social/`
-dans le `server { server_name live2mp3.naerod.com; }` de `/opt/apps/nginx/nginx.conf`
-(avant de recharger nginx). `/u/` et `/avatar/` restent servis par `location /` (public).
+### ✅ Bloc nginx soft-auth `/api/social/` — DÉJÀ APPLIQUÉ (vérifié 2026-08-02)
+Le bloc est en place dans le `server { server_name live2mp3.naerod.com; }` de
+`/opt/apps/nginx/nginx.conf`. **Rien à faire lors des prochaines promotions.**
+Cette section était rédigée comme une étape à venir et n'avait jamais été mise à
+jour après son application : elle a fait annoncer à tort une action nécessaire.
+
+Vérifier avant d'affirmer quoi que ce soit sur ce point :
+```bash
+ssh root@192.168.1.110 'awk "/server_name live2mp3.naerod.com/,/^}/" /opt/apps/nginx/nginx.conf | grep -n "location.*social"'
+```
+
+La preprod n'a pas besoin de ce bloc : tout le domaine passe par `auth_request`
+dans `location /`, les en-têtes d'identité sont donc toujours présents.
+
+Contexte (pourquoi ce bloc existe) : sur la prod, tout chemin non listé tombe
+dans `location /` qui **supprime** les en-têtes d'identité. `/u/` et `/avatar/`
+restent servis par `location /` (public). Configuration en place :
 
 ```nginx
     # Social : soft-auth (lecture publique, l'app exige l'auth sur les écritures)
