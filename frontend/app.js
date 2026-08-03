@@ -569,11 +569,35 @@ function commitEdit(){
 // Exception : la ré-édition d'un album publié n'écrit rien tant que
 // l'utilisateur n'a pas validé — on ne modifie pas un album en ligne à chaque
 // glissement de marqueur. La copie locale suffit dans ce cas.
-let draftTimer=null;
-function scheduleDraftSave(){
+// Chaque modification déclenche son enregistrement (demande du 2026-08-03) :
+// un timecode changé, un cadenas, un ajout, une suppression, un marqueur glissé
+// sont tous des actions ponctuelles, enregistrées **immédiatement**. Le délai de
+// 3 s d'origine ne servait qu'à absorber les rafales, mais il laissait une
+// fenêtre pendant laquelle quitter la page perdait la dernière action.
+//
+// Seule exception : la frappe au clavier (titre, artiste), qui émet un
+// évènement par lettre. Enregistrer à chaque touche réécrirait le manifest
+// des dizaines de fois pour un seul mot, sur un stockage partagé avec la prod —
+// on attend donc une brève pause dans la saisie.
+const SAVE_NOW=0, SAVE_TYPING=700;
+let draftTimer=null, draftInFlight=false, draftDirty=false;
+function scheduleDraftSave(delay){
   if(reedit||!slug)return;
   clearTimeout(draftTimer);
-  draftTimer=setTimeout(saveDraft,3000);
+  draftTimer=setTimeout(runDraftSave,delay==null?SAVE_NOW:delay);
+}
+// Un enregistrement à la fois : sans ce verrou, glisser un marqueur émettrait
+// des requêtes concurrentes dont l'ordre d'arrivée n'est pas garanti — la plus
+// ancienne pourrait écraser la plus récente. Toute modification survenue
+// pendant l'envoi est reprise juste après.
+async function runDraftSave(){
+  if(draftInFlight){draftDirty=true;return;}
+  draftInFlight=true;
+  try{await saveDraft();}
+  finally{
+    draftInFlight=false;
+    if(draftDirty){draftDirty=false;scheduleDraftSave(SAVE_NOW);}
+  }
 }
 async function saveDraft(opts){
   opts=opts||{};
@@ -825,10 +849,10 @@ function buildEditRow(t,i){
     // saisir un titre n'enregistrait rien. Combiné au garde-fou ci-dessous, qui
     // bloque tant qu'une piste est sans titre, une piste ajoutée puis nommée
     // laissait le brouillon définitivement non enregistré (2026-08-03).
-    scheduleDraftSave();
+    scheduleDraftSave(SAVE_TYPING);
   });
   row.querySelector(".t-artist").addEventListener("input",e=>{
-    EDIT[i].artist=e.target.value;scheduleDraftSave();});
+    EDIT[i].artist=e.target.value;scheduleDraftSave(SAVE_TYPING);});
   // Clic sur un timecode → place le curseur d'écoute pile dessus (et recadre
   // la vue zoomée) pour vérifier la coupe, sans empêcher l'édition manuelle.
   const seekTo=sec=>{const a=$("ed-audio");a.currentTime=Math.max(0,sec);};
