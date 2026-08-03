@@ -1595,15 +1595,17 @@ def cancel_render(slug: str,
     Le ffmpeg courant est tué et son fichier partiel supprimé (cf.
     pipeline/render.py) : un rendu relancé ensuite repart proprement.
     """
-    state = renderqueue.cancel(slug)
+    kind = renderqueue.active_kind(slug)
+    state = renderqueue.cancel(slug, kind)
     if state == "none":
         raise HTTPException(404, "aucun rendu en cours pour cet album")
     if state in ("queued", "deferred"):
         # Retiré de la file : personne ne publiera l'évènement final, l'API
         # s'en charge pour que l'interface réagisse tout de suite.
-        progress.publish(slug, {"stage": "all", "status": "cancelled",
-                                "info": {}})
-    return {"ok": True, "was": state}
+        progress.publish(slug, {
+            "stage": "video_all" if kind == renderqueue.KIND_VIDEO else "all",
+            "status": "cancelled", "info": {}})
+    return {"ok": True, "was": state, "kind": kind}
 
 
 class QueueOrderIn(BaseModel):
@@ -1623,11 +1625,20 @@ def render_queue(identity: dict = Depends(require_gestionnaire)) -> dict:
             except Exception:
                 m = None
         album = (m or {}).get("album", {})
+        # Les formats décrivent ce que *ce* job produit : la phase 2 ne rend
+        # que le MP4, l'annoncer « mp3 + mp4 » laisserait croire que l'album
+        # audio n'est pas encore là alors qu'il est déjà écoutable.
+        kind = it.get("kind", renderqueue.KIND_RENDER)
+        if kind == renderqueue.KIND_VIDEO:
+            formats = ["mp4"]
+        else:
+            formats = ["mp3", "mp4"] if it.get("video") else ["mp3"]
         items.append({
             **it,
+            "kind": kind,
             "artist": album.get("artist", ""),
             "title": album.get("title", "") or it["slug"],
-            "formats": ["mp3", "mp4"] if it.get("video") else ["mp3"],
+            "formats": formats,
         })
     return {"items": items}
 
@@ -1645,13 +1656,15 @@ def pause_render(slug: str, paused: bool = True,
 
     Rien n'est perdu : le process reprend exactement où il s'était arrêté.
     """
-    if renderqueue.active_status(slug) is None:
+    kind = renderqueue.active_kind(slug)
+    if kind is None:
         raise HTTPException(404, "aucun rendu en cours pour cet album")
-    renderqueue.set_paused(slug, paused)
-    progress.publish(slug, {"stage": "render",
+    renderqueue.set_paused(slug, paused, kind)
+    progress.publish(slug, {"stage": "video" if kind == renderqueue.KIND_VIDEO
+                            else "render",
                             "status": "paused" if paused else "running",
                             "info": {"paused": paused}})
-    return {"ok": True, "paused": paused}
+    return {"ok": True, "paused": paused, "kind": kind}
 
 
 @app.get("/api/jobs/{slug}/events")

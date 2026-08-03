@@ -87,6 +87,12 @@ const I18N = {
     download:"Bundle ZIP",new_album:"Nouvel album",
     manage_album:"Gérer / publier",
     done_draft_note:"L'album est créé en mode dépublié : seuls les gestionnaires le voient. Vérifiez le résultat puis publiez-le depuis « Gérer / publier ».",
+    // Rendu vidéo de phase 2 : il continue après l'écran final.
+    video_running_title:"Rendu vidéo en cours",
+    video_queued_title:"Rendu vidéo en attente",
+    video_done_title:"Rendu vidéo terminé",
+    video_running_note:"Votre album audio est prêt : vous pouvez fermer cette page. Le MP4 se termine en arrière-plan et une notification vous préviendra.",
+    video_done_note:"Le fichier MP4 du concert complet est disponible dans l'album.",
     tracks_word:"pistes",
     err_generic:"Une erreur est survenue."},
   en:{app_title:"Album creator — from a link to a split concert",
@@ -172,6 +178,11 @@ const I18N = {
     download:"ZIP bundle",new_album:"New album",
     manage_album:"Manage / publish",
     done_draft_note:"The album was created unpublished: only managers can see it. Review the result, then publish it from “Manage / publish”.",
+    video_running_title:"Video render in progress",
+    video_queued_title:"Video render queued",
+    video_done_title:"Video render finished",
+    video_running_note:"Your audio album is ready — you can close this page. The MP4 finishes in the background and you'll get a notification.",
+    video_done_note:"The full-concert MP4 file is available in the album.",
     tracks_word:"tracks",
     err_generic:"Something went wrong."}
 };

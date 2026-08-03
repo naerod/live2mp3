@@ -26,6 +26,9 @@ STAGES = [
     "tags",
     "artwork",
     "disc",
+    # Rendu MP4, découplé de l'audio le 2026-08-03 : il s'exécute dans un job
+    # séparé, bien après que l'album audio est prêt, et a donc son propre état.
+    "video",
 ]
 
 VALID_TARGETS = {"data_disc", "audio_cd"}  # dvd_video hors V1

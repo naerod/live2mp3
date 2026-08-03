@@ -190,7 +190,8 @@ def notify_role(conn, *, recipient: str, actor: str, new_role: str,
     return True
 
 
-def notify_render_done(slug: str, recipient: str) -> bool:
+def notify_render_done(slug: str, recipient: str,
+                       kind: str = "render_done") -> bool:
     """Notifie la fin d'un rendu à celui qui l'a lancé.
 
     **Non désactivable** : c'est l'aboutissement d'une action explicite de
@@ -211,12 +212,22 @@ def notify_render_done(slug: str, recipient: str) -> bool:
             "INSERT INTO notifications(username, type, actor, reason_type, "
             "reason_id, reason_label, slug, title, subtitle, read, created_at) "
             "VALUES(?,?,?,?,?,?,?,?,?,0,?)",
-            (recipient, "render_done", recipient, "render",
+            (recipient, kind, recipient, "render",
              album.get("artist_id", "") or "", album.get("artist", ""),
              slug, album.get("title", "") or slug,
              album.get("artist", ""), _now()),
         )
     return True
+
+
+def notify_video_done(slug: str, recipient: str) -> bool:
+    """Fin du rendu MP4 (phase 2), notifiée à part.
+
+    Type distinct de `render_done` : quand elle arrive, l'album audio est déjà
+    livré et probablement écouté depuis un moment. Les confondre aurait annoncé
+    deux fois « votre album est prêt » pour un seul import.
+    """
+    return notify_render_done(slug, recipient, kind="video_done")
 
 
 def render_activity(username: str) -> list[dict]:
@@ -244,6 +255,10 @@ def render_activity(username: str) -> list[dict]:
                 album = {}
         out.append({
             "id": None,
+            # Nature du job (audio/vidéo) : la phase 2 tourne en fond alors que
+            # l'album est déjà écoutable, le libellé ne peut pas être le même.
+            "kind": it.get("kind", "render"),
+            "pct": it.get("pct"),
             "type": "render_running",
             "username": username,
             "actor": username,

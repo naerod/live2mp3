@@ -665,12 +665,21 @@ let sessionPoll=null;
 // `redirect:"manual"` : un 302 d'Authentik donne une réponse opaque
 // (type "opaqueredirect") au lieu d'être suivi en cross-origin — c'est le
 // signal d'expiration, sans dépendre du contenu de la réponse.
+// Le verdict porte sur la **session**, donc sur la présence d'une identité —
+// pas sur `authenticated`, qui exige en plus l'appartenance au groupe
+// `live2mp3-user`. L'outpost Authentik de la preprod ne transmet pas toujours
+// l'en-tête de groupes (constaté le 2026-07-20, revu le 2026-08-03) : le
+// bandeau « Session expirée » s'affichait alors que la session était valide et
+// que le lecteur audio fonctionnait — un faux positif à chaque sonde.
 async function sessionAlive(){
   try{
     const r=await fetch("/api/me",{redirect:"manual",cache:"no-store"});
     if(r.type==="opaqueredirect"||!r.ok)return false;
-    const d=await r.json().catch(()=>({}));
-    return !!d.authenticated;
+    const d=await r.json().catch(()=>null);
+    // Réponse non-JSON = page de login servie à la place de l'API : session
+    // bel et bien perdue, même si le code HTTP est 200.
+    if(!d)return false;
+    return !!(d.username||d.authenticated);
   }catch(e){return false;}
 }
 
@@ -712,11 +721,16 @@ function wireMediaResilience(){
   };
   // Sonde périodique : prévenir pendant que l'éditeur répond encore, plutôt
   // que de laisser l'utilisateur découvrir la panne sur un lecteur mort.
+  // Deux échecs consécutifs avant d'alarmer : une coupure réseau d'une seconde
+  // ou un aller-retour un peu long ne sont pas une session expirée, et le
+  // bandeau ne se retire qu'à la sonde suivante — le faux positif restait donc
+  // affiché une minute pour rien.
   clearInterval(sessionPoll);
+  let misses=0;
   sessionPoll=setInterval(async()=>{
     if($("step-editor").classList.contains("hidden"))return;
-    if(await sessionAlive())hideSessionBanner();
-    else showSessionBanner();
+    if(await sessionAlive()){misses=0;hideSessionBanner();}
+    else if(++misses>=2)showSessionBanner();
   },60000);
 }
 
@@ -1000,9 +1014,70 @@ async function finish(){
     applyI18n(LANG());
   }
   show("step-done");
+  watchVideoRender();
+}
+
+// --- Rendu vidéo de phase 2 (arrière-plan) --------------------------------
+// Depuis le découplage du 2026-08-03, l'écran final s'affiche dès que l'album
+// audio est prêt ; le MP4 continue dans un job séparé. On ne bloque donc plus
+// l'utilisateur, mais on lui montre où en est ce rendu — avec un vrai
+// pourcentage, lu sur la file (le worker y publie l'avancement ffmpeg réel).
+let videoPoll=null;
+function stopVideoWatch(){clearInterval(videoPoll);videoPoll=null;}
+
+async function videoJob(){
+  try{
+    const q=await(await fetch("/api/render-queue")).json();
+    return (q.items||[]).find(i=>i.slug===slug&&i.kind==="video")||null;
+  }catch(e){return undefined;}   // undefined = indéterminé (réseau), pas « fini »
+}
+
+function paintVideo(job){
+  const card=$("video-progress");
+  if(!card)return;
+  card.classList.remove("hidden","vp-queued","vp-running","vp-done");
+  const pctEl=card.querySelector(".vp-pct"),fill=$("vp-fill");
+  const lbl=card.querySelector(".vp-label");
+  if(!job){   // plus dans la file = terminé
+    card.classList.add("vp-done");
+    lbl.setAttribute("data-i18n","video_done_title");
+    card.querySelector(".vp-note").setAttribute("data-i18n","video_done_note");
+    fill.style.width="100%";pctEl.textContent="";
+    applyI18n(LANG());
+    return;
+  }
+  const queued=job.state==="queued",paused=job.state==="paused";
+  card.classList.add(queued?"vp-queued":"vp-running");
+  lbl.setAttribute("data-i18n",queued?"video_queued_title":"video_running_title");
+  card.querySelector(".vp-note").setAttribute("data-i18n","video_running_note");
+  // `pct` est nul tant que ffmpeg n'a pas émis sa première mesure (ouverture du
+  // fichier source) : afficher « 0 % » laisserait croire à un blocage.
+  const p=job.pct;
+  fill.style.width=(p==null?0:Math.round(p))+"%";
+  pctEl.textContent=paused?T("paused_word")
+    :(p==null?T("running_word"):Math.round(p)+" %");
+  applyI18n(LANG());
+}
+
+async function watchVideoRender(){
+  stopVideoWatch();
+  const first=await videoJob();
+  // Aucun rendu vidéo pour cet album (import audio-only, ou déjà terminé) :
+  // le bloc reste masqué plutôt que d'annoncer une fin qui n'a pas eu lieu.
+  if(!first)return;
+  paintVideo(first);
+  videoPoll=setInterval(async()=>{
+    if($("step-done").classList.contains("hidden")){stopVideoWatch();return;}
+    const job=await videoJob();
+    if(job===undefined)return;    // réseau : on garde le dernier état affiché
+    paintVideo(job);
+    if(!job)stopVideoWatch();
+  },4000);
 }
 
 $("btn-again").onclick=()=>{
+  stopVideoWatch();
+  $("video-progress").classList.add("hidden");
   slug=null;videoInfo=null;
   $("l-url").value="";
   history.replaceState(null,"",location.pathname);
@@ -1027,6 +1102,14 @@ $("btn-again").onclick=()=>{
       const q=await(await fetch("/api/render-queue")).json();
       queued=(q.items||[]).find(i=>i.slug===h)||null;
     }catch(e){}
+    if(queued&&queued.kind==="video"){
+      // Phase 2 seule : l'audio est déjà rendu, l'album est complet côté son.
+      // On revient donc à l'écran final (qui affiche l'avancement du MP4),
+      // surtout pas à l'écran de progression du rendu audio.
+      reedit=!!m.published;
+      await finish();
+      return;
+    }
     if(queued){
       currentPhase="render";
       reedit=!!m.published;

@@ -35,6 +35,25 @@
   .q-tag{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
     padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.09)}
   .q-tag-mp4{background:rgba(220,60,60,.24)}
+  .q-kind{font-size:12px;font-weight:600;color:var(--fg);opacity:.85}
+  .q-pct{font-variant-numeric:tabular-nums}
+  /* Avancement réel du job (ffmpeg) ; en indéterminé tant qu'aucune mesure
+     n'est encore remontée — un 0 % figé se lit comme un blocage. */
+  .q-bar{height:4px;margin-top:8px;border-radius:4px;overflow:hidden;
+    background:var(--border)}
+  .q-fill{height:100%;border-radius:4px;background:var(--accent);width:0;
+    transition:width .4s ease}
+  .q-indet .q-fill{width:40%;
+    animation:q-indet 1.15s cubic-bezier(.4,0,.6,1) infinite}
+  @keyframes q-indet{0%{margin-left:-40%}100%{margin-left:100%}}
+  .q-paused .q-fill{background:var(--muted)}
+  .q-none{display:flex;align-items:center;gap:8px;color:var(--muted);
+    font-size:13px;padding:10px 2px}
+  .q-none .material-symbols-outlined{font-size:19px;color:var(--ok)}
+  @media(prefers-reduced-motion:reduce){
+    .q-indet .q-fill{animation:none;width:100%;opacity:.5}
+    .q-running .q-ico{animation:none}
+  }
   /* Ligne cliquable = reprise de l'import ; la corbeille est un bouton à part
      (stopPropagation) pour qu'un clic destructeur ne soit jamais accidentel. */
   .dr-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;

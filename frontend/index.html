@@ -148,6 +148,17 @@
   <section id="step-done" class="card hidden">
     <h1><span class="material-symbols-outlined step-ico" style="color:var(--ok)">celebration</span><span data-i18n="done_title">Album créé</span></h1>
     <div id="summary"></div>
+    <!-- Phase 2 : le MP4 continue en arrière-plan. Bloc masqué tant qu'aucun
+         rendu vidéo n'est en file — un import audio-only n'en a jamais. -->
+    <div id="video-progress" class="vp-card hidden">
+      <div class="vp-head">
+        <span class="material-symbols-outlined vp-ico">movie</span>
+        <span class="vp-label" data-i18n="video_running_title">Rendu vidéo en cours</span>
+        <span class="vp-pct"></span>
+      </div>
+      <div class="stage-bar"><div class="stage-fill" id="vp-fill"></div></div>
+      <p class="vp-note" data-i18n="video_running_note">Votre album audio est prêt : vous pouvez fermer cette page. Le MP4 se termine en arrière-plan et une notification vous préviendra.</p>
+    </div>
     <div class="actions" style="margin-top:16px;flex-wrap:wrap">
       <a id="btn-album" class="primary" href="#"><span class="material-symbols-outlined">library_music</span> <span data-i18n="view_album">Voir l'album</span></a>
       <a id="btn-manage" class="icon-btn" href="#"><span class="material-symbols-outlined">settings</span> <span data-i18n="manage_album">Gérer / publier</span></a>

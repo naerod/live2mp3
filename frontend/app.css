@@ -93,6 +93,24 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 @media(prefers-reduced-motion:reduce){
   .stages li.indet .stage-fill{animation:none;width:100%;opacity:.5}
 }
+/* Rendu vidéo de phase 2 sur l'écran final : l'album audio est déjà livré,
+   ce bloc informe sans rien bloquer. Sa barre réutilise .stage-bar/.stage-fill
+   mais hors de la liste .stages, d'où l'affichage forcé. */
+.vp-card{margin-top:18px;padding:14px 16px;border-radius:12px;
+  border:1px solid var(--border);background:var(--card)}
+.vp-card .stage-bar{display:block;margin-top:12px}
+.vp-head{display:flex;align-items:center;gap:9px}
+.vp-ico{color:var(--accent);font-size:22px}
+.vp-card.vp-queued .vp-ico,.vp-card.vp-running .vp-ico{
+  animation:l2m-vp-pulse 1.8s ease-in-out infinite}
+.vp-card.vp-done .vp-ico{color:var(--ok);animation:none}
+.vp-card.vp-done .stage-fill{background:var(--ok)}
+@keyframes l2m-vp-pulse{50%{opacity:.45}}
+.vp-label{font-weight:600;font-size:14.5px}
+.vp-pct{margin-left:auto;font-size:13px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.vp-note{margin:10px 0 0;font-size:12.5px;color:var(--muted);line-height:1.5}
+@media(prefers-reduced-motion:reduce){.vp-ico{animation:none!important}}
 #peaks-container{border:1px solid var(--border);border-radius:12px;overflow:hidden}
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}
