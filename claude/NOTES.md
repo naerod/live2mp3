@@ -35,6 +35,29 @@ v1.15.38). Session complète de découpage perdue sur `linkin-park-2025-11-16`
   `localStorage`, elle ne peut pas être posée après chargement comme le thème ;
   le sélecteur est dans le menu avatar, cliquable en deux temps et fragile).
 
+2026-08-03 : **PROD v1.20.0** — promotion de toute la ligne preprod v1.15.26 →
+v1.15.41 (37 commits, 2823 lignes). Contenu : découplage du rendu MP4, rendu
+dans un `.part`, avancement par étape, correctifs d'enregistrement de l'éditeur,
+portée d'environnement (`origin_env`), MP4 unique par concert, revue de code.
+- Prérequis vérifiés avant promotion (tous présents dans le `.env` prod) :
+  `JELLYFIN_API_KEY`, `SETLISTFM_API_KEY`, `AUTHENTIK_URL`,
+  `AUTHENTIK_API_TOKEN`, `DEEPSEEK_API_KEY`, `PROJECTS_DIR`.
+  `ENV_SUFFIX` vide est **normal** en prod (conteneurs `live2mp3-app`) : le
+  compose l'interpole sans `:?`.
+- **Aucune étape nginx** : le découplage n'ajoute aucune route
+  (`/api/render-queue`, `/api/drafts`, `/app/drafts` existaient déjà).
+- Après déploiement : 24 albums toujours visibles (le filtre `hidden_by_env`
+  ignore les manifests sans `origin_env`, donc aucun album historique masqué),
+  vitrine/preprod/dorianjulien/naerod/hub tous en 200.
+- ⚠️ **Fausse alerte de ma part** : `linkin-park-2025-11-16` apparaissait en prod
+  avec `origin_env` absent et `published: true` — j'y ai vu une exposition
+  accidentelle et j'ai rétabli `published: false` + `origin_env: preprod`.
+  C'était en réalité l'utilisateur qui venait de publier **et** de promouvoir
+  l'album (`PATCH /published` puis `POST /promote` dans les logs preprod).
+  État remis comme il l'avait laissé. **Leçon** : avant de « corriger » un état
+  surprenant sur des données partagées, lire les journaux d'accès — une écriture
+  légitime concurrente est plus probable qu'un bug, et l'annuler est destructeur.
+
 2026-08-03 (suite 2) : **Avancement par étape + rendu dans un `.part`**
 (preprod v1.15.41).
 - **v1.15.40** — le job audio ne publiait aucun avancement (seul le job vidéo le
