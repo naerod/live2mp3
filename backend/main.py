@@ -760,7 +760,13 @@ def album_detail(slug: str,
                               or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
         "per_track_covers": bool(album.get("per_track_covers", False)),
-        "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
+        # `source` (piste ajoutée depuis un lien) est exposée pour que la page
+        # de gestion puisse la signaler : rien ne distingue sinon une
+        # compilation d'un concert découpé.
+        "tracks": [{"n": t.get("n"), "title": t.get("title"),
+                    **({} if not t.get("artist") else {"artist": t.get("artist")}),
+                    **({} if not t.get("source") else {"source": t.get("source")})}
+                   for t in m.tracks],
     }
 
 
