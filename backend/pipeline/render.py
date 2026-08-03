@@ -174,9 +174,21 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path,
     ], cancel, paused, on_seconds)
 
 
+def is_external(track: dict) -> bool:
+    """Piste apportée par `addtrack` : elle a sa propre source vidéo et son
+    MP3 est déjà produit, elle ne se découpe pas depuis le master de l'album."""
+    return bool(track.get("source"))
+
+
 def _expected_filenames(m: Manifest, ext: str) -> set[str]:
     names = set()
     for track in m.tracks:
+        # Une piste externe n'a pas de timecodes d'album, mais son fichier
+        # existe bel et bien : sans cette exception la purge des orphelins
+        # l'effacerait au premier re-rendu de l'album (cf. addtrack.py).
+        if is_external(track):
+            names.add(m.track_filename(track, ext))
+            continue
         if track.get("start") is None or track.get("end") is None:
             continue
         names.add(m.track_filename(track, ext))
@@ -259,8 +271,11 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
     audio_dir = project_dir / "build" / "audio"
     video_dir = project_dir / "build" / "video"
 
+    # Les pistes externes sont exclues du découpage : leur audio ne vient pas
+    # du master (elles n'ont d'ailleurs pas de timecodes d'album).
     todo = [t for t in m.tracks
-            if t.get("start") is not None and t.get("end") is not None]
+            if not is_external(t)
+            and t.get("start") is not None and t.get("end") is not None]
     total = len(todo)
 
     rendered = {"audio": [], "video": []}

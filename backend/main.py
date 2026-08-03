@@ -48,6 +48,8 @@ from .auth import (
     roles,
 )
 from .db import get_conn, init_db
+from . import addtrack
+from .addtrack import router as addtrack_router
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
@@ -115,6 +117,7 @@ app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
 app.include_router(import_router)
+app.include_router(addtrack_router)
 
 # Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
 app.include_router(linktool.router)
@@ -1399,7 +1402,7 @@ def update_setlist(slug: str, payload: SetlistIn,
         if t.end <= t.start:
             raise HTTPException(400, f"piste « {t.title} » : fin avant début")
     m = Manifest.load(path)
-    m.data["tracks"] = [{
+    cut_tracks = [{
         "n": i,
         "title": t.title.strip(),
         **({"artist": t.artist.strip()} if t.artist and t.artist.strip() else {}),
@@ -1407,8 +1410,13 @@ def update_setlist(slug: str, payload: SetlistIn,
         "end": float(t.end),
         "locked": True,
     } for i, t in enumerate(tracks, start=1)]
+    # L'éditeur ne voit que le découpage du master : les pistes ajoutées
+    # depuis un lien (addtrack) sont recollées en fin de liste, sinon cette
+    # écriture les effacerait purement et simplement.
+    m.data["tracks"] = addtrack.preserve_external_tracks(slug, m, cut_tracks)
     m.data["auto_setlist"] = False
     m.save()
+    _rename_audio_files(slug, m)
     return {"ok": True, "tracks": len(m.tracks)}
 
 
