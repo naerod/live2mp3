@@ -45,6 +45,27 @@
 - `deploy-preprod` bump patch, commit `Release vX.Y.Z`, pousse sur `preprod`.
 - `deploy-prod` merge `preprod→main`, bump minor, crée tag git `vX.Y.Z`, pousse.
 
+### ⚠️ Réaligner la preprod après chaque promotion
+La promotion bump le **minor** côté prod sans toucher au `VERSION` de la branche
+`preprod` : les deux lignes divergent d'une version mineure à chaque fois. Non
+corrigée, la dérive s'accumule — constaté le 2026-08-03, prod en **v1.19.0**
+face à une preprod encore en **v1.15.41** après une dizaine de promotions, au
+point qu'on ne pouvait plus dire au badge près si la preprod était en avance ou
+en retard sur la prod.
+
+**Juste après un `deploy-prod`**, replacer la preprod sur la nouvelle ligne :
+
+```bash
+cd ~/workspace/live2mp3 && git checkout preprod && echo "<version prod>" > VERSION
+```
+
+puis commiter, pousser et redéployer la preprod (le script portera le patch à
+`.1`). La preprod doit toujours se lire comme « la prod, plus les patches en
+cours de validation ».
+
+Le script `deploy-prod` retient déjà `max(VERSION prod, VERSION preprod)` avant
+de bumper : une preprod en avance ne casse donc jamais la numérotation prod.
+
 ## Système social (profils / favoris / commentaires)
 - Base **SQLite** dédiée : `projects/.l2m-social/<APP_ENV>/live2mp3.db` (+ `avatars/`).
   Stockée sous le volume `projects` déjà monté → **aucune modif de docker-compose**.
