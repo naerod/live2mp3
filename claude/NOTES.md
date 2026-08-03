@@ -1,4 +1,32 @@
 
+2026-08-03 (suite) : **L'éditeur n'enregistrait rien du tout** (preprod
+v1.15.38). Session complète de découpage perdue sur `linkin-park-2025-11-16`
+(32 pistes au dixième). Deuxième perte en deux jours ; le correctif du 08-02
+(`n` manquant) n'avait traité qu'une cause sur quatre. Voir
+`workspace/debugging/2026-08-03_live2mp3-editeur-brouillon-jamais-enregistre.md`.
+- **Trois défauts cumulés** : (1) le garde-fou de `saveDraft` abandonnait **en
+  silence** dès qu'une piste était sans titre — blocage portant sur la setlist
+  ENTIÈRE ; (2) une piste ajoutée naît `title:""`, créant donc aussitôt cet
+  état ; (3) saisir le titre ne planifiait aucun enregistrement (titre/artiste
+  ne passent pas par `commitEdit()`, qui reconstruit les lignes et ferait perdre
+  le focus) → nommer la piste ne débloquait rien ; (4) aucune purge du débounce
+  de 3 s au départ de la page.
+- Correctifs : saisie titre/artiste → `scheduleDraftSave()` ; état `blocked`
+  visible (`cloud_alert` + cause nommée, FR/EN) ; `flushDraftSave()` sur
+  `pagehide`/`visibilitychange` avec `keepalive:true` (sinon le navigateur
+  annule la requête en vol pendant la navigation).
+- ⚠️ **Piège de reproduction** : `commitEdit()` **trie** `EDIT` par `start` — une
+  piste ajoutée lecteur à 0 s remonte en 1re position. Viser « la dernière ligne
+  du DOM » écrase le titre d'une autre piste et fait croire que le correctif ne
+  marche pas. Cibler la ligne au titre vide.
+- Vérifié par reproduction Chromium avant/après (0 PUT → PUT 200 à chaque étape).
+- **Données remédiées** : les 32 timecodes de l'utilisateur réinjectés depuis ses
+  captures via `PUT /setlist`, chaînage fin→début vérifié sur les 32 pistes,
+  2 h 02 min 43,74 s. Album toujours non publié.
+- `tools/webshot/measure.mjs` : nouvelle option `--lang` (la langue vit dans
+  `localStorage`, elle ne peut pas être posée après chargement comme le thème ;
+  le sélecteur est dans le menu avatar, cliquable en deux temps et fragile).
+
 2026-08-03 : **Rendu MP4 découplé du rendu MP3** (preprod v1.15.37).
 Les 28 MP3 d'un concert sortent en quelques minutes, le MP4 demande 15 à 20 min
 de x264 : dans un seul job RQ, l'album audio n'était livré à personne avant la
