@@ -505,6 +505,9 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .imp-choice-back{position:absolute;top:14px;left:14px;margin:0;font-size:13px}
 .imp-choice-back+.imp-choice-h{margin-top:34px}
 .imp-choice-sub{margin:0 0 16px;font-size:13.5px;color:var(--muted);line-height:1.5}
+/* Étape « où ajouter » : deux choix seulement, l'icône porte le sens. */
+.imp-grid-big .imp-card{padding:26px 22px;gap:10px}
+.imp-grid-big .imp-card-ic{font-size:46px;margin-bottom:6px}
 .imp-pick-search{display:flex;align-items:center;gap:8px;padding:0 12px;
   border:1px solid var(--border);border-radius:12px;background:var(--bg)}
 .imp-pick-search .material-symbols-outlined{font-size:20px;color:var(--muted)}

@@ -215,8 +215,8 @@ const L2M = (function () {
       const isTool = mode === "tool";
       box.innerHTML = chrome(isTool ? tx.tool_t : tx.manual_t, `
         <p class="imp-choice-sub">${tx.target_sub}</p>
-        <div class="imp-choice-grid">
-          ${card("new", "album", tx.new_t, isTool ? tx.new_d_tool : tx.new_d_manual)}
+        <div class="imp-choice-grid imp-grid-big">
+          ${card("new", "library_music", tx.new_t, isTool ? tx.new_d_tool : tx.new_d_manual)}
           ${card("existing", "playlist_add", tx.exist_t, isTool ? tx.exist_d_tool : tx.exist_d_manual)}
         </div>`, stepSource);
       wire(stepSource);
