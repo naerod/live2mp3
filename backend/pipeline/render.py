@@ -129,7 +129,9 @@ def render_audio(master_wav: Path, start: float, end: float, out: Path,
         "ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{duration:.3f}",
         "-i", str(master_wav),
         "-c:a", "libmp3lame", "-q:a", "0",
-        str(out),
+        # Format imposé : le rendu écrit d'abord dans un `<nom>.mp3.part`, dont
+        # l'extension ne dit rien à ffmpeg (cf. _render_or_cleanup).
+        "-f", "mp3", str(out),
     ], cancel, paused)
 
 
@@ -167,7 +169,8 @@ def render_video(master_mkv: Path, start: float, end: float, out: Path,
         "-c:v", VIDEO_CODEC, "-crf", VIDEO_CRF, "-preset", VIDEO_PRESET,
         "-c:a", "aac", "-b:a", "256k",
         "-movflags", "+faststart",
-        str(out),
+        # Idem audio : la sortie est un `<nom>.mp4.part` pendant l'encodage.
+        "-f", "mp4", str(out),
     ], cancel, paused, on_seconds)
 
 
@@ -197,14 +200,32 @@ def _render_or_cleanup(fn, src: Path, start, end, out: Path,
                        cancel: Callable[[], bool] | None,
                        paused: Callable[[], bool] | None = None,
                        **kw) -> None:
-    """Un ffmpeg tué laisse un fichier tronqué : sans ce nettoyage, le stage
-    étant idempotent par nom de fichier, un rendu relancé après annulation
-    conserverait la piste incomplète."""
+    """Rend dans un fichier temporaire, puis le met en place d'un seul geste.
+
+    Le stage est idempotent par nom de fichier : un fichier partiel portant le
+    nom final serait pris pour un rendu abouti et **jamais** réencodé. C'est ce
+    qui s'est produit le 2026-08-03 : un redéploiement a recréé le conteneur du
+    worker en plein encodage, laissant un MP4 tronqué de 744 Mo sous son nom
+    définitif — une relance l'aurait servi comme vidéo finale.
+
+    Une annulation propre nettoyait bien son fichier, mais un `SIGKILL` (docker,
+    OOM, redémarrage de l'hôte) ne laisse aucune chance de le faire. D'où le
+    `.part` : le nom final n'apparaît qu'une fois l'encodage terminé, et tout
+    résidu `.part` est balayé par la purge des orphelins au rendu suivant.
+    """
+    # Le nom temporaire ne se termine **pas** par l'extension du média : sinon
+    # les `glob("*.mp3")` du catalogue le compteraient comme une piste rendue
+    # (un résidu suffirait à sortir l'album des brouillons). ffmpeg déduisant le
+    # conteneur de l'extension, `render_audio`/`render_video` lui imposent leur
+    # format explicitement — c'est la contrepartie de ce choix.
+    part = out.with_name(out.name + ".part")
+    part.unlink(missing_ok=True)
     try:
-        fn(src, float(start), float(end), out, cancel, paused, **kw)
-    except Cancelled:
-        out.unlink(missing_ok=True)
+        fn(src, float(start), float(end), part, cancel, paused, **kw)
+    except BaseException:
+        part.unlink(missing_ok=True)
         raise
+    os.replace(part, out)
 
 
 def video_filename(m: Manifest, project_slug: str) -> str:

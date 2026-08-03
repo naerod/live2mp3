@@ -69,6 +69,45 @@ def test_video_only_does_not_purge_audio_orphans(synth_project):
     assert len(list((synth_project / "build" / "audio").glob("*.mp3"))) == 4
 
 
+# --- Un rendu interrompu ne doit rien laisser sous le nom final -------------
+
+def test_killed_render_leaves_no_file_under_final_name(synth_project, monkeypatch):
+    """Le stage est idempotent par nom de fichier : un fichier partiel portant
+    le nom définitif serait pris pour un rendu abouti et jamais réencodé.
+
+    Cas réel du 2026-08-03 : un redéploiement a recréé le conteneur du worker
+    en plein encodage, laissant un MP4 tronqué de 744 Mo sous son nom final.
+    Une annulation propre nettoie son fichier, mais un SIGKILL n'en laisse pas
+    l'occasion — d'où le rendu dans un `.part` promu seulement à la fin."""
+    from backend.pipeline import render as R
+
+    def _die(src, start, end, out, cancel=None, paused=None, **kw):
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"\x00" * 1024)      # encodage entamé...
+        raise KeyboardInterrupt("worker tué")  # ...puis process tué
+
+    monkeypatch.setattr(R, "render_video", _die)
+    with pytest.raises(KeyboardInterrupt):
+        R.run(synth_project, video=True, audio=False)
+
+    video_dir = synth_project / "build" / "video"
+    assert list(video_dir.glob("*.mp4")) == []
+    assert list(video_dir.glob("*.part")) == []
+
+
+def test_leftover_part_file_is_purged_by_next_render(synth_project):
+    """Un `.part` résiduel (worker tué sans pouvoir nettoyer) ne doit pas
+    s'accumuler : la purge des orphelins le balaie au rendu suivant."""
+    video_dir = synth_project / "build" / "video"
+    video_dir.mkdir(parents=True, exist_ok=True)
+    (video_dir / "vieux-restant.mp4.part").write_bytes(b"\x00" * 512)
+
+    render.run(synth_project, video=True, audio=False)
+
+    assert list(video_dir.glob("*.part")) == []
+    assert len(list(video_dir.glob("*.mp4"))) == 1
+
+
 # --- Progression réelle du MP4 ---------------------------------------------
 
 def test_video_render_reports_real_progress(synth_project):
