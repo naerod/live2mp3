@@ -29,6 +29,10 @@
       q_err: "Action impossible",
       q_kind_audio: "Album audio", q_kind_video: "Rendu vidéo",
       q_empty: "Aucun rendu en cours.",
+      q_step: "Étape", q_open: "Voir le détail du rendu",
+      qs_render: "Découpe et encodage des pistes", qs_tags: "Métadonnées MP3",
+      qs_artwork: "Pochettes PDF", qs_disc: "Image disque",
+      qs_video: "Ré-encodage de la vidéo",
     },
     en: {
       back: "Back", title: "Drafts",
@@ -57,6 +61,10 @@
       q_err: "Action failed",
       q_kind_audio: "Audio album", q_kind_video: "Video render",
       q_empty: "No render in progress.",
+      q_step: "Step", q_open: "View render details",
+      qs_render: "Cutting & encoding tracks", qs_tags: "MP3 metadata",
+      qs_artwork: "PDF artwork", qs_disc: "Disc image",
+      qs_video: "Video re-encoding",
     },
   };
   const LANG = () => localStorage.getItem("l2m-lang") || "fr";
@@ -136,18 +144,26 @@
     // laissait croire qu'il restait indisponible pendant tout l'encodage.
     const video = it.kind === "video";
     const kindLbl = video ? t("q_kind_video") : t("q_kind_audio");
-    // Progression réelle (ffmpeg) quand le worker en publie une ; sinon barre
-    // indéterminée — un « 0 % » figé se lit comme un blocage.
+    // Étape en cours (« Étape 2/4 · Métadonnées MP3 ») : sans elle, une barre
+    // seule ne dit pas ce que la machine est en train de faire.
+    const st2 = it.step;
+    const stageTxt = st2
+      ? `${t("q_step")} ${st2.index}/${st2.total} · ${t("qs_" + st2.stage)}`
+      : "";
+    // Progression réelle (ffmpeg / compteur de pistes) quand le worker en
+    // publie une ; sinon barre indéterminée — un « 0 % » figé se lit comme un
+    // blocage.
     const p = it.pct;
     const bar = active ? `<div class="q-bar${p == null ? " q-indet" : ""}">
         <div class="q-fill" style="${p == null ? "" : `width:${Math.round(p)}%`}"></div>
       </div>` : "";
     return `<div class="q-row q-${it.state}" data-slug="${esc(it.slug)}" data-kind="${esc(it.kind || "render")}" draggable="${!active}">
       <span class="material-symbols-outlined q-ico">${active ? (video ? "movie" : "sync") : "schedule"}</span>
-      <span class="q-body">
+      <span class="q-body q-open" role="button" tabindex="0" title="${esc(t("q_open"))}">
         <span class="q-title">${esc(it.artist || "")}${it.artist ? " — " : ""}${esc(it.title || it.slug)}</span>
         <span class="q-meta"><span class="q-state">${esc(st)}</span>
           <span class="q-kind">${esc(kindLbl)}</span>${tags}
+          ${stageTxt ? `<span class="q-stage">${esc(stageTxt)}</span>` : ""}
           ${active && p != null ? `<span class="q-pct">${Math.round(p)} %</span>` : ""}</span>
         ${bar}
       </span>
@@ -186,6 +202,17 @@
     const key = (i) => `${i.slug}|${i.kind || "render"}`;
     const byId = Object.fromEntries(items.map(i => [key(i), i]));
     const of = (b) => byId[`${b.dataset.slug}|${b.closest(".q-row").dataset.kind}`] || {};
+    // Rouvrir le détail du rendu. Seul le corps de la ligne est cliquable, pas
+    // la ligne entière : pause et arrêt sont des boutons voisins, et un clic
+    // destructeur ne doit jamais partir d'un geste de navigation.
+    document.querySelectorAll(".q-open").forEach(body => {
+      const slug = body.closest(".q-row").dataset.slug;
+      const open = () => { location.href = `/app#${encodeURIComponent(slug)}`; };
+      body.addEventListener("click", open);
+      body.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+    });
     document.querySelectorAll(".q-pause").forEach(b => b.addEventListener("click", async () => {
       const slug = b.dataset.slug;
       const want = of(b).state !== "paused";

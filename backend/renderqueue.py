@@ -173,6 +173,32 @@ def clear_pct(slug: str, kind: str = KIND_RENDER) -> None:
     conn().delete(_key("pct", slug, kind))
 
 
+def set_step(slug: str, step: dict, kind: str = KIND_RENDER) -> None:
+    """Étape courante du job : `{stage, index, total, pct}`.
+
+    Doublon assumé du flux SSE de `progress.py` : la page des brouillons
+    interroge `/api/render-queue` toutes les 5 s sans maintenir de flux ouvert,
+    elle a besoin d'un état lisible d'un seul coup plutôt que d'un journal à
+    rejouer.
+    """
+    try:
+        conn().set(_key("step", slug, kind), json.dumps(step), ex=META_TTL)
+    except redis.RedisError:
+        pass
+
+
+def get_step(slug: str, kind: str = KIND_RENDER) -> dict | None:
+    try:
+        raw = conn().get(_key("step", slug, kind))
+        return json.loads(raw) if raw else None
+    except (redis.RedisError, ValueError):
+        return None
+
+
+def clear_step(slug: str, kind: str = KIND_RENDER) -> None:
+    conn().delete(_key("step", slug, kind))
+
+
 # --- Métadonnées d'affichage ----------------------------------------------
 
 def set_meta(slug: str, meta: dict, kind: str = KIND_RENDER) -> None:
@@ -363,11 +389,12 @@ def listing() -> list[dict]:
     for slug, kind in _started_jobs():
         meta = get_meta(slug, kind)
         meta.update({"slug": slug, "kind": kind, "pct": get_pct(slug, kind),
+                     "step": get_step(slug, kind),
                      "state": "paused" if is_paused(slug, kind) else "running"})
         out.append(meta)
     for slug, kind in _queued_jobs():
         meta = get_meta(slug, kind)
-        meta.update({"slug": slug, "kind": kind, "pct": None,
+        meta.update({"slug": slug, "kind": kind, "pct": None, "step": None,
                      "state": "queued"})
         out.append(meta)
     return out

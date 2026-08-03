@@ -243,6 +243,63 @@ def test_render_queue_audio_job_announces_both_formats(api, monkeypatch):
     assert row["formats"] == ["mp3", "mp4"]
 
 
+# --- Avancement par étape (barre de la page brouillons) ---------------------
+
+def test_step_progress_is_monotonic_across_stages():
+    """La barre ne doit jamais reculer d'une étape à la suivante, et l'étape
+    est numérotée pour l'affichage « Étape 2/4 »."""
+    from backend.jobs import _step_progress
+
+    seq = [
+        _step_progress("render", "running", {"pct": 0}),
+        _step_progress("render", "running", {"pct": 50}),
+        _step_progress("render", "done", {}),
+        _step_progress("tags", "running", {}),
+        _step_progress("tags", "done", {}),
+        _step_progress("artwork", "done", {}),
+        _step_progress("disc", "done", {}),
+    ]
+    pcts = [s["pct"] for s in seq]
+    assert pcts == sorted(pcts)
+    assert pcts[0] == 0 and pcts[-1] == 100
+    assert seq[0]["index"] == 1 and seq[0]["total"] == 4
+    assert seq[3]["index"] == 2
+    assert seq[3]["stage"] == "tags"
+
+
+def test_encoding_stage_dominates_the_bar():
+    """La découpe/encodage occupe la quasi totalité du temps réel : à poids
+    égaux la barre resterait sous 25 % pendant tout le rendu puis sauterait à
+    100 %, donnant l'impression de blocage que cette barre doit dissiper."""
+    from backend.jobs import _step_progress
+
+    assert _step_progress("render", "running", {"pct": 50})["pct"] > 40
+    assert _step_progress("render", "done", {})["pct"] > 85
+
+
+def test_step_progress_ignores_unknown_stages():
+    """Les étapes de préparation (téléchargement, analyse IA) ne font pas
+    partie de ce job : elles ne doivent pas perturber la barre."""
+    from backend.jobs import _step_progress
+
+    assert _step_progress("download", "running", {"pct": 30}) is None
+    assert _step_progress("ai_markers", "done", {}) is None
+
+
+def test_render_queue_exposes_step(api, monkeypatch):
+    c, projects = api
+    slug = _make_project(c, projects, with_video=False)
+    monkeypatch.setattr(renderqueue, "listing", lambda: [
+        {"slug": slug, "kind": renderqueue.KIND_RENDER, "state": "running",
+         "video": False, "pct": 44.0, "requested_by": "g",
+         "step": {"stage": "render", "index": 1, "total": 4, "pct": 44.0}},
+    ])
+    row = c.get("/api/render-queue", headers=GEST).json()["items"][0]
+    assert row["step"]["stage"] == "render"
+    assert row["step"]["index"] == 1
+    assert row["step"]["total"] == 4
+
+
 # --- Notification dédiée ----------------------------------------------------
 
 def test_video_done_notification_is_a_distinct_type(api):

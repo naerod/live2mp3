@@ -123,7 +123,15 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
 
     project_dir = _Path(PROJECTS_DIR) / slug
     requested_by = renderqueue.get_meta(slug).get("requested_by", "")
-    cb = progress.make_cb(slug)
+    publish = progress.make_cb(slug)
+
+    def cb(stage: str, status: str, info: dict) -> None:
+        publish(stage, status, info)
+        step = _step_progress(stage, status, info)
+        if step:
+            renderqueue.set_step(slug, step, renderqueue.KIND_RENDER)
+            renderqueue.set_pct(slug, step["pct"], renderqueue.KIND_RENDER)
+
     try:
         run_render_pipeline(
             project_dir, media=media, gap_seconds=gap, video=False,
@@ -181,6 +189,8 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
     finally:
         renderqueue.clear_cancel(slug)
         renderqueue.set_paused(slug, False)
+        renderqueue.clear_pct(slug)
+        renderqueue.clear_step(slug)
         renderqueue.clear_meta(slug)
 
 
@@ -206,7 +216,10 @@ def render_video_job(*, slug: str, republish: bool) -> dict:
         # des brouillons interroge sans maintenir de flux ouvert.
         progress.publish(slug, {"stage": stage, "status": status, "info": info})
         if "pct" in info:
-            renderqueue.set_pct(slug, float(info["pct"]), KIND)
+            pct = float(info["pct"])
+            renderqueue.set_pct(slug, pct, KIND)
+            renderqueue.set_step(slug, {"stage": "video", "index": 1,
+                                        "total": 1, "pct": pct}, KIND)
 
     try:
         run_video_pipeline(
@@ -237,7 +250,39 @@ def render_video_job(*, slug: str, republish: bool) -> dict:
         renderqueue.clear_cancel(slug, KIND)
         renderqueue.set_paused(slug, False, KIND)
         renderqueue.clear_pct(slug, KIND)
+        renderqueue.clear_step(slug, KIND)
         renderqueue.clear_meta(slug, KIND)
+
+
+# Poids relatifs des étapes de la phase 1 dans la barre d'avancement.
+# Mesurés sur un concert de 2 h : la découpe/encodage des 32 MP3 occupe la quasi
+# totalité du temps, les trois autres étapes durent quelques secondes. À poids
+# égaux, la barre resterait bloquée sous 25 % pendant tout le rendu réel puis
+# sauterait à 100 % — ce qui donne exactement la fausse impression de blocage
+# que cette barre est censée dissiper.
+_STAGE_WEIGHTS = {"render": 0.88, "tags": 0.04, "artwork": 0.04, "disc": 0.04}
+
+
+def _step_progress(stage: str, status: str, info: dict) -> dict | None:
+    """Avancement global de la phase 1, à partir de l'étape en cours.
+
+    Retourne `{stage, index, total, pct}` — l'index sert au libellé
+    « Étape 2/4 », le pct pilote la barre.
+    """
+    stages = [s for s in RENDER_STAGES if s in _STAGE_WEIGHTS]
+    if stage not in _STAGE_WEIGHTS:
+        return None
+    idx = stages.index(stage)
+    done = sum(_STAGE_WEIGHTS[s] for s in stages[:idx])
+    if status == "done":
+        frac = 1.0
+    else:
+        # `pct` n'est fourni que par l'étape de rendu (compteur de pistes) ;
+        # les autres sont trop courtes pour être mesurées.
+        frac = max(0.0, min(1.0, float(info.get("pct") or 0) / 100))
+    total = sum(_STAGE_WEIGHTS[s] for s in stages) or 1.0
+    return {"stage": stage, "index": idx + 1, "total": len(stages),
+            "pct": round((done + _STAGE_WEIGHTS[stage] * frac) / total * 100, 1)}
 
 
 def _has_video_source(project_dir: Path) -> bool:
