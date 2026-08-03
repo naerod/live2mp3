@@ -35,6 +35,33 @@ v1.15.38). Session complète de découpage perdue sur `linkin-park-2025-11-16`
   `localStorage`, elle ne peut pas être posée après chargement comme le thème ;
   le sélecteur est dans le menu avatar, cliquable en deux temps et fragile).
 
+2026-08-03 (suite 2) : **Avancement par étape + rendu dans un `.part`**
+(preprod v1.15.41).
+- **v1.15.40** — le job audio ne publiait aucun avancement (seul le job vidéo le
+  faisait) : bande indéterminée sans nom d'étape. `renderqueue.set_step/get_step`
+  (`{stage,index,total,pct}`) exposé par `/api/render-queue` → « Étape 2/4 ·
+  Métadonnées MP3 » + barre + %. Doublon assumé du SSE : la page interroge
+  toutes les 5 s sans flux ouvert. **Étapes pondérées** (`render` 0,88 ; les
+  3 autres 0,04) — à poids égaux la barre resterait sous 25 % pendant tout le
+  rendu réel puis sauterait à 100 %. Corps de ligne cliquable → `/app#slug`
+  (pause/arrêt volontairement hors zone cliquable).
+- **v1.15.41 — ⚠️ incident : déployer pendant un encodage laissait un fichier
+  tronqué sous son NOM DÉFINITIF.** Le déploiement de la v1.15.40 a recréé le
+  conteneur du worker en plein encodage : MP4 tronqué de 744 Mo + job fantôme
+  figé à 20,7 %. Le stage étant idempotent par nom, une relance l'aurait sauté
+  et servi comme vidéo finale. `_render_or_cleanup` nettoyait sur `Cancelled`
+  mais un SIGKILL n'en laisse pas l'occasion. → encodage dans `<nom>.mp3.part` /
+  `<nom>.mp4.part`, promu par `os.replace` à la réussite.
+  - ⚠️ Suffixe en **fin de nom**, pas l'extension : `Path.glob("*.mp4")` **voit
+    les fichiers cachés** (vérifié) — un `.x.part.mp4` aurait compté comme piste
+    rendue dans `catalogue._has_files` et sorti l'album des brouillons.
+  - ⚠️ ffmpeg déduit le conteneur de l'extension → `-f mp3` / `-f mp4` imposés.
+  - **Règle d'exploitation** : vérifier `/api/render-queue` avant tout
+    déploiement. Le `.part` évite la corruption, pas la perte du travail en
+    cours ; le job reste fantôme dans RQ jusqu'à son `job_timeout` (6 h) et doit
+    être purgé/relancé à la main.
+- 231 tests verts (+6).
+
 2026-08-03 : **Rendu MP4 découplé du rendu MP3** (preprod v1.15.37).
 Les 28 MP3 d'un concert sortent en quelques minutes, le MP4 demande 15 à 20 min
 de x264 : dans un seul job RQ, l'album audio n'était livré à personne avant la
