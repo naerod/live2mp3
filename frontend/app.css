@@ -395,6 +395,8 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .draft-saved{display:flex;align-items:center;gap:7px;margin:0 0 10px;
   font-size:12.5px;color:var(--muted)}
 .draft-saved .material-symbols-outlined{font-size:18px;color:var(--ok,var(--accent))}
+.draft-saved.err{color:var(--like);font-weight:600}
+.draft-saved.err .material-symbols-outlined{color:var(--like)}
 /* Bandeau de session SSO expirée (lecteur audio bloqué) */
 .session-warn{display:flex;align-items:center;gap:10px;margin:0 0 14px;
   padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.4;

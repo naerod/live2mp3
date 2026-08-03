@@ -580,18 +580,54 @@ async function saveDraft(){
   // Le serveur refuse une piste sans titre ou à bornes inversées : tant que
   // l'édition est dans un état intermédiaire, on garde juste la copie locale.
   if(EDIT.some(t=>!t.title.trim()||t.end<=t.start))return;
-  const tracks=EDIT.map(t=>({title:t.title.trim(),artist:(t.artist||"").trim(),
-                             start:t.start,end:t.end}));
+  // `n` est obligatoire côté serveur (SetlistTrackIn) : l'omettre faisait
+  // échouer chaque autosave en 422, silencieusement. Même charge utile que le
+  // bouton « Valider », artiste omis plutôt qu'envoyé vide.
+  const tracks=EDIT.map((t,i)=>{
+    const o={n:i+1,title:t.title.trim(),start:t.start,end:t.end};
+    if((t.artist||"").trim())o.artist=t.artist.trim();
+    return o;
+  });
   try{
     const r=await fetch(`/api/jobs/${slug}/setlist`,{method:"PUT",
       redirect:"manual",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({tracks})});
-    if(r.type==="opaqueredirect"||!r.ok){showSessionBanner();return;}
+    // Distinguer les deux causes : une redirection ou un 401/403 = session
+    // expirée ; tout autre code = refus applicatif. Les confondre affichait
+    // « Session expirée » sur une erreur de validation, et surtout laissait
+    // croire à un simple souci d'authentification alors que rien ne
+    // s'enregistrait.
+    if(r.type==="opaqueredirect"||r.status===401||r.status===403){
+      showSessionBanner();draftState("err");return;
+    }
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      console.warn("brouillon non enregistré:",r.status,d.detail||d);
+      draftState("err");return;
+    }
     hideSessionBanner();
-    $("draft-saved").classList.remove("hidden");
-    clearTimeout(saveDraft._hide);
-    saveDraft._hide=setTimeout(()=>$("draft-saved").classList.add("hidden"),2500);
-  }catch(e){/* réseau : la copie locale reste le filet */}
+    draftState("ok");
+  }catch(e){draftState("err");/* réseau : la copie locale reste le filet */}
+}
+
+// État visible de l'enregistrement. Un échec doit se voir : c'est l'absence de
+// signal qui a fait perdre une heure de découpage le 2026-08-02.
+function draftState(kind){
+  const el=$("draft-saved");
+  if(!el)return;
+  const ic=el.querySelector(".material-symbols-outlined");
+  const tx=el.querySelector("[data-i18n]");
+  el.classList.remove("hidden","err");
+  clearTimeout(draftState._hide);
+  if(kind==="ok"){
+    ic.textContent="cloud_done";
+    if(tx)tx.textContent=T("draft_saved");
+    draftState._hide=setTimeout(()=>el.classList.add("hidden"),2500);
+  }else{
+    el.classList.add("err");
+    ic.textContent="cloud_off";
+    if(tx)tx.textContent=T("draft_failed");
+  }
 }
 
 // --- Sauvegarde locale des coupes en cours d'édition ---------------------
