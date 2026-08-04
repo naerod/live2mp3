@@ -21,10 +21,32 @@ import os
 
 import requests
 
+from .manifest import PROJECTS_DIR
+
 JELLYFIN_URL = os.environ.get("JELLYFIN_URL", "http://jellyfin:8096").rstrip("/")
 JELLYFIN_API_KEY = os.environ.get("JELLYFIN_API_KEY", "").strip()
 
 _TIMEOUT = 10
+
+# `PROJECTS_DIR` est le bind-mount hôte partagé avec CT110 (host)
+# `/opt/data/live2mp3/projects` : toucher ce fichier y est immédiatement visible.
+# Un service systemd (`jellyfin-sync.path`/`.service`, hors dépôt) surveille son
+# mtime et relance `sync-media.sh` dès qu'il change, au lieu d'attendre le
+# prochain passage du cron (jusqu'à 10 min).
+_SYNC_TRIGGER = PROJECTS_DIR / ".sync-trigger"
+
+
+def trigger_sync() -> bool:
+    """Réveille `sync-media.sh` tout de suite (publication/dépublication).
+
+    Best-effort, comme le reste de ce module : un déclenchement raté n'est
+    pas grave, le cron */10 min reste le filet de sécurité.
+    """
+    try:
+        _SYNC_TRIGGER.touch()
+        return True
+    except OSError:
+        return False
 
 
 def refresh_library() -> bool:

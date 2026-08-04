@@ -31,7 +31,7 @@ from pydantic import BaseModel
 
 import re
 from uuid import uuid4
-from . import catalogue, entities, linktool, llm
+from . import catalogue, entities, jellyfin, linktool, llm
 from . import progress, renderqueue
 from .albumfiles import (
     _rename_audio_files,
@@ -981,6 +981,9 @@ def set_published(slug: str, payload: PublishIn,
     m = Manifest.load(path)
     m.data["published"] = payload.published
     m.save(path)
+    # Symlink Jellyfin (apparition/retrait dans Finamp) dès maintenant, plutôt
+    # que d'attendre le prochain passage du cron sync-media.sh (jusqu'à 10 min).
+    jellyfin.trigger_sync()
     # Publication → annonce aux abonnés (fan-out idempotent : une fois par env).
     notified = 0
     if payload.published:
@@ -1017,6 +1020,8 @@ def set_published_bulk(payload: BulkPublishIn,
                 notified += notifications.announce_post(slug)
             except Exception as exc:
                 log.warning("annonce de %s impossible : %s", slug, exc)
+    if updated:
+        jellyfin.trigger_sync()
     return {"ok": True, "published": payload.published,
             "updated": updated, "count": len(updated),
             "notified": notified, "missing": missing}

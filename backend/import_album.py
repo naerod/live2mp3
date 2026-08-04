@@ -31,6 +31,7 @@ from mutagen.id3 import ID3
 from mutagen.mp3 import MP3
 from pydantic import BaseModel
 
+from . import jellyfin
 from .albumfiles import (
     MIME_EXT,
     _sanitize_filename,
@@ -446,6 +447,10 @@ def commit(payload: CommitIn,
         )
 
     shutil.rmtree(staging, ignore_errors=True)
+    if payload.published:
+        # Symlink Jellyfin dès maintenant si l'import est publié d'entrée
+        # (au lieu du prochain passage de sync-media.sh, jusqu'à 10 min).
+        jellyfin.trigger_sync()
     return {"ok": True, "slug": slug, "tracks": len(payload.tracks),
             "mp3_tagged": tagged, "cover_id": cover_id,
             "cover_embedded": embedded, "published": bool(payload.published)}
