@@ -31,7 +31,7 @@ from pydantic import BaseModel
 
 import re
 from uuid import uuid4
-from . import catalogue, entities, linktool, llm
+from . import catalogue, entities, jellyfin, linktool, llm
 from . import progress, renderqueue
 from .albumfiles import (
     _rename_audio_files,
@@ -48,6 +48,8 @@ from .auth import (
     roles,
 )
 from .db import get_conn, init_db
+from . import addtrack
+from .addtrack import router as addtrack_router
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
@@ -115,6 +117,7 @@ app.include_router(covers_router)
 
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
 app.include_router(import_router)
+app.include_router(addtrack_router)
 
 # Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
 app.include_router(linktool.router)
@@ -757,7 +760,13 @@ def album_detail(slug: str,
                               or (src_dir / "master.wav").exists(),
         "published": m.data.get("published", True),
         "per_track_covers": bool(album.get("per_track_covers", False)),
-        "tracks": [{"n": t.get("n"), "title": t.get("title"), **({} if not t.get("artist") else {"artist": t.get("artist")})} for t in m.tracks],
+        # `source` (piste ajoutée depuis un lien) est exposée pour que la page
+        # de gestion puisse la signaler : rien ne distingue sinon une
+        # compilation d'un concert découpé.
+        "tracks": [{"n": t.get("n"), "title": t.get("title"),
+                    **({} if not t.get("artist") else {"artist": t.get("artist")}),
+                    **({} if not t.get("source") else {"source": t.get("source")})}
+                   for t in m.tracks],
     }
 
 
@@ -972,6 +981,9 @@ def set_published(slug: str, payload: PublishIn,
     m = Manifest.load(path)
     m.data["published"] = payload.published
     m.save(path)
+    # Symlink Jellyfin (apparition/retrait dans Finamp) dès maintenant, plutôt
+    # que d'attendre le prochain passage du cron sync-media.sh (jusqu'à 10 min).
+    jellyfin.trigger_sync()
     # Publication → annonce aux abonnés (fan-out idempotent : une fois par env).
     notified = 0
     if payload.published:
@@ -1008,6 +1020,8 @@ def set_published_bulk(payload: BulkPublishIn,
                 notified += notifications.announce_post(slug)
             except Exception as exc:
                 log.warning("annonce de %s impossible : %s", slug, exc)
+    if updated:
+        jellyfin.trigger_sync()
     return {"ok": True, "published": payload.published,
             "updated": updated, "count": len(updated),
             "notified": notified, "missing": missing}
@@ -1399,7 +1413,7 @@ def update_setlist(slug: str, payload: SetlistIn,
         if t.end <= t.start:
             raise HTTPException(400, f"piste « {t.title} » : fin avant début")
     m = Manifest.load(path)
-    m.data["tracks"] = [{
+    cut_tracks = [{
         "n": i,
         "title": t.title.strip(),
         **({"artist": t.artist.strip()} if t.artist and t.artist.strip() else {}),
@@ -1407,8 +1421,13 @@ def update_setlist(slug: str, payload: SetlistIn,
         "end": float(t.end),
         "locked": True,
     } for i, t in enumerate(tracks, start=1)]
+    # L'éditeur ne voit que le découpage du master : les pistes ajoutées
+    # depuis un lien (addtrack) sont recollées en fin de liste, sinon cette
+    # écriture les effacerait purement et simplement.
+    m.data["tracks"] = addtrack.preserve_external_tracks(slug, m, cut_tracks)
     m.data["auto_setlist"] = False
     m.save()
+    _rename_audio_files(slug, m)
     return {"ok": True, "tracks": len(m.tracks)}
 
 

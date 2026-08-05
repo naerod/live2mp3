@@ -116,6 +116,32 @@
   #btn-open-editor[disabled]:hover{background:transparent;border-color:var(--border)}
   .add-track-row{display:flex;gap:8px}
   .add-track-row input{flex:1;margin:0;padding:6px 10px;font-size:13px}
+  /* Ajout d'une piste depuis un lien vidéo (albums-compilations). */
+  .from-url{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+  .fu-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .fu-actions .icon-btn{margin:0}
+  .fx-panel{margin-top:10px;display:flex;flex-direction:column;gap:10px;
+    align-items:flex-start}
+  .fu-panel{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+  .fu-preview{display:flex;gap:10px;align-items:center;background:var(--bg);
+    border:1px solid var(--border);border-radius:10px;padding:8px}
+  .fu-preview img{width:96px;height:54px;object-fit:cover;border-radius:6px;flex:none}
+  .fu-vtitle{font-size:13px;font-weight:600;line-height:1.3}
+  .fu-vsub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .fu-fields{display:flex;flex-direction:column;gap:10px}
+  .fu-trim{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  /* `flex-direction` explicite : la règle globale `label` d'app.css empile en
+     colonne, ce qui posait la case au-dessus de son texte. */
+  .fu-check{display:flex;flex-direction:row;align-items:center;gap:8px;
+    align-self:flex-start;font-size:12.5px;color:var(--muted);cursor:pointer}
+  .fu-check input{margin:0}
+  .fu-status{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:0}
+  .fu-status.err{color:var(--danger,#e57373)}
+  .fu-status .spin{animation:fu-spin 1s linear infinite;font-size:17px}
+  @keyframes fu-spin{to{transform:rotate(360deg)}}
+  /* Repère « piste venue d'un lien » dans la liste des pistes. */
+  .track-src{color:var(--muted);font-size:15px;cursor:help;flex:none}
+  @media(max-width:560px){.fu-trim{grid-template-columns:1fr}}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
   .lchip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 12px;
     border-radius:999px;border:1px solid var(--border);background:var(--card);
@@ -312,6 +338,46 @@
           <input id="new-track" type="text" placeholder="Nouveau titre…">
           <button class="icon-btn" id="add-track" style="margin:0;height:34px"><span class="material-symbols-outlined">add</span></button>
         </div>
+
+        <!-- Ajout d'une piste depuis un lien vidéo : le morceau est téléchargé,
+             rogné et encodé côté serveur, puis rattaché à cet album. -->
+        <div class="from-url">
+          <div class="fu-actions">
+            <button class="icon-btn" id="fu-toggle" type="button">
+              <span class="material-symbols-outlined">playlist_add</span><span id="t-fu-toggle"></span>
+            </button>
+            <button class="icon-btn" id="fx-toggle" type="button">
+              <span class="material-symbols-outlined">upload_file</span><span id="t-fx-toggle"></span>
+            </button>
+          </div>
+          <div class="fx-panel hidden" id="fx-panel">
+            <p class="meta-legend"><span class="material-symbols-outlined">info</span><span id="t-fx-hint"></span></p>
+            <input type="file" id="fx-file" accept="audio/mpeg,.mp3" multiple style="display:none">
+            <button class="primary" id="fx-pick" type="button"><span class="material-symbols-outlined">upload</span><span id="t-fx-pick"></span></button>
+            <p class="fu-status hidden" id="fx-status"></p>
+          </div>
+          <div class="fu-panel hidden" id="fu-panel">
+            <p class="meta-legend"><span class="material-symbols-outlined">info</span><span id="t-fu-hint"></span></p>
+            <div class="add-track-row">
+              <input id="fu-url" type="url" placeholder="https://www.youtube.com/watch?v=…">
+              <button class="icon-btn" id="fu-analyze" type="button" style="margin:0;height:34px"><span class="material-symbols-outlined">auto_awesome</span><span id="t-fu-analyze"></span></button>
+            </div>
+            <div class="fu-preview hidden" id="fu-preview">
+              <img id="fu-thumb" alt="" referrerpolicy="no-referrer">
+              <div class="fu-meta"><div class="fu-vtitle" id="fu-vtitle"></div><div class="fu-vsub" id="fu-vsub"></div></div>
+            </div>
+            <div class="fu-fields hidden" id="fu-fields">
+              <div class="fg full"><span class="fg-head"><label id="t-fu-title"></label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="fu-title" type="text"></div>
+              <div class="fu-trim">
+                <div class="fg"><label id="t-fu-start"></label><input id="fu-start" type="text" placeholder="0:00" autocomplete="off"></div>
+                <div class="fg"><label id="t-fu-end"></label><input id="fu-end" type="text" placeholder="3:36" autocomplete="off"></div>
+              </div>
+              <label class="fu-check"><input type="checkbox" id="fu-cover" checked><span id="t-fu-cover"></span></label>
+              <button class="primary" id="fu-add" type="button" style="align-self:flex-start"><span class="material-symbols-outlined">library_add</span><span id="t-fu-add"></span></button>
+            </div>
+            <p class="fu-status hidden" id="fu-status"></p>
+          </div>
+        </div>
       </div>
 
       <!-- Labels -->
@@ -363,7 +429,28 @@ const TT={
       status_draft:"Dépublié — visible uniquement des gestionnaires",
       open_editor:"Ouvrir l'éditeur audio",
       open_editor_hint:"Rouvrir l'éditeur de coupes (Peaks.js) sur le master conservé de cet album",
-      open_editor_no_source:"Indisponible : fichier source non conservé pour cet album (import manuel)"},
+      open_editor_no_source:"Indisponible : fichier source non conservé pour cet album (import manuel)",
+      fu_toggle:"Ajouter une piste depuis un lien",
+      fu_hint:"Le morceau est téléchargé, rogné puis encodé en MP3 et rattaché à cet album. Mettez l'artiste dans le titre de la piste (« Coldplay (ft. Ed Sheeran) - Fix You ») : sur une compilation, l'artiste change à chaque piste.",
+      fu_analyze:"Analyser",
+      fu_title:"Titre de la piste",
+      fu_start:"Début (optionnel)",fu_end:"Fin (optionnel)",
+      fu_cover:"Utiliser la miniature de la vidéo comme pochette de piste",
+      fu_add:"Ajouter la piste",
+      fu_analyzing:"Lecture du lien…",
+      fu_stage_download:"Téléchargement…",fu_stage_encode:"Encodage MP3…",
+      fu_stage_tags:"Écriture des tags…",
+      fu_done:t=>`Piste ajoutée : ${t}`,
+      fu_err_url:"Collez d'abord un lien.",
+      fu_err_title:"Titre de piste requis.",
+      fu_err_trim:"Rognage : la fin doit être après le début.",
+      fu_err_time:"Durée non reconnue — utilisez « 1:23 » ou « 83 ».",
+      fu_track_src:"Piste ajoutée depuis un lien",
+      fx_toggle:"Déposer des MP3",
+      fx_hint:"Des MP3 déjà découpés sont ajoutés à la suite de la tracklist. Le titre est lu dans les tags ID3, à défaut dans le nom du fichier — vous pourrez le corriger ensuite.",
+      fx_pick:"Choisir des fichiers MP3",
+      fx_uploading:n=>`Envoi de ${n} fichier${n>1?"s":""}…`,
+      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
@@ -392,7 +479,28 @@ const TT={
       status_draft:"Unpublished — visible to managers only",
       open_editor:"Open the audio editor",
       open_editor_hint:"Reopen the cut editor (Peaks.js) on this album's retained master",
-      open_editor_no_source:"Unavailable: no source file kept for this album (manual import)"}
+      open_editor_no_source:"Unavailable: no source file kept for this album (manual import)",
+      fu_toggle:"Add a track from a link",
+      fu_hint:"The song is downloaded, trimmed, encoded to MP3 and attached to this album. Put the artist in the track title (“Coldplay (ft. Ed Sheeran) - Fix You”): on a compilation the artist changes with every track.",
+      fu_analyze:"Analyse",
+      fu_title:"Track title",
+      fu_start:"Start (optional)",fu_end:"End (optional)",
+      fu_cover:"Use the video thumbnail as this track's cover",
+      fu_add:"Add track",
+      fu_analyzing:"Reading the link…",
+      fu_stage_download:"Downloading…",fu_stage_encode:"Encoding MP3…",
+      fu_stage_tags:"Writing tags…",
+      fu_done:t=>`Track added: ${t}`,
+      fu_err_url:"Paste a link first.",
+      fu_err_title:"Track title required.",
+      fu_err_trim:"Trim: the end must come after the start.",
+      fu_err_time:"Duration not recognised — use “1:23” or “83”.",
+      fu_track_src:"Track added from a link",
+      fx_toggle:"Upload MP3s",
+      fx_hint:"Already-split MP3s are appended to the tracklist. The title is read from the ID3 tags, or from the filename — you can fix it afterwards.",
+      fx_pick:"Choose MP3 files",
+      fx_uploading:n=>`Uploading ${n} file${n>1?"s":""}…`,
+      fx_done:n=>`${n} track${n>1?"s":""} added`}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
@@ -441,6 +549,17 @@ function applyLang(){
   document.getElementById("new-track").placeholder=t.new_track;
   document.getElementById("newlabel").placeholder=t.add_label;
   document.getElementById("t-btn-open-editor").textContent=t.open_editor;
+  document.getElementById("t-fu-toggle").textContent=t.fu_toggle;
+  document.getElementById("t-fu-hint").textContent=t.fu_hint;
+  document.getElementById("t-fu-analyze").textContent=t.fu_analyze;
+  document.getElementById("t-fu-title").textContent=t.fu_title;
+  document.getElementById("t-fu-start").textContent=t.fu_start;
+  document.getElementById("t-fu-end").textContent=t.fu_end;
+  document.getElementById("t-fu-cover").textContent=t.fu_cover;
+  document.getElementById("t-fu-add").textContent=t.fu_add;
+  document.getElementById("t-fx-toggle").textContent=t.fx_toggle;
+  document.getElementById("t-fx-hint").textContent=t.fx_hint;
+  document.getElementById("t-fx-pick").textContent=t.fx_pick;
   refreshOpenEditorBtn();
   refreshScopeRow();
   if(DATA){renderDL();renderTraycard();}
@@ -481,10 +600,15 @@ function refreshScopeRow(){
     st.textContent=t.scope_preprod;
     lbl.textContent=t.promote_btn; ic.textContent="rocket_launch";
     btn.className="primary";
+    btn.classList.remove("hidden");
   }else{
+    // Album déjà servi par la production : on l'indique, sans proposer de l'en
+    // retirer. Le seul geste offert par la preprod est « pousser en prod » —
+    // dépublier un album public est une décision qui se prend sur la prod.
+    // La route `POST /api/albums/{slug}/demote` existe toujours pour un
+    // rattrapage en ligne de commande.
     st.textContent=t.scope_prod;
-    lbl.textContent=t.demote_btn; ic.textContent="undo";
-    btn.className="";
+    btn.classList.add("hidden");
   }
 }
 document.getElementById("btn-promote").onclick=async()=>{
@@ -612,10 +736,14 @@ function renderTracks(){
       <div class="tc-slot-hint"><span class="material-symbols-outlined">zoom_in</span></div>
     </div>`:""
     const gear=PER_TRACK?`<button class="track-gear" data-n="${tr.n}" data-i="${i}" title="Métadonnées"><span class="material-symbols-outlined">tune</span></button>`:"";
+    // Une piste ajoutée depuis un lien porte sa propre source : on la signale,
+    // sinon rien ne distingue une compilation d'un concert découpé.
+    const src=tr.source&&tr.source.url
+      ?`<span class="material-symbols-outlined track-src" title="${t.fu_track_src} — ${esc(tr.source.url)}">link</span>`:"";
     return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
     <input type="text" value="${esc(tr.title)}" data-i="${i}">
-    ${gear}
+    ${src}${gear}
     <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
     </li>`;
   }).join("");
@@ -654,6 +782,203 @@ document.getElementById("add-track").onclick=()=>{
   tracks.push({n,title:v,start:null,end:null,locked:false});inp.value="";renderTracks();};
 document.getElementById("new-track").addEventListener("keydown",e=>{
   if(e.key==="Enter"){e.preventDefault();document.getElementById("add-track").click();}});
+
+// ── Ajouter une piste depuis un lien ────────────────────────────────────────
+// Deux temps, comme l'outil de création : sonde (aucun téléchargement) puis
+// production explicite. La production tourne côté serveur (yt-dlp dépasse la
+// minute) et son avancement est relu par sondage.
+let FU_VIDEO=null,FU_POLL=null;
+
+function fuEl(id){return document.getElementById(id);}
+function fuStatus(msg,{err=false,spin=false}={}){
+  const el=fuEl("fu-status");
+  if(!msg){el.classList.add("hidden");el.innerHTML="";return;}
+  el.classList.remove("hidden");
+  el.classList.toggle("err",err);
+  const ico=err?"error":(spin?"progress_activity":"check_circle");
+  el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
+  el.lastChild.textContent=msg;
+}
+// « 1:23 », « 01:23 », « 83 » ou « 83.5 » -> secondes. null si vide, NaN si illisible.
+function fuParseTime(v){
+  v=(v||"").trim();
+  if(!v)return null;
+  if(!/^[0-9]+(:[0-5]?[0-9]){0,2}(\.[0-9]+)?$/.test(v))return NaN;
+  return v.split(":").map(Number).reduce((a,p)=>a*60+p,0);
+}
+function fuFmt(sec){
+  sec=Math.round(sec||0);
+  const m=Math.floor(sec/60);
+  return `${m}:${String(sec%60).padStart(2,"0")}`;
+}
+function fuReset(){
+  FU_VIDEO=null;
+  fuEl("fu-url").value="";
+  fuEl("fu-title").value="";
+  fuEl("fu-start").value="";fuEl("fu-end").value="";
+  fuEl("fu-preview").classList.add("hidden");
+  fuEl("fu-fields").classList.add("hidden");
+}
+
+fuEl("fu-toggle").onclick=()=>{
+  const panel=fuEl("fu-panel");
+  panel.classList.toggle("hidden");
+  if(!panel.classList.contains("hidden"))fuEl("fu-url").focus();
+};
+
+fuEl("fu-analyze").onclick=async()=>{
+  const t=TT[L()];
+  const url=fuEl("fu-url").value.trim();
+  if(!url){fuStatus(t.fu_err_url,{err:true});fuEl("fu-url").focus();return;}
+  fuEl("fu-analyze").disabled=true;
+  fuStatus(t.fu_analyzing,{spin:true});
+  try{
+    const r=await fetch("/api/tool/probe-track",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+    FU_VIDEO=d.video;
+    fuEl("fu-thumb").src=d.video.thumbnail||"";
+    fuEl("fu-vtitle").textContent=d.video.title||"";
+    fuEl("fu-vsub").textContent=[d.video.channel,d.video.duration?fuFmt(d.video.duration):""]
+      .filter(Boolean).join(" · ");
+    fuEl("fu-title").value=d.suggestion.track_title||"";
+    fuEl("fu-end").placeholder=d.video.duration?fuFmt(d.video.duration):"";
+    fuEl("fu-preview").classList.remove("hidden");
+    fuEl("fu-fields").classList.remove("hidden");
+    fuStatus("");
+  }catch(e){
+    fuStatus(e.message||"", {err:true});
+  }finally{
+    fuEl("fu-analyze").disabled=false;
+  }
+};
+fuEl("fu-url").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){e.preventDefault();fuEl("fu-analyze").click();}});
+
+fuEl("fu-add").onclick=async()=>{
+  const t=TT[L()];
+  const title=fuEl("fu-title").value.trim();
+  if(!title){fuStatus(t.fu_err_title,{err:true});fuEl("fu-title").focus();return;}
+  const start=fuParseTime(fuEl("fu-start").value);
+  const end=fuParseTime(fuEl("fu-end").value);
+  if(Number.isNaN(start)||Number.isNaN(end)){fuStatus(t.fu_err_time,{err:true});return;}
+  if(end!==null&&end<=(start||0)){fuStatus(t.fu_err_trim,{err:true});return;}
+  const body={url:(FU_VIDEO&&FU_VIDEO.webpage_url)||fuEl("fu-url").value.trim(),
+    title,start,end,
+    thumbnail_url:(FU_VIDEO&&FU_VIDEO.thumbnail)||"",
+    cover_from_thumbnail:fuEl("fu-cover").checked};
+  fuEl("fu-add").disabled=true;
+  fuStatus(t.fu_stage_download,{spin:true});
+  try{
+    const r=await fetch(`/api/albums/${SLUG}/tracks/from-url`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+    fuWatch(d.token,d.n,d.title,body.url);
+  }catch(e){
+    fuEl("fu-add").disabled=false;
+    fuStatus(e.message||"",{err:true});
+  }
+};
+
+function fuWatch(token,n,title,url){
+  clearInterval(FU_POLL);
+  FU_POLL=setInterval(async()=>{
+    const t=TT[L()];
+    let job;
+    try{
+      const r=await fetch(`/api/albums/${SLUG}/tracks/from-url/${token}`);
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      job=await r.json();
+    }catch(e){return;}   // coupure réseau passagère : on retentera au tick suivant
+    if(job.state==="error"){
+      clearInterval(FU_POLL);
+      fuEl("fu-add").disabled=false;
+      fuStatus(job.error||"",{err:true});
+      return;
+    }
+    if(job.state==="done"){
+      clearInterval(FU_POLL);
+      fuEl("fu-add").disabled=false;
+      // La piste est ajoutée localement plutôt que par un rechargement complet :
+      // les modifications en cours (titres, labels) ne doivent pas être perdues.
+      if(!tracks.some(x=>x.n===n)){
+        tracks.push({n,title,start:null,end:null,locked:false,source:{url}});
+      }
+      if(PER_TRACK)await loadTrackCovers();
+      renderTracks();
+      fuStatus(t.fu_done(title));
+      toast(t.fu_done(title));
+      fuReset();
+      return;
+    }
+    const label={download:t.fu_stage_download,encode:t.fu_stage_encode,
+                 tags:t.fu_stage_tags}[job.stage]||t.fu_stage_download;
+    const pct=job.stage==="download"&&job.pct?` ${Math.round(job.pct)} %`:"";
+    fuStatus(label+pct,{spin:true});
+  },1500);
+}
+
+// ── Déposer des MP3 déjà découpés ───────────────────────────────────────────
+function fxStatus(msg,{err=false,spin=false}={}){
+  const el=fuEl("fx-status");
+  if(!msg){el.classList.add("hidden");el.innerHTML="";return;}
+  el.classList.remove("hidden");
+  el.classList.toggle("err",err);
+  const ico=err?"error":(spin?"progress_activity":"check_circle");
+  el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
+  el.lastChild.textContent=msg;
+}
+
+fuEl("fx-toggle").onclick=()=>fuEl("fx-panel").classList.toggle("hidden");
+fuEl("fx-pick").onclick=()=>fuEl("fx-file").click();
+
+fuEl("fx-file").onchange=async()=>{
+  const t=TT[L()];
+  const input=fuEl("fx-file");
+  const files=[...input.files];
+  if(!files.length)return;
+  const fd=new FormData();
+  files.forEach(f=>fd.append("files",f));
+  fuEl("fx-pick").disabled=true;
+  fxStatus(t.fx_uploading(files.length),{spin:true});
+  try{
+    const r=await fetch(`/api/albums/${SLUG}/tracks/upload`,{method:"POST",body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+    // Ajout local plutôt que rechargement : les modifications en cours de
+    // saisie (titres, labels) ne doivent pas être perdues.
+    (d.added||[]).forEach(a=>{
+      if(!tracks.some(x=>x.n===a.n))
+        tracks.push({n:a.n,title:a.title,start:null,end:null,locked:false,
+                     source:{file:a.file}});
+    });
+    if(PER_TRACK)await loadTrackCovers();
+    renderTracks();
+    fxStatus(t.fx_done((d.added||[]).length));
+    toast(t.fx_done((d.added||[]).length));
+  }catch(e){
+    fxStatus(e.message||"",{err:true});
+  }finally{
+    fuEl("fx-pick").disabled=false;
+    input.value="";   // re-déposer le même fichier doit redéclencher `change`
+  }
+};
+
+// Arrivée depuis la fenêtre « Importer » : ?add=link | ?add=file ouvre
+// directement le bon panneau, la destination ayant déjà été choisie là-bas.
+function openRequestedPanel(){
+  const add=new URLSearchParams(location.search).get("add");
+  if(add!=="link"&&add!=="file")return;
+  const panel=fuEl(add==="link"?"fu-panel":"fx-panel");
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({behavior:"smooth",block:"center"});
+  if(add==="link")setTimeout(()=>fuEl("fu-url").focus(),300);
+  // L'URL est nettoyée : un rechargement ne doit pas rouvrir le panneau
+  // indéfiniment, et le lien copié depuis la barre d'adresse reste propre.
+  history.replaceState(null,"",location.pathname);
+}
 
 // Labels
 function renderChips(){
@@ -998,6 +1323,7 @@ async function load(){
   renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
   _bindTcvEvents();
   refreshUrlBtn();
+  openRequestedPanel();
 }
 
 // ── Corriger l'URL (slug) ────────────────────────────────────────────────────
