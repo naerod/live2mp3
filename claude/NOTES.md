@@ -995,3 +995,33 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
 - Imports morts retirés ; `backend/` est pyflakes-clean.
 - **À trancher** : `import_drive.py` (21 Ko, racine, non suivi par git, aucun
   référencement trouvé) — laissé intact, décision utilisateur attendue.
+
+2026-08-05 : import multi-liens — preprod v1.22.2 (commit 345da94).
+- Nouveau mode « Importer depuis plusieurs liens » de l'outil de création :
+  1 lien = 1 piste, sources téléchargées puis **concaténées en un master.wav
+  unique** à la préparation, timecodes exacts posés aux jointures. Tout le
+  pipeline aval (waveform/render/tags/artwork/disque) inchangé ; détection IA
+  court-circuitée (pistes `locked`, tous timecodes présents).
+- Cas d'usage : regrouper les passages éparpillés d'un artiste (vidéos « une
+  chanson », ex. mytaratata) en un album « Taratata - <Artiste> ».
+- Backend : `POST /api/tool/analyze-multi` (sonde N liens, tolère un lien
+  illisible → renvoyé avec `error`), `split_song()` artiste/titre (retire
+  suffixe émission + année, garde les « / » de medley) ; `new_manifest(clips=)`
+  → `source.clips` ordonné + `source.multi`; `JobIn.clips` → create_job
+  construit 1 piste/clip et **force l'audio** (vidéo multi = chantier V2) ;
+  `download.run_multi()` (download+extract wav/clip, concat filtre ffmpeg,
+  timecodes cumulés mesurés par ffprobe avant suppression des segments) ;
+  `purge_master` accepte le mode multi.
+- Front (index.html/app.js/i18n/app.css) : case à cocher + zone multi-URL
+  (1 lien/ligne), formulaire une ligne/clip (lien mémorisé en dataset, lien
+  illisible signalé en rouge et bloque la création), option vidéo masquée en
+  multi. i18n FR/EN complet.
+- Tests : test_split_song, test_analyze_multi_route (tolérance erreurs +
+  permissions), test_create_job_multi_manifest, test_run_multi_concat_and_
+  timecodes (concat réelle 3s+5s → master 8s + timecodes). **258 passed, 1 skip.**
+- Vérif live conteneur : route montée (OpenAPI), 401 sans auth, markup/i18n
+  servis, app healthy. Reste à valider : parcours complet authentifié dans l'UI
+  (à faire par l'utilisateur) et un vrai import mytaratata bout-en-bout.
+- ⚠️ Non lié : addtrack.py / album.html / clip-trimmer.js / test_addtrack.py
+  restent modifiés non commités (travail « découpe waveform » d'une session
+  précédente) — délibérément laissés intacts, hors périmètre de ce commit.
