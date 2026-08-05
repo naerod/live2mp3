@@ -61,7 +61,7 @@ from .covers import _now, track_cover_file, track_covers_dir
 from .db import get_conn
 from .linktool import ProbeError, probe_url
 from .manifest import PROJECTS_DIR, Manifest, sanitize_filename
-from .pipeline import download
+from .pipeline import download, preanalyze
 from .social import _ensure_profile
 
 router = APIRouter(tags=["addtrack"])
@@ -170,6 +170,9 @@ class AddTrackIn(BaseModel):
     end: float | None = None
     thumbnail_url: str | None = None
     cover_from_thumbnail: bool = True
+    # Jeton d'une découpe précise déjà préparée (cf. prep-clip) : sa source
+    # audio est réutilisée telle quelle, on ne re-télécharge pas.
+    prep_token: str | None = None
 
 
 def _album_manifest(slug: str) -> tuple[Path, Manifest]:
@@ -275,14 +278,20 @@ def _rollback_track(slug: str, n: int) -> None:
 def _run_add_bg(token: str, slug: str, n: int, payload: AddTrackIn,
                 username: str) -> None:
     work = _work_dir(token)
+    prep = _prep_source(payload.prep_token) if payload.prep_token else None
     try:
-        _job_set(token, state="running", stage="download", pct=0.0)
-        cookies = os.environ.get("YTDLP_COOKIES")
-        src = download.download_audio(
-            payload.url, work, cookies,
-            progress=lambda pct: _job_set(token, stage="download", pct=pct))
-
-        _job_set(token, stage="encode", pct=0.0)
+        if prep is not None:
+            # La source a déjà été téléchargée pour la découpe précise : on la
+            # réutilise telle quelle, pas de second passage yt-dlp.
+            _job_set(token, state="running", stage="encode", pct=0.0)
+            src = prep
+        else:
+            _job_set(token, state="running", stage="download", pct=0.0)
+            cookies = os.environ.get("YTDLP_COOKIES")
+            src = download.download_audio(
+                payload.url, work, cookies,
+                progress=lambda pct: _job_set(token, stage="download", pct=pct))
+            _job_set(token, stage="encode", pct=0.0)
         # Le manifeste est relu ici : entre la création de l'entrée et la fin
         # du téléchargement, le gestionnaire a pu renommer la piste depuis la
         # page de gestion — le nom de fichier doit suivre le manifeste.
@@ -318,6 +327,8 @@ def _run_add_bg(token: str, slug: str, n: int, payload: AddTrackIn,
         _job_set(token, state="error", error=str(e) or e.__class__.__name__)
     finally:
         shutil.rmtree(work, ignore_errors=True)
+        if payload.prep_token:
+            shutil.rmtree(_prep_dir(payload.prep_token), ignore_errors=True)
 
 
 # --- Cohabitation avec l'éditeur de coupes ---------------------------------
@@ -409,6 +420,131 @@ def add_track_from_url(slug: str, payload: AddTrackIn,
                            identity.get("username") or ""),
                      daemon=True).start()
     return {"ok": True, "token": token, "n": n, "title": title}
+
+
+# --- Découpe précise à la waveform -----------------------------------------
+# La saisie « minute:seconde » du panneau d'ajout ne permet pas de caler un
+# début pile sur l'attaque d'un morceau (parlote d'intro, applaudissements).
+# `prep-clip` télécharge la source **une seule fois**, en produit une waveform
+# (réutilise `generate_waveform`, comme l'éditeur d'album) et un MP3 léger de
+# lecture, que le front affiche avec deux poignées début/fin. À la validation,
+# `from-url` réutilise cette même source (jeton `prep_token`) : pas de second
+# téléchargement, et le rognage garde la précision au millième de seconde déjà
+# supportée par `encode_track`.
+def _prep_dir(token: str) -> Path:
+    return PROJECTS_DIR / ".l2m-addtrack" / f"prep-{token}"
+
+
+def _prep_source(token: str) -> Path | None:
+    """Fichier source téléchargé d'une préparation, s'il est encore là."""
+    d = _prep_dir(token)
+    files = sorted(d.glob("master_audio.*"))
+    return files[0] if files else None
+
+
+def _sweep_prep_dirs() -> None:
+    """Efface les préparations abandonnées (onglet fermé) au-delà du TTL.
+
+    Une préparation retient une source audio sur disque tant qu'elle n'a pas
+    été consommée par un ajout : sans ce balayage, un aller-retour interrompu
+    laisserait le fichier indéfiniment."""
+    root = PROJECTS_DIR / ".l2m-addtrack"
+    if not root.exists():
+        return
+    cutoff = time.time() - JOB_TTL_S
+    for d in root.glob("prep-*"):
+        try:
+            if d.is_dir() and d.stat().st_mtime < cutoff:
+                shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
+def _run_prep_bg(token: str, url: str) -> None:
+    work = _prep_dir(token)
+    try:
+        _job_set(token, state="running", stage="download", pct=0.0)
+        cookies = os.environ.get("YTDLP_COOKIES")
+        src = download.download_audio(
+            url, work, cookies,
+            progress=lambda pct: _job_set(token, stage="download", pct=pct))
+
+        _job_set(token, stage="waveform", pct=0.0)
+        wav = download.extract_wav(src, work / "clip.wav")
+        preanalyze.generate_waveform(wav, work / "waveform.dat")
+
+        _job_set(token, stage="preview", pct=0.0)
+        preview = work / "preview.mp3"
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(wav),
+            "-vn", "-c:a", "libmp3lame", "-b:a", "128k", str(preview),
+        ], check=True, capture_output=True)
+
+        # La waveform (donc le lecteur) porte sur le WAV : sa durée réelle est
+        # la référence des poignées, plus fiable que la durée annoncée par la
+        # sonde (parfois arrondie).
+        duration = _wav_seconds(wav)
+        # `clip.wav` ne sert plus qu'à la génération : on le retire pour ne pas
+        # laisser un PCM volumineux le temps que l'ajout consomme la source.
+        wav.unlink(missing_ok=True)
+        _job_set(token, state="done", stage="done", pct=100.0, duration=duration)
+    except Exception as e:
+        shutil.rmtree(work, ignore_errors=True)
+        _job_set(token, state="error", error=str(e) or e.__class__.__name__)
+
+
+def _wav_seconds(wav: Path) -> float:
+    import wave
+    try:
+        with wave.open(str(wav), "rb") as w:
+            return w.getnframes() / float(w.getframerate() or 1)
+    except (wave.Error, OSError):
+        return 0.0
+
+
+@router.post("/api/albums/{slug}/tracks/prep-clip")
+def prep_clip(slug: str, payload: ProbeIn,
+              identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Télécharge et prépare une source pour la découpe précise (waveform)."""
+    _album_manifest(slug)  # 404 si l'album n'existe pas
+    url = (payload.url or "").strip()
+    if not re.match(r"^https?://", url):
+        raise HTTPException(400, "URL invalide (http/https attendu)")
+    _purge_jobs()
+    _sweep_prep_dirs()
+    token = uuid4().hex
+    _job_set(token, state="queued", stage="download", pct=0.0, slug=slug)
+    threading.Thread(target=_run_prep_bg, args=(token, url), daemon=True).start()
+    return {"ok": True, "token": token}
+
+
+@router.get("/api/albums/{slug}/tracks/prep-clip/{token}")
+def prep_clip_status(slug: str, token: str,
+                     identity: dict = Depends(require_gestionnaire)) -> dict:
+    job = _job_get(token)
+    if not job:
+        raise HTTPException(404, "préparation inconnue")
+    return job
+
+
+@router.get("/api/albums/{slug}/tracks/prep-clip/{token}/waveform.dat")
+def prep_clip_waveform(slug: str, token: str,
+                       identity: dict = Depends(require_gestionnaire)):
+    from fastapi.responses import FileResponse
+    dat = _prep_dir(token) / "waveform.dat"
+    if not dat.exists():
+        raise HTTPException(404, "waveform indisponible")
+    return FileResponse(str(dat), media_type="application/octet-stream")
+
+
+@router.get("/api/albums/{slug}/tracks/prep-clip/{token}/audio")
+def prep_clip_audio(slug: str, token: str,
+                    identity: dict = Depends(require_gestionnaire)):
+    from fastapi.responses import FileResponse
+    mp3 = _prep_dir(token) / "preview.mp3"
+    if not mp3.exists():
+        raise HTTPException(404, "aperçu indisponible")
+    return FileResponse(str(mp3), media_type="audio/mpeg")
 
 
 # --- Dépôt de fichiers dans un album existant ------------------------------
