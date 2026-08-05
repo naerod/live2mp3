@@ -38,6 +38,8 @@ const show=id=>{STEPS.forEach(s=>$(s).classList.toggle("hidden",s!==id));
 
 let slug=null;          // slug du projet en cours
 let videoInfo=null;     // métadonnées de la vidéo sondée
+let multiMode=false;    // import multi-liens : 1 clip = 1 piste, concaténés
+let multiThumb="";      // miniature du 1er clip lisible (pochette proposée)
 let setlistSource=null; // provenance de la setlist (setlist.fm) + attribution
 let currentPhase=null;  // "prepare" | "render" (pour le bouton réessayer)
 let peaksInstance=null;
@@ -100,14 +102,68 @@ $("btn-analyze").onclick=async()=>{
 };
 $("l-url").addEventListener("keydown",e=>{if(e.key==="Enter")$("btn-analyze").click();});
 
+// ── Import multi-liens ─────────────────────────────────────────────────────
+$("multi-toggle").addEventListener("change",e=>{
+  const on=e.target.checked;
+  $("single-url-row").classList.toggle("hidden",on);
+  $("multi-url-wrap").classList.toggle("hidden",!on);
+  $("analyze-status").classList.add("hidden");
+});
+$("btn-analyze-multi").onclick=async()=>{
+  const urls=$("l-urls").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!urls.length){$("l-urls").focus();return;}
+  setAnalyzing(true);$("btn-analyze-multi").disabled=true;
+  try{
+    const r=await fetch("/api/tool/analyze-multi",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({urls})});
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      throw new Error(d.detail||`HTTP ${r.status}`);
+    }
+    const d=await r.json();
+    setAnalyzing(false);
+    fillFormMulti(d);
+    show("step-form");
+  }catch(e){
+    setAnalyzing(false);
+    analyzeError(`${T("err_analyze")} ${e.message||""}`);
+  }finally{$("btn-analyze-multi").disabled=false;}
+};
+
+function fillFormMulti(d){
+  multiMode=true;videoInfo=null;setlistSource=null;
+  multiThumb=d.thumbnail||"";
+  const sug=d.suggestion||{};
+  mountArtistAC(sug.artist_id||"",sug.artist||"");
+  $("f-title").value="";$("f-date").value="";$("f-venue").value="";$("f-festival").value="";
+  $("src-card").classList.add("hidden");
+  $("setlist-src").classList.add("hidden");
+  // Vidéo indisponible en multi-liens (V1 audio seul) : on masque l'option.
+  const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.add("hidden");
+  $("f-video").checked=false;
+  $("track-rows").innerHTML="";
+  (d.clips||[]).forEach(c=>addFormRow({
+    title:c.title||"",artist:c.artist||"",url:c.url,error:c.error||"",
+    clipArtist:c.clip_artist||"",
+  }));
+  if(!(d.clips||[]).length)addFormRow({});
+}
+
+function exitMultiMode(){
+  multiMode=false;multiThumb="";
+  const vwrap=$("f-video").closest(".opt-check");
+  if(vwrap)vwrap.classList.remove("hidden");
+  $("f-video").checked=true;
+}
 $("btn-manual").onclick=()=>{
+  exitMultiMode();
   videoInfo=null;
   mountArtistAC("","");
   $("src-card").classList.add("hidden");
   if(!$("track-rows").children.length)addFormRow({});
   show("step-form");
 };
-$("btn-back-link").onclick=()=>show("step-link");
+$("btn-back-link").onclick=()=>{exitMultiMode();show("step-link");};
 
 // ============================================================
 // Étape 2 — Formulaire de vérification
@@ -188,6 +244,18 @@ function addFormRow(t){
   row.querySelector(".t-artist").value=t.artist||"";
   row.dataset.start=t.start!=null?t.start:"";
   row.dataset.end=t.end!=null?t.end:"";
+  // Mode multi-liens : la ligne mémorise son lien source. Un lien illisible
+  // est signalé et devra être corrigé ou retiré avant la préparation.
+  if(t.url!==undefined)row.dataset.url=t.url||"";
+  if(t.error){
+    row.classList.add("row-error");
+    row.title=t.error;
+    const b=row.querySelector(".t-badge");
+    if(b)b.innerHTML=`<span class="material-symbols-outlined" style="color:var(--like)" title="${t.error}">error</span>`;
+  }else if(t.url){
+    const b=row.querySelector(".t-badge");
+    if(b)b.innerHTML=`<a href="${t.url}" target="_blank" rel="noopener" title="${T("open_link")}"><span class="material-symbols-outlined">link</span></a>`;
+  }
   row.querySelector(".row-del").onclick=()=>{row.remove();renumber(rows);};
   rows.appendChild(row);
   renumber(rows);
@@ -212,18 +280,35 @@ $("btn-create").onclick=async()=>{
     if(r.dataset.end!=="")t.end=parseFloat(r.dataset.end);
     return t;
   }).filter(t=>t.title);
-  const body={
-    album:{artist,artist_id:av.id,title,date:$("f-date").value||null,
-      venue:$("f-venue").value.trim()||null,
-      festival:$("f-festival").value.trim()||null},
-    tracks,
-    target:$("f-target").value,
-    source_url:(videoInfo&&videoInfo.webpage_url)||$("l-url").value.trim(),
-    video:$("f-video").checked,
-    thumbnail_url:(videoInfo&&videoInfo.thumbnail)||"",
-    setlistfm_url:(setlistSource&&setlistSource.url)||"",
-    duration:(videoInfo&&videoInfo.duration)||null,
-  };
+  const album={artist,artist_id:av.id,title,date:$("f-date").value||null,
+    venue:$("f-venue").value.trim()||null,
+    festival:$("f-festival").value.trim()||null};
+  let body;
+  if(multiMode){
+    // Un lien illisible casserait la concaténation : on bloque avant l'envoi.
+    if($("track-rows").querySelector(".track-row.row-error")){
+      alert(T("err_multi_broken"));return;}
+    const clips=[...$("track-rows").querySelectorAll(".track-row")].map(r=>{
+      const url=r.dataset.url||"";
+      if(!url)return null;
+      const c={url,title:r.querySelector(".t-title").value.trim()};
+      const a=r.querySelector(".t-artist").value.trim();
+      if(a)c.artist=a;
+      return c;
+    }).filter(Boolean);
+    if(!clips.length){alert(T("err_required"));return;}
+    body={album,target:$("f-target").value,tracks:[],clips,
+      thumbnail_url:multiThumb,video:false,source_url:""};
+  }else{
+    body={album,tracks,
+      target:$("f-target").value,
+      source_url:(videoInfo&&videoInfo.webpage_url)||$("l-url").value.trim(),
+      video:$("f-video").checked,
+      thumbnail_url:(videoInfo&&videoInfo.thumbnail)||"",
+      setlistfm_url:(setlistSource&&setlistSource.url)||"",
+      duration:(videoInfo&&videoInfo.duration)||null,
+    };
+  }
   $("btn-create").disabled=true;
   try{
     const r=await fetch("/api/jobs",{method:"POST",

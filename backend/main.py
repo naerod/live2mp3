@@ -179,6 +179,13 @@ class AlbumIn(BaseModel):
     cover: str | None = None
 
 
+class ClipIn(BaseModel):
+    url: str
+    title: str
+    artist: str | None = None
+    duration: float | None = None
+
+
 class JobIn(BaseModel):
     album: AlbumIn
     tracks: list[TrackIn]
@@ -189,6 +196,9 @@ class JobIn(BaseModel):
     thumbnail_url: str = ""       # miniature -> proposition de pochette
     duration: float | None = None  # durée de la source (bornage des coupes)
     setlistfm_url: str = ""       # setlist officielle (attribution obligatoire)
+    # Mode multi-liens : chaque clip devient une piste, sources concaténées
+    # en un master unique à la préparation. Prime sur source_url/tracks.
+    clips: list[ClipIn] = []
 
 
 class SetlistTrackIn(BaseModel):
@@ -1125,16 +1135,28 @@ def album_admin_page(slug: str,
 @app.post("/api/jobs")
 def create_job(job: JobIn,
                identity: dict = Depends(require_gestionnaire)) -> dict[str, Any]:
-    tracks = [t.model_dump(exclude_none=True) for t in job.tracks]
-    # Setlist inconnue : piste unique provisoire, l'IA la remplacera à la
-    # préparation (transcription -> identification des chansons).
-    auto_setlist = not tracks
-    if auto_setlist:
-        tracks = [{"n": 1, "title": job.album.title or "Piste 1"}]
+    multi = bool(job.clips)
+    if multi:
+        # Une piste par clip, dans l'ordre fourni. Les timecodes exacts sont
+        # posés à la préparation (durées réelles des WAV décodés) : ici on ne
+        # connaît que les durées sondées, insuffisamment précises pour couper.
+        tracks = [{"n": i, "title": c.title.strip() or f"Piste {i}",
+                   "artist": (c.artist or "").strip() or None,
+                   "locked": True}
+                  for i, c in enumerate(job.clips, start=1)]
+        auto_setlist = False
+    else:
+        tracks = [t.model_dump(exclude_none=True) for t in job.tracks]
+        # Setlist inconnue : piste unique provisoire, l'IA la remplacera à la
+        # préparation (transcription -> identification des chansons).
+        auto_setlist = not tracks
+        if auto_setlist:
+            tracks = [{"n": 1, "title": job.album.title or "Piste 1"}]
     m = new_manifest(
         job.album.model_dump(exclude_none=True),
         tracks,
         target=job.target, source_url=job.source_url,
+        clips=[c.model_dump() for c in job.clips] if multi else None,
     )
     project_dir = PROJECTS_DIR / m.slug
     if (project_dir / "manifest.yaml").exists():
@@ -1142,7 +1164,9 @@ def create_job(job: JobIn,
             409, f"un album existe déjà sous ce slug ({m.slug}) — "
                  "modifier l'artiste ou la date")
     m.data["auto_setlist"] = auto_setlist
-    m.data["source"]["media"] = "video" if job.video else "audio"
+    # Multi-liens : audio uniquement en V1 (concaténer des vidéos de formats
+    # hétérogènes est un chantier distinct). La vidéo reste possible en mono-lien.
+    m.data["source"]["media"] = "video" if (job.video and not multi) else "audio"
     if job.thumbnail_url:
         m.data["source"]["thumbnail_url"] = job.thumbnail_url
     if job.duration:

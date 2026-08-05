@@ -38,10 +38,18 @@
   <section id="step-link" class="card">
     <h1><span class="material-symbols-outlined step-ico">link</span><span data-i18n="link_title">Créer un album depuis un lien</span></h1>
     <p class="note"><span class="material-symbols-outlined">info</span><span data-i18n="link_hint">Collez le lien d'une captation de concert (YouTube…). L'IA récupère l'artiste, la date, le lieu et la setlist — vous vérifiez chaque étape avant le résultat final.</span></p>
-    <div class="link-row">
+    <div class="link-row" id="single-url-row">
       <input id="l-url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off">
       <button id="btn-analyze" class="primary"><span class="material-symbols-outlined">auto_awesome</span> <span data-i18n="analyze">Analyser</span></button>
     </div>
+    <div id="multi-url-wrap" class="hidden">
+      <p class="note"><span class="material-symbols-outlined">info</span><span data-i18n="multi_hint">Un lien par ligne. Chaque lien devient une piste de l'album, dans cet ordre. Idéal pour regrouper les passages d'un même artiste (audio uniquement).</span></p>
+      <textarea id="l-urls" rows="6" placeholder="https://www.youtube.com/watch?v=…&#10;https://mytaratata.com/…&#10;https://mytaratata.com/…" autocomplete="off"></textarea>
+      <div class="actions" style="margin-top:12px">
+        <button id="btn-analyze-multi" class="primary"><span class="material-symbols-outlined">auto_awesome</span> <span data-i18n="analyze_multi">Analyser les liens</span></button>
+      </div>
+    </div>
+    <label class="opt-check" style="margin-top:14px"><input type="checkbox" id="multi-toggle"> <span data-i18n="multi_toggle">Importer depuis plusieurs liens</span></label>
     <p id="analyze-status" class="note hidden"></p>
     <div class="actions" style="margin-top:18px">
       <button id="btn-manual" class="icon-btn"><span class="material-symbols-outlined">edit_note</span> <span data-i18n="manual">Remplir manuellement</span></button>

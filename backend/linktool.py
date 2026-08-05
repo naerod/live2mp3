@@ -127,6 +127,31 @@ def heuristic_suggestion(video: dict) -> dict:
     }
 
 
+# --- Découpe artiste / titre pour un clip mono-chanson ---------------------
+_SHOW_TAIL = re.compile(r"\s*/\s*TARATATA.*$", re.IGNORECASE)
+_TRAIL_YEAR = re.compile(r"\s*\b(?:19|20)\d{2}\b\s*$")
+
+
+def split_song(video: dict) -> tuple[str, str]:
+    """Sépare « Artiste - Titre » d'une vidéo pointant une seule chanson.
+
+    Les captations mytaratata (et la plupart des extraits live) titrent
+    ``Artiste - Chanson / TARATATA … AAAA``. On isole l'artiste (avant le
+    premier « - »), on retire le suffixe d'émission et l'année ; le reste
+    (medley « A / B / C » compris) devient le titre. Best-effort : le
+    gestionnaire relit et corrige chaque ligne dans le formulaire.
+    """
+    title = (video.get("title") or "").strip()
+    artist, song = "", title
+    if " - " in title:
+        artist, song = (p.strip() for p in title.split(" - ", 1))
+    if not artist:
+        artist = _CHANNEL_NOISE.sub("", video.get("channel", "")).strip()
+    song = _SHOW_TAIL.sub("", song)
+    song = _TRAIL_YEAR.sub("", song).strip()
+    return artist, song or title
+
+
 # --- Route -----------------------------------------------------------------
 class AnalyzeIn(BaseModel):
     url: str
@@ -157,6 +182,73 @@ def analyze(payload: AnalyzeIn,
     _resolve_suggested_artist(suggestion)
     return {"video": video, "suggestion": suggestion, "ai": ai,
             "setlist_source": setlist_src}
+
+
+class AnalyzeMultiIn(BaseModel):
+    urls: list[str]
+
+
+@router.post("/analyze-multi")
+def analyze_multi(payload: AnalyzeMultiIn,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Sonde plusieurs liens, chacun devenant une piste d'un album unique.
+
+    Cas d'usage : regrouper les passages d'un même artiste (plusieurs vidéos
+    « une chanson » — cf. mytaratata) en un seul album. Chaque lien est sondé
+    indépendamment ; un lien illisible n'interrompt pas les autres (il revient
+    avec `error`, le formulaire l'affiche pour correction). Aucun
+    téléchargement ici (point d'arrêt D) : la concaténation a lieu à la
+    préparation.
+    """
+    urls = [u.strip() for u in (payload.urls or []) if u and u.strip()]
+    if not urls:
+        raise HTTPException(400, "aucun lien fourni")
+    if len(urls) > 30:
+        raise HTTPException(400, "30 liens maximum par album")
+
+    clips: list[dict] = []
+    artist_votes: dict[str, int] = {}
+    for url in urls:
+        if not re.match(r"^https?://", url):
+            clips.append({"url": url, "error": "URL invalide (http/https attendu)"})
+            continue
+        try:
+            video = probe_url(url)
+        except ProbeError as e:
+            clips.append({"url": url, "error": f"lien illisible : {e}"})
+            continue
+        artist, song = split_song(video)
+        if artist:
+            key = artist.casefold()
+            artist_votes[key] = artist_votes.get(key, 0) + 1
+        clips.append({
+            "url": video.get("webpage_url") or url,
+            "title": song,
+            "artist": "",              # rempli seulement si ≠ artiste album
+            "clip_artist": artist,     # artiste déduit du clip (indicatif)
+            "thumbnail": video.get("thumbnail") or "",
+            "duration": video.get("duration") or 0.0,
+            "channel": video.get("channel") or "",
+        })
+
+    ok = [c for c in clips if not c.get("error")]
+    if not ok:
+        raise HTTPException(422, "aucun lien exploitable")
+
+    # Artiste d'album = le plus fréquent parmi les clips lisibles.
+    album_artist = ""
+    if artist_votes:
+        top = max(artist_votes.values())
+        for c in ok:
+            if c["clip_artist"] and artist_votes.get(c["clip_artist"].casefold()) == top:
+                album_artist = c["clip_artist"]
+                break
+
+    suggestion = {"artist": album_artist, "title": "",
+                  "date": None, "venue": "", "city": "", "festival": ""}
+    _resolve_suggested_artist(suggestion)
+    return {"clips": clips, "suggestion": suggestion,
+            "thumbnail": next((c["thumbnail"] for c in ok if c["thumbnail"]), "")}
 
 
 def _resolve_suggested_artist(suggestion: dict) -> None:

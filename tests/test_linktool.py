@@ -279,6 +279,131 @@ def test_analyze_route_mocked(client, monkeypatch):
                   headers=GEST).status_code == 400
 
 
+def test_split_song():
+    v = {"title": "Shaka Ponk - House Of The Rising Sun (The Animals) / TARATATA 2024",
+         "channel": "MyTaratata"}
+    assert linktool.split_song(v) == ("Shaka Ponk",
+                                      "House Of The Rising Sun (The Animals)")
+    # Medley : les « / » internes sont préservés, seul le suffixe émission tombe.
+    v2 = {"title": "Shaka Ponk - Sun / Brutal Pop / Wanna Get Free 2024",
+          "channel": ""}
+    assert linktool.split_song(v2) == ("Shaka Ponk",
+                                       "Sun / Brutal Pop / Wanna Get Free")
+
+
+def test_analyze_multi_route(client, monkeypatch):
+    c, _ = client
+
+    def fake_probe(url):
+        song = "Sex Ball" if "sex" in url else "Ayo (I'm Picky)"
+        return linktool.normalize_info(
+            {"title": f"Shaka Ponk - {song} / TARATATA 2024",
+             "channel": "MyTaratata", "duration": 200.0,
+             "thumbnail": "https://img/x.jpg", "webpage_url": url,
+             "extractor_key": "Generic"}, url)
+
+    monkeypatch.setattr(linktool, "probe_url", fake_probe)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    urls = ["https://mytaratata.com/sex-ball", "https://mytaratata.com/ayo"]
+    r = c.post("/api/tool/analyze-multi", json={"urls": urls}, headers=GEST)
+    assert r.status_code == 200
+    d = r.json()
+    assert len(d["clips"]) == 2
+    assert d["clips"][0]["title"] == "Sex Ball"
+    assert d["clips"][0]["clip_artist"] == "Shaka Ponk"
+    assert d["suggestion"]["artist"] == "Shaka Ponk"
+    assert d["thumbnail"] == "https://img/x.jpg"
+    # Lien illisible isolé : n'interrompt pas les autres
+    def probe_maybe(url):
+        if "bad" in url:
+            raise linktool.ProbeError("404")
+        return fake_probe(url)
+    monkeypatch.setattr(linktool, "probe_url", probe_maybe)
+    r2 = c.post("/api/tool/analyze-multi",
+                json={"urls": ["https://x/bad", "https://x/sex"]}, headers=GEST)
+    assert r2.status_code == 200
+    clips = r2.json()["clips"]
+    assert clips[0]["error"] and not clips[1].get("error")
+    # Réservé aux gestionnaires, liste vide refusée
+    assert c.post("/api/tool/analyze-multi", json={"urls": urls},
+                  headers=USER).status_code == 403
+    assert c.post("/api/tool/analyze-multi", json={"urls": []},
+                  headers=GEST).status_code == 400
+
+
+def test_create_job_multi_manifest(client):
+    c, projects = client
+    payload = {
+        "album": {"artist": "Shaka Ponk", "title": "Taratata - Shaka Ponk"},
+        "tracks": [],
+        "clips": [
+            {"url": "https://t/1", "title": "Sex Ball", "duration": 200.0},
+            {"url": "https://t/2", "title": "Ayo", "artist": "Ayo", "duration": 180.0},
+        ],
+        "video": True,   # ignoré en multi : audio forcé
+    }
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    m = c.get(f"/api/jobs/{slug}/manifest", headers=GEST).json()
+    assert m["source"]["multi"] is True
+    assert [c2["url"] for c2 in m["source"]["clips"]] == ["https://t/1", "https://t/2"]
+    assert m["source"]["media"] == "audio"        # vidéo désactivée en multi
+    assert m["auto_setlist"] is False
+    assert len(m["tracks"]) == 2
+    assert m["tracks"][0]["title"] == "Sex Ball" and m["tracks"][0]["locked"] is True
+    assert m["tracks"][1]["artist"] == "Ayo"
+    # Timecodes posés seulement à la préparation (concaténation)
+    assert m["tracks"][0]["start"] is None
+
+
+def test_run_multi_concat_and_timecodes(client, monkeypatch):
+    """Concaténation réelle de 2 clips synthétiques -> master + timecodes."""
+    from backend import main
+    from backend.manifest import Manifest
+    from backend.pipeline import download
+    c, projects = client
+    payload = {
+        "album": {"artist": "Shaka Ponk", "title": "Taratata - Shaka Ponk"},
+        "tracks": [],
+        "clips": [
+            {"url": "https://t/1", "title": "A", "duration": 3.0},
+            {"url": "https://t/2", "title": "B", "duration": 5.0},
+        ],
+    }
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    project_dir = projects / slug
+
+    # download_audio mocké : produit un fichier audio synthétique par clip
+    # (durées volontairement différentes pour vérifier le bornage cumulé).
+    durs = {0: 3.0, 1: 5.0}
+    def fake_dl(url, source_dir, cookies=None, progress=None, stem="master_audio"):
+        idx = int(stem.split("_")[1])
+        # Extension distincte du .wav produit par extract_wav (comme le ferait
+        # yt-dlp : m4a/webm), sinon entrée == sortie à l'extraction.
+        out = source_dir / f"{stem}.src.wav"
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "lavfi",
+            "-i", f"sine=frequency=440:duration={durs[idx]}",
+            "-ar", "44100", "-ac", "2", str(out)], check=True, capture_output=True)
+        if progress:
+            progress(100.0)
+        return out
+    monkeypatch.setattr(download, "download_audio", fake_dl)
+
+    download.run(project_dir)
+
+    master = project_dir / "source" / "master.wav"
+    assert master.exists()
+    assert abs(download._wav_seconds(master) - 8.0) < 0.1   # 3 + 5
+    m = Manifest.load(project_dir / "manifest.yaml")
+    assert m.state("download") == "done"
+    t0, t1 = m.tracks
+    assert abs(t0["start"] - 0.0) < 0.05 and abs(t0["end"] - 3.0) < 0.05
+    assert abs(t1["start"] - 3.0) < 0.05 and abs(t1["end"] - 8.0) < 0.05
+    assert t0["locked"] and t1["locked"]
+    # Segments temporaires nettoyés
+    assert not list((project_dir / "source").glob("clip_*.wav"))
+
+
 def test_setlist_replace_and_validation(client):
     c, projects = client
     slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]
