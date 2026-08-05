@@ -41,6 +41,52 @@ class ProbeError(RuntimeError):
     """Le lien n'a pas pu être lu par yt-dlp."""
 
 
+# --- Résolveur mytaratata --------------------------------------------------
+# yt-dlp ne connaît pas mytaratata.com (« Unsupported URL »), mais chaque page
+# embarque un MP4 direct (JWPlayer) parfaitement lisible. On résout donc la
+# page vers ce MP4 + son titre/pochette avant de passer la main à yt-dlp.
+_MYTARATATA_PAGE = re.compile(r"^https?://(?:www\.)?mytaratata\.com/", re.I)
+_TARA_SOURCE = re.compile(r'data-source="([^"]+\.mp4)"', re.I)
+_TARA_H1 = re.compile(r"<h1>([^<]+)</h1>", re.I)
+_TARA_IMG = re.compile(r'data-image="([^"]+)"', re.I)
+
+
+def resolve_mytaratata(url: str) -> dict:
+    """Page mytaratata -> info normalisée pointant le MP4 embarqué.
+
+    Le titre de la page (« Artiste "Chanson" (année) ») est plus fiable que le
+    nom de fichier du MP4 ; il est conservé tel quel et interprété plus tard
+    (split_song). Le MP4 devient l'URL de téléchargement (yt-dlp la lit en
+    extracteur générique).
+    """
+    import html
+    try:
+        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+    except requests.RequestException as e:
+        raise ProbeError(f"page mytaratata illisible : {e}") from e
+    page = r.text
+    msrc = _TARA_SOURCE.search(page)
+    if not msrc:
+        raise ProbeError("aucune vidéo trouvée sur la page mytaratata")
+    mp4 = msrc.group(1)
+    h1 = _TARA_H1.search(page)
+    title = html.unescape(h1.group(1)).strip() if h1 else ""
+    img = _TARA_IMG.search(page)
+    return {
+        "id": mp4.rsplit("/", 1)[-1].rsplit(".", 1)[0],
+        "title": title,
+        "channel": "Taratata",
+        "upload_date": "",
+        "duration": 0.0,          # inconnue ici ; mesurée au téléchargement
+        "description": "",
+        "chapters": [],
+        "thumbnail": img.group(1) if img else "",
+        "webpage_url": mp4,       # cible de téléchargement (MP4 direct)
+        "extractor": "mytaratata",
+    }
+
+
 # --- Sonde yt-dlp ----------------------------------------------------------
 def probe_url(url: str) -> dict:
     """Métadonnées de la vidéo sans téléchargement.
@@ -48,6 +94,10 @@ def probe_url(url: str) -> dict:
     `--no-playlist` : un lien YouTube copié depuis une lecture embarque souvent
     `&list=…` (radio/mix) — on ne veut que la vidéo pointée.
     """
+    # mytaratata : résolution maison vers le MP4 embarqué (yt-dlp ne gère pas
+    # les pages du site, seulement le fichier MP4 final).
+    if _MYTARATATA_PAGE.match(url) and "videos.mytaratata.com" not in url:
+        return resolve_mytaratata(url)
     cmd = ["yt-dlp", "--dump-single-json", "--no-playlist", "--skip-download",
            "--no-warnings"]
     cookies = os.environ.get("YTDLP_COOKIES")
@@ -143,7 +193,12 @@ def split_song(video: dict) -> tuple[str, str]:
     """
     title = (video.get("title") or "").strip()
     artist, song = "", title
-    if " - " in title:
+    # Format mytaratata : « Artiste "Chanson" (année) » (guillemets droits ou
+    # typographiques après déséchappement HTML).
+    mt = re.match(r'^(.*?)\s*[«"“”]([^"“”«»]+)[»"“”]', title)
+    if mt:
+        artist, song = mt.group(1).strip(), mt.group(2).strip()
+    elif " - " in title:
         artist, song = (p.strip() for p in title.split(" - ", 1))
     if not artist:
         artist = _CHANNEL_NOISE.sub("", video.get("channel", "")).strip()

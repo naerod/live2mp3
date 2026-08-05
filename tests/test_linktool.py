@@ -291,6 +291,46 @@ def test_split_song():
                                        "Sun / Brutal Pop / Wanna Get Free")
 
 
+_TARA_HTML = (
+    '<div class="jwplayer" data-image="https://mytaratata.com/img/x.jpeg" '
+    'data-source="https://videos.mytaratata.com/videos/402/289-1024x576.mp4">'
+    '</div><h1>Coldplay &quot;Viva La Vida&quot; (2011)</h1>')
+
+
+def test_resolve_mytaratata(monkeypatch):
+    class R:
+        text = _TARA_HTML
+        def raise_for_status(self): pass
+    monkeypatch.setattr(linktool.requests, "get", lambda *a, **k: R())
+    v = linktool.resolve_mytaratata("https://mytaratata.com/taratata/402/coldplay")
+    assert v["webpage_url"].endswith("289-1024x576.mp4")   # cible de download
+    assert v["title"] == 'Coldplay "Viva La Vida" (2011)'
+    assert v["thumbnail"].endswith(".jpeg")
+    assert v["extractor"] == "mytaratata"
+    # Titre mytaratata « Artiste "Chanson" (année) » -> artiste/titre corrects
+    assert linktool.split_song(v) == ("Coldplay", "Viva La Vida")
+
+
+def test_probe_routes_mytaratata_pages(monkeypatch):
+    """probe_url délègue les pages mytaratata au résolveur, pas à yt-dlp."""
+    resolved = []
+    monkeypatch.setattr(linktool, "resolve_mytaratata",
+                        lambda url: resolved.append(url) or {"ok": 1})
+    # yt-dlp mocké en échec explicite : le distinguer d'une résolution.
+    def stub_ytdlp(*a, **k):
+        raise RuntimeError("yt-dlp appelé")
+    monkeypatch.setattr(linktool.subprocess, "run", stub_ytdlp)
+
+    # Page mytaratata -> résolveur, pas yt-dlp.
+    linktool.probe_url("https://mytaratata.com/taratata/402/x")
+    assert resolved == ["https://mytaratata.com/taratata/402/x"]
+
+    # MP4 direct -> yt-dlp générique, jamais le résolveur.
+    with pytest.raises(RuntimeError, match="yt-dlp appelé"):
+        linktool.probe_url("https://videos.mytaratata.com/videos/402/289.mp4")
+    assert resolved == ["https://mytaratata.com/taratata/402/x"]   # inchangé
+
+
 def test_analyze_multi_route(client, monkeypatch):
     c, _ = client
 
