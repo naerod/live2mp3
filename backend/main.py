@@ -871,6 +871,11 @@ def update_tracks(slug: str, payload: TracksEditIn,
     tagged = _write_track_tags(slug, m)
     tagged += _write_album_tags(slug, m)
     renamed = _rename_audio_files(slug, m)
+    # Un renommage de fichier ou un changement de titre ID3 laisse Jellyfin
+    # avec l'ancien chemin/nom en cache : la lecture du fichier disparu
+    # échoue côté client (« an error has occurred »). Best-effort, comme
+    # à l'ajout de piste (cf. jellyfin.py).
+    jellyfin.refresh_album(slug)
     return {"ok": True, "tracks": len(new_tracks), "mp3_tagged": tagged, "renamed": renamed}
 
 
@@ -1428,6 +1433,8 @@ def update_setlist(slug: str, payload: SetlistIn,
     m.data["auto_setlist"] = False
     m.save()
     _rename_audio_files(slug, m)
+    # Réconcilie Jellyfin avec les fichiers renommés (cf. update_tracks).
+    jellyfin.refresh_album(slug)
     return {"ok": True, "tracks": len(m.tracks)}
 
 
