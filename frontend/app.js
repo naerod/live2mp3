@@ -66,11 +66,11 @@ function artistValue(){
 // ============================================================
 // Étape 1 — Analyse du lien
 // ============================================================
-function setAnalyzing(on){
+function setAnalyzing(on,key="analyzing"){
   $("btn-analyze").disabled=on;
   const st=$("analyze-status");
   st.classList.toggle("hidden",!on);
-  if(on)st.innerHTML=`<span class="material-symbols-outlined spin">progress_activity</span><span>${T("analyzing")}</span>`;
+  if(on)st.innerHTML=`<span class="material-symbols-outlined spin">progress_activity</span><span>${T(key)}</span>`;
 }
 function analyzeError(text){
   const st=$("analyze-status");
@@ -112,7 +112,7 @@ $("multi-toggle").addEventListener("change",e=>{
 $("btn-analyze-multi").onclick=async()=>{
   const urls=$("l-urls").value.split("\n").map(s=>s.trim()).filter(Boolean);
   if(!urls.length){$("l-urls").focus();return;}
-  setAnalyzing(true);$("btn-analyze-multi").disabled=true;
+  setAnalyzing(true,"analyzing_multi");$("btn-analyze-multi").disabled=true;
   try{
     const r=await fetch("/api/tool/analyze-multi",{method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({urls})});
@@ -126,7 +126,7 @@ $("btn-analyze-multi").onclick=async()=>{
     show("step-form");
   }catch(e){
     setAnalyzing(false);
-    analyzeError(`${T("err_analyze")} ${e.message||""}`);
+    analyzeError(`${T("err_analyze_multi")} ${e.message||""}`);
   }finally{$("btn-analyze-multi").disabled=false;}
 };
 
@@ -138,6 +138,11 @@ function fillFormMulti(d){
   $("f-title").value="";$("f-date").value="";$("f-venue").value="";$("f-festival").value="";
   $("src-card").classList.add("hidden");
   $("setlist-src").classList.add("hidden");
+  // Consigne setlist adaptée : 1 piste = 1 lien (pas de détection IA à l'écoute).
+  $("setlist-hint").setAttribute("data-i18n","setlist_hint_multi");
+  // « Ajouter une piste » n'a pas de sens ici (une piste sans lien est ignorée).
+  $("btn-add-track").classList.add("hidden");
+  applyI18n(LANG());
   // Vidéo indisponible en multi-liens (V1 audio seul) : on masque l'option.
   const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.add("hidden");
   $("f-video").checked=false;
@@ -154,6 +159,10 @@ function exitMultiMode(){
   const vwrap=$("f-video").closest(".opt-check");
   if(vwrap)vwrap.classList.remove("hidden");
   $("f-video").checked=true;
+  // Restaure les libellés du mode mono-lien.
+  $("setlist-hint").setAttribute("data-i18n","setlist_hint");
+  $("btn-add-track").classList.remove("hidden");
+  applyI18n(LANG());
 }
 $("btn-manual").onclick=()=>{
   exitMultiMode();
@@ -360,8 +369,10 @@ function runProgress(titleKey,stages,onComplete,onCancelled){
   const items={};
   stages.forEach(s=>{
     const li=document.createElement("li");
+    // Multi-liens : plusieurs sources téléchargées -> libellé au pluriel.
+    const label=(s==="download"&&multiMode)?T("stage_download_multi"):T("stage_"+s);
     li.innerHTML=`<div class="stage-head"><span class="dot"></span>`+
-      `<span class="stage-label">${T("stage_"+s)}</span>`+
+      `<span class="stage-label">${label}</span>`+
       `<span class="stage-pct"></span></div>`+
       `<div class="stage-bar"><div class="stage-fill"></div></div>`;
     ul.appendChild(li);items[s]=li;
