@@ -1,3 +1,28 @@
+2026-08-05 : **Découpe précise à la waveform pour l'ajout de piste**
+(preprod v1.22.1). La saisie « minute:seconde » ne permettait pas de caler un
+début pile sur l'attaque (parlote d'intro). Bouton « Découpe précise » dans le
+panneau d'ajout depuis un lien → waveform + deux poignées début/fin, rognage au
+millième de seconde.
+- Backend `addtrack.py` : `POST .../tracks/prep-clip` télécharge la source **une
+  seule fois** (thread + sondage), en sort une `waveform.dat`
+  (`preanalyze.generate_waveform`, comme l'éditeur d'album) et un `preview.mp3`
+  128k, servis par `GET .../prep-clip/{token}/waveform.dat` et `/audio`. La prépa
+  vit sous `projects/.l2m-addtrack/prep-<token>/` jusqu'à consommation (balayage
+  TTL 1 h pour les onglets fermés). `AddTrackIn.prep_token` → `_run_add_bg`
+  réutilise la source déjà téléchargée (pas de second yt-dlp) et nettoie la prépa.
+- Front : composant autonome `frontend/shared/clip-trimmer.js` (`ClipTrimmer`,
+  sans dépendance) — décode le binaire audiowaveform v2, dessine la waveform +
+  poignées glissables + voile hors-sélection + tête de lecture, boutons Lire /
+  Écouter la sélection / Début ici / Fin ici. Câblé dans `album.html` (panneau
+  from-url) : les poignées font foi sur le rognage quand la découpe est active.
+- Tests : 3 cas dans `test_addtrack.py` (waveform+preview produits, réutilisation
+  de la source sans re-download, auth gestionnaire). Suite : 250 passés, 1 skip.
+- Vérifié E2E sur preprod (vraie vidéo YouTube 337 s : prep-clip → waveform 67 ko
+  + mp3 5,4 Mo) + rendu visuel du composant (screenshot, clair/sombre via vars).
+- **TODO (demandé) :** fonctionnalité « remplacer une piste » (réimport d'une
+  vidéo + découpe précise pour que la jonction avec les pistes voisines soit
+  parfaite). Réutiliser ClipTrimmer.
+
 2026-08-03 (suite 2) : **Ajout de pistes depuis le bouton « Importer »**
 (preprod v1.20.6). Le panneau d'ajout n'existait que dans la page de gestion :
 il fallait déjà savoir où l'on allait.
