@@ -289,6 +289,12 @@ def test_split_song():
           "channel": ""}
     assert linktool.split_song(v2) == ("Shaka Ponk",
                                        "Sun / Brutal Pop / Wanna Get Free")
+    # Format mytaratata avec crédit de reprise : « (The Animals) » conservé,
+    # année « (2024) » retirée.
+    v3 = {"title": 'Shaka Ponk "House Of The Rising Sun" (The Animals) (2024)',
+          "channel": "Taratata"}
+    assert linktool.split_song(v3) == ("Shaka Ponk",
+                                       "House Of The Rising Sun (The Animals)")
 
 
 _TARA_HTML = (

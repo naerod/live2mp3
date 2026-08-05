@@ -179,7 +179,9 @@ def heuristic_suggestion(video: dict) -> dict:
 
 # --- Découpe artiste / titre pour un clip mono-chanson ---------------------
 _SHOW_TAIL = re.compile(r"\s*/\s*TARATATA.*$", re.IGNORECASE)
-_TRAIL_YEAR = re.compile(r"\s*\b(?:19|20)\d{2}\b\s*$")
+# Année finale, éventuellement entre parenthèses (mytaratata : « … (2024) »).
+_TRAIL_YEAR = re.compile(r"\s*\(?\b(?:19|20)\d{2}\b\)?\s*$")
+_QUOTES = re.compile(r"[«»\"“”]")
 
 
 def split_song(video: dict) -> tuple[str, str]:
@@ -193,11 +195,14 @@ def split_song(video: dict) -> tuple[str, str]:
     """
     title = (video.get("title") or "").strip()
     artist, song = "", title
-    # Format mytaratata : « Artiste "Chanson" (année) » (guillemets droits ou
-    # typographiques après déséchappement HTML).
-    mt = re.match(r'^(.*?)\s*[«"“”]([^"“”«»]+)[»"“”]', title)
+    # Format mytaratata : « Artiste "Chanson" (Reprise) (année) ». On prend
+    # l'artiste avant le 1er guillemet, puis TOUT le reste (on ne garde pas
+    # que la partie citée : « (The Animals) » est un crédit de reprise à
+    # conserver). Les guillemets sont retirés, l'année finale tombe plus bas.
+    mt = re.match(r'^(.*?)\s*[«"“”](.+)$', title)
     if mt:
-        artist, song = mt.group(1).strip(), mt.group(2).strip()
+        artist = mt.group(1).strip()
+        song = _QUOTES.sub("", mt.group(2)).strip()
     elif " - " in title:
         artist, song = (p.strip() for p in title.split(" - ", 1))
     if not artist:
