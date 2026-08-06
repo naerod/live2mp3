@@ -1025,3 +1025,27 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
 - ⚠️ Non lié : addtrack.py / album.html / clip-trimmer.js / test_addtrack.py
   restent modifiés non commités (travail « découpe waveform » d'une session
   précédente) — délibérément laissés intacts, hors périmètre de ce commit.
+
+2026-08-06 : réordonnancement des pistes (import multi-liens) — preprod v1.22.9.
+- **Formulaire** (avant préparation, v1.22.7) : flèches ↑↓ sur chaque ligne en
+  mode multi (classe #track-rows.reorderable) ; l'ordre des lignes = ordre de
+  concaténation. ↑ désactivée 1re ligne, ↓ dernière. i18n move_up/move_down.
+- **Éditeur** (après préparation, v1.22.8/.9) : réordonnancement d'un album déjà
+  préparé via **re-concaténation** (le CUE d'un CD audio exige des timecodes
+  croissants) :
+  - backend `download.reorder_master(project_dir, order)` : découpe le master
+    par timecodes, ré-assemble dans l'ordre voulu, repose des timecodes cumulés
+    monotones, réordonne source.clips. **Indexe par ordre temporel (start)**,
+    pas l'ordre de liste du manifeste (qui peut différer — cas coldplay-untitled)
+    → apparie (piste, clip) puis trie par start avant permutation. Multi seulement.
+  - endpoint `POST /api/jobs/{slug}/reorder {order:[...]}` (permutation des index
+    pistes en ordre temporel) → reorder_master + régénère waveform/preview ; 400
+    si mono-source.
+  - front éditeur : flèches ↑↓ (albums multi), réordonnancement local + barre
+    « Appliquer l'ordre » = un seul /reorder + rechargement openEditor(). Autosave
+    gelé tant que non appliqué (le PUT /setlist re-trie par start), validation
+    bloquée pendant ce temps. oi = index temporel de EDIT (trié par start).
+- Vérifié E2E sur copie réelle de coldplay-untitled (31 min) : inversion correcte
+  de l'ordre chrono, timecodes contigus, master préservé, album original intact.
+- Tests : reorder_master (concat réelle + cas liste≠ordre temporel), refus
+  mono-source. **262 passed.**
