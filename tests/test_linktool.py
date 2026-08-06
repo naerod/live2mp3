@@ -475,7 +475,15 @@ def test_reorder_master_multi(client, monkeypatch):
     monkeypatch.setattr(download, "download_audio", fake_dl)
     download.run(project_dir)
 
-    # Inverse l'ordre : B (5s) devient piste 1, A (3s) piste 2.
+    # Cas anomal : la liste du manifeste n'est PAS dans l'ordre temporel
+    # (piste B avant A dans la liste, mais A commence à 0). La permutation
+    # reçue porte sur l'ordre TEMPOREL (comme l'éditeur), pas l'ordre de liste.
+    m0 = Manifest.load(project_dir / "manifest.yaml")
+    m0.data["tracks"] = list(reversed(m0.data["tracks"]))
+    m0.data["source"]["clips"] = list(reversed(m0.data["source"]["clips"]))
+    m0.save()
+
+    # order=[1,0] sur l'ordre temporel (A=idx0 @0-3, B=idx1 @3-8) -> B en tête.
     res = download.reorder_master(project_dir, [1, 0])
     assert res["tracks"] == 2
     m = Manifest.load(project_dir / "manifest.yaml")

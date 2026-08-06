@@ -194,12 +194,21 @@ def reorder_master(project_dir: str | Path, order: list[int]) -> dict:
     if not master.is_file():
         raise ValueError("master.wav absent : rouvrir l'éditeur pour le régénérer")
 
+    # Index canonique = ordre temporel (par `start`), identique à celui de
+    # l'éditeur (EDIT trié par start) : c'est sur cet ordre que porte la
+    # permutation reçue. La liste du manifeste peut différer de l'ordre
+    # temporel ; on apparie chaque piste à son clip (positions parallèles
+    # écrites par run_multi) avant de trier.
+    if len(clips) != n:
+        raise ValueError("incohérence pistes/clips dans le manifeste")
+    paired = sorted(zip(tracks, clips), key=lambda p: float(p[0]["start"]))
+
     source_dir = project_dir / "source"
     segs: list[Path] = []
     try:
         # Découpe chaque piste dans l'ordre VOULU (segments PCM, précis).
         for pos, idx in enumerate(order):
-            t = tracks[idx]
+            t = paired[idx][0]
             seg = source_dir / f"reorder_{pos:02d}.wav"
             subprocess.run(
                 ["ffmpeg", "-y", "-i", str(master), "-ss", str(float(t["start"])),
@@ -225,7 +234,7 @@ def reorder_master(project_dir: str | Path, order: list[int]) -> dict:
     # Timecodes cumulés depuis les durées réelles des segments réordonnés.
     new_tracks, new_clips, t0 = [], [], 0.0
     for pos, idx in enumerate(order):
-        old = tracks[idx]
+        old, clip = paired[idx]
         dur = float(old["end"]) - float(old["start"])
         nt = dict(old)
         nt["n"] = pos + 1
@@ -233,7 +242,7 @@ def reorder_master(project_dir: str | Path, order: list[int]) -> dict:
         nt["end"] = round(t0 + dur, 3)
         nt["locked"] = True
         new_tracks.append(nt)
-        new_clips.append(clips[idx])
+        new_clips.append(clip)
         t0 += dur
     m.data["tracks"] = new_tracks
     m.data["source"]["clips"] = new_clips
