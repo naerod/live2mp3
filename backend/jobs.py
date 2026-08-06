@@ -139,6 +139,12 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
             cancel=lambda: renderqueue.cancel_requested(slug),
             paused=lambda: renderqueue.is_paused(slug),
         )
+        # Crée le symlink Jellyfin si l'album est publié mais pas encore monté :
+        # une publication faite AVANT la fin du rendu déclenche sync-media.sh
+        # alors que build/audio n'a pas encore de MP3 (catalogue has_mp3=false),
+        # donc aucun symlink n'est posé — et rien ne le repose ensuite. Idempotent
+        # si déjà monté ou si l'album n'est pas publié (sync-media.sh réconcilie).
+        jellyfin.trigger_sync()
         if republish:
             # Un album déjà publié qu'on vient de re-rendre doit réapparaître à
             # jour dans Jellyfin : le symlink existe déjà, sync-media.sh ne voit
@@ -227,6 +233,10 @@ def render_video_job(*, slug: str, republish: bool) -> dict:
             cancel=lambda: renderqueue.cancel_requested(slug, KIND),
             paused=lambda: renderqueue.is_paused(slug, KIND),
         )
+        # Même logique que pour l'audio : garantit le montage du symlink clips
+        # si l'album est publié mais que le rendu vidéo n'était pas prêt lors
+        # de la publication (course publication/rendu).
+        jellyfin.trigger_sync()
         if republish:
             # Même raison que pour l'audio : sync-media.sh ne voit pas un
             # changement de contenu dans un dossier déjà monté.
