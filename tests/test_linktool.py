@@ -450,6 +450,57 @@ def test_run_multi_concat_and_timecodes(client, monkeypatch):
     assert not list((project_dir / "source").glob("clip_*.wav"))
 
 
+def test_reorder_master_multi(client, monkeypatch):
+    """Réordonnancement : re-concaténation du master + timecodes recalculés."""
+    from backend.manifest import Manifest
+    from backend.pipeline import download
+    c, projects = client
+    payload = {
+        "album": {"artist": "Coldplay", "title": "Taratata - Coldplay"},
+        "tracks": [],
+        "clips": [{"url": "https://t/1", "title": "A", "duration": 3.0},
+                  {"url": "https://t/2", "title": "B", "duration": 5.0}],
+    }
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    project_dir = projects / slug
+    durs = {0: 3.0, 1: 5.0}
+    def fake_dl(url, source_dir, cookies=None, progress=None, stem="master_audio"):
+        idx = int(stem.split("_")[1])
+        out = source_dir / f"{stem}.src.wav"
+        subprocess.run(["ffmpeg", "-y", "-f", "lavfi",
+                        "-i", f"sine=frequency=440:duration={durs[idx]}",
+                        "-ar", "44100", "-ac", "2", str(out)],
+                       check=True, capture_output=True)
+        return out
+    monkeypatch.setattr(download, "download_audio", fake_dl)
+    download.run(project_dir)
+
+    # Inverse l'ordre : B (5s) devient piste 1, A (3s) piste 2.
+    res = download.reorder_master(project_dir, [1, 0])
+    assert res["tracks"] == 2
+    m = Manifest.load(project_dir / "manifest.yaml")
+    t0, t1 = m.tracks
+    assert t0["title"] == "B" and t0["n"] == 1
+    assert abs(t0["start"] - 0.0) < 0.05 and abs(t0["end"] - 5.0) < 0.05
+    assert t1["title"] == "A" and t1["n"] == 2
+    assert abs(t1["start"] - 5.0) < 0.05 and abs(t1["end"] - 8.0) < 0.05
+    # clips réordonnés en parallèle ; master toujours 8 s ; segments nettoyés
+    assert [cl["url"] for cl in m.data["source"]["clips"]] == ["https://t/2", "https://t/1"]
+    assert abs(download._wav_seconds(project_dir / "source" / "master.wav") - 8.0) < 0.1
+    assert not list((project_dir / "source").glob("reorder_*.wav"))
+    # Permutation invalide rejetée
+    with pytest.raises(ValueError):
+        download.reorder_master(project_dir, [0, 0])
+
+
+def test_reorder_endpoint_rejects_single_source(client):
+    """L'endpoint /reorder refuse un album mono-source (400)."""
+    c, projects = client
+    slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]
+    r = c.post(f"/api/jobs/{slug}/reorder", json={"order": [0]}, headers=GEST)
+    assert r.status_code == 400
+
+
 def test_setlist_replace_and_validation(client):
     c, projects = client
     slug = c.post("/api/jobs", json=_job_payload(), headers=GEST).json()["slug"]

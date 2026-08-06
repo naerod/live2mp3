@@ -375,6 +375,15 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .track-row .row-move{display:none;gap:2px}
 #track-rows.reorderable .row-move{display:inline-flex}
 .track-row .row-move button:disabled{opacity:.3;cursor:default}
+/* Éditeur : les flèches sont rendues conditionnellement (editMulti) donc
+   toujours visibles quand présentes. */
+#edit-rows .row-move{display:inline-flex}
+.reorder-bar{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:10px;
+  background:var(--card2,rgba(136,147,242,.12));
+  border:1px solid var(--accent,#8893f2)}
+.reorder-bar .reorder-msg{display:flex;align-items:center;gap:8px;font-size:14px}
+.reorder-bar .reorder-actions{display:flex;gap:8px}
 .track-row.row-error{outline:1px solid var(--like);outline-offset:4px;border-radius:8px}
 .track-row .t-badge a{color:var(--muted);display:inline-flex;text-decoration:none}
 .track-row .t-badge a:hover{color:var(--accent,var(--fg))}

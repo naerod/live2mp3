@@ -167,6 +167,81 @@ def run_multi(project_dir: Path, clips: list[dict],
             "durations": durations}
 
 
+def reorder_master(project_dir: str | Path, order: list[int]) -> dict:
+    """Réordonne un album multi-liens en re-concaténant le master.
+
+    `order` : permutation des index 0-based des pistes actuelles, dans le nouvel
+    ordre voulu. Chaque piste étant un segment contigu de master.wav, on découpe
+    le master par timecodes, on ré-assemble dans le nouvel ordre, puis on repose
+    des timecodes cumulés (monotones) — l'éditeur et le CUE d'un CD audio
+    restent donc valides. Titres/artistes suivent leur piste ; `source.clips`
+    est réordonné en parallèle (cohérence d'un éventuel re-téléchargement).
+
+    Réservé aux albums multi-liens (`source.clips`) : sur une source unique, les
+    pistes ne sont pas des chansons entières indépendantes (gaps, transitions).
+    """
+    project_dir = Path(project_dir)
+    m = Manifest.load(project_dir / "manifest.yaml")
+    src = m.data.get("source", {})
+    clips = src.get("clips")
+    if not clips:
+        raise ValueError("réordonnancement réservé aux albums multi-liens")
+    tracks = m.tracks
+    n = len(tracks)
+    if sorted(order) != list(range(n)):
+        raise ValueError("ordre invalide (doit être une permutation des pistes)")
+    master = project_dir / src["master_wav"]
+    if not master.is_file():
+        raise ValueError("master.wav absent : rouvrir l'éditeur pour le régénérer")
+
+    source_dir = project_dir / "source"
+    segs: list[Path] = []
+    try:
+        # Découpe chaque piste dans l'ordre VOULU (segments PCM, précis).
+        for pos, idx in enumerate(order):
+            t = tracks[idx]
+            seg = source_dir / f"reorder_{pos:02d}.wav"
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", str(master), "-ss", str(float(t["start"])),
+                 "-to", str(float(t["end"])), "-c:a", "pcm_s16le",
+                 "-ar", "44100", "-ac", "2", str(seg)],
+                check=True, capture_output=True)
+            segs.append(seg)
+        # Ré-assemblage -> master temporaire puis remplacement atomique.
+        tmp_master = source_dir / "master.reorder.wav"
+        inputs: list[str] = []
+        for s in segs:
+            inputs += ["-i", str(s)]
+        filt = "".join(f"[{k}:a]" for k in range(n)) + f"concat=n={n}:v=0:a=1[out]"
+        subprocess.run(
+            ["ffmpeg", "-y", *inputs, "-filter_complex", filt, "-map", "[out]",
+             "-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2", str(tmp_master)],
+            check=True, capture_output=True)
+        tmp_master.replace(master)
+    finally:
+        for s in segs:
+            s.unlink(missing_ok=True)
+
+    # Timecodes cumulés depuis les durées réelles des segments réordonnés.
+    new_tracks, new_clips, t0 = [], [], 0.0
+    for pos, idx in enumerate(order):
+        old = tracks[idx]
+        dur = float(old["end"]) - float(old["start"])
+        nt = dict(old)
+        nt["n"] = pos + 1
+        nt["start"] = round(t0, 3)
+        nt["end"] = round(t0 + dur, 3)
+        nt["locked"] = True
+        new_tracks.append(nt)
+        new_clips.append(clips[idx])
+        t0 += dur
+    m.data["tracks"] = new_tracks
+    m.data["source"]["clips"] = new_clips
+    m.data["source"]["duration"] = round(t0, 3)
+    m.save()
+    return {"tracks": len(new_tracks), "duration": round(t0, 3)}
+
+
 def run(project_dir: str | Path, progress: ProgressCb | None = None) -> dict:
     project_dir = Path(project_dir)
     m = Manifest.load(project_dir / "manifest.yaml")

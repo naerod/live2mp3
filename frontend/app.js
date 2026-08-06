@@ -507,8 +507,10 @@ const DISC_SECONDS=88*60;   // capacité d'un disque physique (88 min)
 // Modèle de l'éditeur. `linked` : le début de la piste suit la fin de la
 // précédente (grisé, pas de gap). Toujours false pour la 1re piste (début
 // libre) ; la fin de la dernière piste reste toujours éditable.
-let EDIT=[];   // [{title, artist, start, end, linked}]
+let EDIT=[];   // [{title, artist, start, end, linked, oi}]
 let EDIT_ORIG=null;   // instantané de l'analyse IA d'origine (pour "Réinitialiser")
+let editMulti=false;      // album multi-liens : réordonnancement possible
+let reorderPending=false; // ordre modifié localement, pas encore ré-assemblé
 
 // Reconstruit EDIT depuis les pistes brutes du manifeste (analyse IA).
 function buildEditFromTracks(tracks){
@@ -540,6 +542,14 @@ async function openEditor(){
   wireMediaResilience();
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
   EDIT=buildEditFromTracks(m.tracks);
+  // Réordonnancement réservé aux albums multi-liens (pistes = chansons entières
+  // et contiguës). `oi` = index de la piste dans le manifeste (ordre temporel,
+  // préservé par l'autosave qui re-trie toujours par start) : c'est la
+  // permutation envoyée à /reorder.
+  editMulti=!!(m.source&&(m.source.multi||m.source.clips));
+  EDIT.forEach((t,i)=>{t.oi=i;});
+  reorderPending=false;
+  $("reorder-bar").classList.add("hidden");
   // Copie profonde figée : référence pour le bouton « Réinitialiser ».
   // Toujours prise sur le manifeste, jamais sur la reprise locale : sinon
   // « Réinitialiser » ne ramènerait plus à l'analyse IA d'origine.
@@ -552,6 +562,9 @@ async function openEditor(){
   const localEdit=loadEditLocal(slug);
   if(localEdit&&(reedit||!EDIT.length)){
     EDIT=localEdit.edit;
+    // Ordre local non mappable au manifeste : on désactive le réordonnancement
+    // pour cette session (oi ne correspondrait plus aux index du manifeste).
+    editMulti=false;
     toast(T("edit_restored"));
   }else if(localEdit)clearEditLocal(slug);
   relinkEnds();
@@ -699,6 +712,9 @@ const SAVE_NOW=0, SAVE_TYPING=700;
 let draftTimer=null, draftInFlight=false, draftDirty=false;
 function scheduleDraftSave(delay){
   if(reedit||!slug)return;
+  // Ordre modifié non appliqué : ne pas autosauver (le serveur re-trie par
+  // start et figerait des timecodes incohérents avec l'ordre affiché).
+  if(reorderPending)return;
   clearTimeout(draftTimer);
   draftTimer=setTimeout(runDraftSave,delay==null?SAVE_NOW:delay);
 }
@@ -951,6 +967,10 @@ function buildEditRow(t,i){
         : `<span class="t-lock-spacer"></span>`}
     </span>
     <span class="t-actions-sep"></span>
+    ${editMulti?`<span class="row-move">
+      <button class="icon-btn icon-only mini row-up" title="${T('move_up')}"${i===0?' disabled':''}><span class="material-symbols-outlined">arrow_upward</span></button>
+      <button class="icon-btn icon-only mini row-down" title="${T('move_down')}"${i===EDIT.length-1?' disabled':''}><span class="material-symbols-outlined">arrow_downward</span></button>
+    </span>`:''}
     <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
     <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title;
@@ -993,8 +1013,53 @@ function buildEditRow(t,i){
   row.querySelector(".row-play").onclick=()=>{
     const a=$("ed-audio");a.currentTime=EDIT[i].start;a.play();};
   row.querySelector(".row-del").onclick=()=>{EDIT.splice(i,1);commitEdit();};
+  const up=row.querySelector(".row-up"),down=row.querySelector(".row-down");
+  if(up)up.onclick=()=>moveEditRow(i,-1);
+  if(down)down.onclick=()=>moveEditRow(i,1);
   return row;
 }
+
+// Réordonnancement (albums multi-liens) : on permute les pistes localement puis
+// l'utilisateur applique (re-concaténation serveur). L'audio n'est pas encore
+// ré-assemblé ici ; les timecodes affichés restent ceux du master actuel
+// jusqu'à l'application — d'où la barre d'action explicite.
+function moveEditRow(i,dir){
+  const j=i+dir;
+  if(j<0||j>=EDIT.length)return;
+  const tmp=EDIT[i];EDIT[i]=EDIT[j];EDIT[j]=tmp;
+  reorderPending=true;
+  renderRows();
+  updateReorderBar();
+}
+function updateReorderBar(){
+  const bar=$("reorder-bar");
+  if(bar)bar.classList.toggle("hidden",!reorderPending);
+  // Tant que l'ordre n'est pas ré-assemblé, la validation est bloquée : les
+  // MP3 seraient produits dans l'ordre du master actuel, pas celui affiché.
+  const rb=$("btn-render");if(rb)rb.disabled=reorderPending;
+}
+async function applyReorder(){
+  const order=EDIT.map(t=>t.oi);
+  const apply=$("btn-reorder-apply");apply.disabled=true;
+  const cancel=$("btn-reorder-cancel");if(cancel)cancel.disabled=true;
+  toast(T("reorder_applying"));
+  try{
+    const r=await fetch(`/api/jobs/${slug}/reorder`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({order})});
+    if(!r.ok){const d=await r.json().catch(()=>({}));
+      throw new Error(d.detail||`HTTP ${r.status}`);}
+    clearEditLocal(slug);   // l'ordre local est désormais dans le master
+    reorderPending=false;
+    await openEditor();     // recharge tout depuis le manifeste ré-assemblé
+    toast(T("reorder_done"));
+  }catch(e){
+    alert(`${T("err_reorder")} ${e.message||""}`);
+  }finally{
+    apply.disabled=false;if(cancel)cancel.disabled=false;
+  }
+}
+$("btn-reorder-apply").onclick=applyReorder;
+$("btn-reorder-cancel").onclick=()=>{reorderPending=false;openEditor();};
 
 // Reprend la position exacte du lecteur comme début ou fin de la piste.
 function setFromPlayhead(i,which){

@@ -146,6 +146,13 @@
       <span class="disc-warn-txt"></span>
     </div>
     <div id="edit-rows" class="track-rows"></div>
+    <div id="reorder-bar" class="reorder-bar hidden">
+      <span class="reorder-msg"><span class="material-symbols-outlined">swap_vert</span> <span data-i18n="reorder_pending">Ordre modifié — appliquez pour ré-assembler l'audio.</span></span>
+      <span class="reorder-actions">
+        <button id="btn-reorder-cancel" class="btn-secondary"><span class="material-symbols-outlined">undo</span> <span data-i18n="reorder_cancel">Annuler</span></button>
+        <button id="btn-reorder-apply" class="primary"><span class="material-symbols-outlined">done</span> <span data-i18n="reorder_apply">Appliquer l'ordre</span></button>
+      </span>
+    </div>
     <button id="btn-add-track2" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
     <div class="actions" style="margin-top:18px">
       <button id="btn-render" class="primary"><span class="material-symbols-outlined">check_circle</span> <span data-i18n="validate_render">Valider et créer l'album</span></button>

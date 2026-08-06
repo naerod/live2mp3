@@ -1399,6 +1399,35 @@ def start_prepare(slug: str,
     return {"ok": True, "slug": slug}
 
 
+class ReorderIn(BaseModel):
+    order: list[int]   # index 0-based des pistes actuelles, dans le nouvel ordre
+
+
+@app.post("/api/jobs/{slug}/reorder")
+def reorder_tracks(slug: str, payload: ReorderIn,
+                   identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Réordonne un album multi-liens : re-concatène le master dans le nouvel
+    ordre, recalcule les timecodes, puis régénère forme d'onde et preview.
+
+    Synchrone (rapide : découpe/concat d'un WAV déjà local) ; l'éditeur recharge
+    ensuite le manifeste à jour. Réservé aux albums multi-liens.
+    """
+    project_dir = PROJECTS_DIR / slug
+    if not (project_dir / "manifest.yaml").exists():
+        raise HTTPException(404, "projet introuvable")
+    try:
+        res = download.reorder_master(project_dir, payload.order)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    # Régénère les dérivés du master pour que l'éditeur reflète le nouvel ordre.
+    m = Manifest.load(project_dir / "manifest.yaml")
+    wav = project_dir / m.data["source"]["master_wav"]
+    preanalyze.generate_waveform(wav, project_dir / "source" / "waveform.dat")
+    (project_dir / "source" / "preview.mp3").unlink(missing_ok=True)
+    linktool.make_preview(project_dir, m)
+    return {"ok": True, **res}
+
+
 @app.post("/api/jobs/{slug}/skip-detection")
 def skip_detection(slug: str,
                    identity: dict = Depends(require_gestionnaire)) -> dict:
