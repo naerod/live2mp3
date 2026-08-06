@@ -376,8 +376,20 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 #track-rows.reorderable .row-move{display:inline-flex}
 .track-row .row-move button:disabled{opacity:.3;cursor:default}
 /* Éditeur : les flèches sont rendues conditionnellement (editMulti) donc
-   toujours visibles quand présentes. */
-#edit-rows .row-move{display:inline-flex}
+   toujours visibles quand présentes. Empilées verticalement pour un
+   encombrement horizontal minimal (sinon la ligne déborde sur 2 lignes). */
+#edit-rows .row-move{display:inline-flex;flex-direction:column;gap:3px;flex-shrink:0}
+#edit-rows .row-move .icon-btn.mini{height:17px;width:28px;border-radius:6px}
+#edit-rows .row-move .icon-btn.mini .material-symbols-outlined{font-size:15px}
+/* Desktop : garder chaque piste sur une seule ligne — les champs texte se
+   rétractent, le bloc timecodes et les actions restent intacts. Le wrap
+   mobile (≤768px) est géré plus bas. */
+@media(min-width:769px){
+  #edit-rows .track-row{flex-wrap:nowrap}
+  #edit-rows .t-title{min-width:120px}
+  #edit-rows .t-artist{min-width:96px}
+  #edit-rows .t-times{flex-shrink:0}
+}
 .reorder-bar{display:flex;align-items:center;justify-content:space-between;
   gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:10px;
   background:var(--card2,rgba(136,147,242,.12));
