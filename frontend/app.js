@@ -142,6 +142,8 @@ function fillFormMulti(d){
   $("setlist-hint").setAttribute("data-i18n","setlist_hint_multi");
   // « Ajouter une piste » n'a pas de sens ici (une piste sans lien est ignorée).
   $("btn-add-track").classList.add("hidden");
+  // Flèches de réordonnancement visibles (l'ordre pilote la concaténation).
+  $("track-rows").classList.add("reorderable");
   applyI18n(LANG());
   // Vidéo indisponible en multi-liens (V1 audio seul) : on masque l'option.
   const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.add("hidden");
@@ -162,6 +164,7 @@ function exitMultiMode(){
   // Restaure les libellés du mode mono-lien.
   $("setlist-hint").setAttribute("data-i18n","setlist_hint");
   $("btn-add-track").classList.remove("hidden");
+  $("track-rows").classList.remove("reorderable");
   applyI18n(LANG());
 }
 $("btn-manual").onclick=()=>{
@@ -248,6 +251,10 @@ function addFormRow(t){
     <input class="t-title" placeholder="${T("tr_title_ph")}" value="">
     <input class="t-artist" placeholder="${T("tr_artist_ph")}" value="">
     <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtDur(t.start)}`:""}</span>
+    <span class="row-move">
+      <button class="icon-btn icon-only row-up" title="${T("move_up")}"><span class="material-symbols-outlined">arrow_upward</span></button>
+      <button class="icon-btn icon-only row-down" title="${T("move_down")}"><span class="material-symbols-outlined">arrow_downward</span></button>
+    </span>
     <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title||"";
   row.querySelector(".t-artist").value=t.artist||"";
@@ -266,12 +273,25 @@ function addFormRow(t){
     if(b)b.innerHTML=`<a href="${t.url}" target="_blank" rel="noopener" title="${T("open_link")}"><span class="material-symbols-outlined">link</span></a>`;
   }
   row.querySelector(".row-del").onclick=()=>{row.remove();renumber(rows);};
+  // Réordonnancement (mode multi-liens) : l'ordre des lignes = l'ordre de
+  // concaténation à la préparation. On déplace la ligne entière, ce qui
+  // préserve titre/artiste/lien saisis.
+  row.querySelector(".row-up").onclick=()=>{
+    const prev=row.previousElementSibling;
+    if(prev)rows.insertBefore(row,prev);renumber(rows);};
+  row.querySelector(".row-down").onclick=()=>{
+    const next=row.nextElementSibling;
+    if(next)rows.insertBefore(next,row);renumber(rows);};
   rows.appendChild(row);
   renumber(rows);
 }
 function renumber(container){
-  [...container.querySelectorAll(".track-row")].forEach((r,i)=>{
+  const rows=[...container.querySelectorAll(".track-row")];
+  rows.forEach((r,i)=>{
     r.querySelector(".tn").textContent=(i+1)+".";
+    const up=r.querySelector(".row-up"),down=r.querySelector(".row-down");
+    if(up)up.disabled=(i===0);
+    if(down)down.disabled=(i===rows.length-1);
   });
 }
 $("btn-add-track").onclick=()=>addFormRow({});
