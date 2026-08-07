@@ -868,9 +868,16 @@ def update_tracks(slug: str, payload: TracksEditIn,
     m = Manifest.load(path)
     track_map = {t["n"]: t for t in m.tracks}
     new_tracks = []
-    for ti in payload.tracks:
-        existing = dict(track_map.get(ti.n, {"n": ti.n, "start": None, "end": None, "locked": False}))
-        existing["n"] = ti.n
+    # Le `n` est renuméroté par **position** dans la liste reçue : c'est le
+    # numéro de piste canonique (badge de la fiche publique, préfixe des
+    # fichiers, tag TRCK). Réordonner sans renuméroter laissait le badge sur
+    # l'ancien numéro alors que fichiers et tags suivaient déjà la position —
+    # d'où l'affichage désordonné (02,03,…,01). On apparie chaque entrée à sa
+    # piste existante par l'`n` d'origine (pour conserver start/end/source)
+    # avant de réattribuer le nouveau numéro.
+    for pos, ti in enumerate(payload.tracks, start=1):
+        existing = dict(track_map.get(ti.n, {"start": None, "end": None, "locked": False}))
+        existing["n"] = pos
         existing["title"] = ti.title
         new_tracks.append(existing)
     m.data["tracks"] = new_tracks
