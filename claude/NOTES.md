@@ -11,12 +11,27 @@ Jellyfin**. Visuels Jellyfin (poster/backdrop/landscape/logo, dans le dossier
   via offset, 409 si désync) + `/api/import/analyze-staged` + lecture vidéo
   (`_read_video` ffprobe, `_read_media`, `has_video`). Refacto `analyze` →
   `_analyze_files_dir`. 6 tests (test_import.py). Suite 266 OK.
-- **Reste à faire** : (1) refonte pop-up import + textes (MP3/MP4, pré-découpé /
-  complet / ZIP) ; (2) UI upload chunké avec barre + reprise (vitrine.html) ;
-  (3) commit vidéo (build/video, extraction audio) ; (4) **cœur** : réutiliser
-  `_run_prepare_bg` sur un fichier local (sauter le stage download) pour la
-  découpe IA d'un MP4/MP3 complet, avec artiste+date (ou URL setlist.fm) saisis ;
-  (5) Q&A bonus (audio + extra Jellyfin) ; (6) artwork Jellyfin.
+- **FAIT & déployé (preprod v1.23.4)** — le CŒUR est complet et validé :
+  - Upload chunké résumable + `analyze-staged` + lecture vidéo (v1.23.2).
+  - **`prepare-ai`** : fichier complet (MP3/MP4) téléversé → projet + master +
+    WAV, `download=done`, découpe IA (silences+Whisper+DeepSeek) via
+    `_run_prepare_bg`, setlist depuis URL setlist.fm / (artiste,date) / auto.
+    `setlist-lookup` + pistes vérifiées au formulaire (v1.23.3-4).
+  - **UI** (page éditeur IA) : bouton « Importer un fichier complet », upload
+    chunké (barre + reprise réseau), formulaire (artiste/date/lieu + lien
+    setlist.fm + « Récupérer la setlist ») → même éditeur de coupes que le lien.
+    Pop-up d'import : libellés MAJ. i18n FR/EN. **Rendu vérifié (screenshot).**
+  - **E2E live validé** : clip 90s → chunké → prepare-ai → download=done →
+    waveform → ai_markers=done, sans re-téléchargement. 273 tests OK.
+- **RESTE (2ndaire, touche l'infra)** :
+  - **Q&A** : (a) piste audio bonus → réutiliser l'« Ajouter une piste » existant
+    (addtrack.py) ; (b) **extra vidéo Jellyfin** → nécessite d'adapter
+    `sync-media.sh` (hors repo, CT110) pour monter un extra à côté de build/video
+    (convention Jellyfin extras). À faire prudemment.
+  - **Artwork Jellyfin** : la pochette album (poster) passe déjà par le système
+    de covers ; backdrop/logo = spécifiques Jellyfin (placement via sync-media).
+  - **Commit MP4 pré-découpés** (cas 4) : non requis pour le pilote (concert +
+    Q&A sont des fichiers complets).
 - Bugs pochettes (crédit auto, classement, clic agrandir) : corrigés v1.23.1,
   voir workspace/debugging/2026-08-09_pochettes-credit-auto-classement-clic.md
 
