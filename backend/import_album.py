@@ -14,8 +14,10 @@ et rien ne transite par /tmp du conteneur.
 """
 from __future__ import annotations
 
+import json
 import re
 import shutil
+import subprocess
 import time
 import uuid
 import zipfile
@@ -24,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from mutagen import MutagenError
 from mutagen.id3 import ID3
@@ -63,10 +65,22 @@ def _staging_root() -> Path:
     return PROJECTS_DIR / ".l2m-import"
 
 AUDIO_EXT = {".mp3"}
+# Vidéo acceptée à l'import (concert complet ou clips pré-découpés). Le MP4 est
+# le cas courant ; mkv/webm/mov/m4v sont tolérés (yt-dlp/ffmpeg les gèrent).
+VIDEO_EXT = {".mp4", ".mkv", ".webm", ".mov", ".m4v"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 ZIP_EXT = {".zip"}
+# Extensions acceptées par l'upload chunké (gros fichiers). Les images passent
+# encore par le multipart classique de `/analyze` (petites).
+MEDIA_EXT = AUDIO_EXT | VIDEO_EXT
 
-MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024  # 4 Go par dépôt
+MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024  # 4 Go par dépôt multipart (audio/zip)
+# La vidéo passe par l'upload chunké : un concert complet dépasse volontiers 4 Go.
+MAX_VIDEO_BYTES = 16 * 1024 * 1024 * 1024
+# Taille d'un chunk imposée côté serveur comme plafond : Cloudflare rejette les
+# corps > 100 Mo. Le client découpe en morceaux plus petits (~8 Mo) ; on refuse
+# tout chunk qui dépasserait cette marge de sécurité.
+MAX_CHUNK_BYTES = 90 * 1024 * 1024
 MAX_FILES = 400
 
 # Fichiers parasites des exports macOS / Windows.
@@ -97,6 +111,20 @@ class CommitIn(BaseModel):
     cover: str = ""      # nom de fichier staging, ou "" si aucune
     traycard: str = ""
     tracks: list[TrackIn]
+
+
+class UploadInitIn(BaseModel):
+    filename: str
+    size: int
+    token: str | None = None   # pour ajouter un fichier à un staging existant
+
+
+class UploadFinishIn(BaseModel):
+    size: int
+
+
+class StagedIn(BaseModel):
+    token: str
 
 
 # ── Staging ────────────────────────────────────────────────────────────────
@@ -211,6 +239,40 @@ def _read_mp3(path: Path) -> dict[str, Any]:
     return info
 
 
+def _read_video(path: Path) -> dict[str, Any]:
+    """Métadonnées d'un fichier vidéo : durée via ffprobe, titre depuis le nom.
+
+    Un MP4 de concert n'a pas de tags ID3 exploitables comme un MP3 ; artiste,
+    date et titres viendront du formulaire (import manuel) ou de l'IA/setlist.fm.
+    """
+    info: dict[str, Any] = {
+        "file": path.name, "title": "", "artist": "", "album": "",
+        "albumartist": "", "date": "", "n": None, "duration": 0.0,
+        "has_embedded_cover": False, "media": "video",
+    }
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            capture_output=True, text=True, timeout=30,
+        )
+        info["duration"] = float((out.stdout or "").strip() or 0)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    info["n"] = _parse_track_n(path.name)
+    info["title"] = _title_from_filename(path.name)
+    return info
+
+
+def _read_media(path: Path) -> dict[str, Any]:
+    """Lecture d'un média du staging (MP3 → tags ID3, vidéo → ffprobe)."""
+    if path.suffix.lower() in VIDEO_EXT:
+        return _read_video(path)
+    info = _read_mp3(path)
+    info["media"] = "audio"
+    return info
+
+
 def _most_common(values: list[str]) -> str:
     """Valeur non vide la plus fréquente — les tags d'un album sont rarement unanimes."""
     vals = [v for v in values if v]
@@ -237,6 +299,110 @@ def _extract_staging_cover(files_dir: Path, tracks: list[dict]) -> str | None:
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
+
+# ── Upload chunké résumable (gros fichiers audio/vidéo) ──────────────────────
+# Cloudflare rejette les corps > 100 Mo : un concert MP4 de plusieurs Go ne peut
+# pas partir en une requête. Le client découpe le fichier en morceaux (~8 Mo),
+# envoyés séquentiellement ; le serveur les appende sur disque (jamais en RAM) et
+# expose l'octet déjà reçu pour reprendre après une coupure réseau (4G).
+
+def _incoming(staging: Path, file_id: str) -> tuple[Path, dict]:
+    if not re.fullmatch(r"[0-9a-f]{32}", file_id or ""):
+        raise HTTPException(400, "file_id invalide")
+    inc = staging / "incoming"
+    part, metaf = inc / f"{file_id}.part", inc / f"{file_id}.json"
+    if not part.exists() or not metaf.exists():
+        raise HTTPException(404, "upload introuvable ou expiré")
+    return part, json.loads(metaf.read_text())
+
+
+@router.post("/upload/init")
+def upload_init(payload: UploadInitIn,
+                identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Ouvre (ou rejoint) un staging et réserve un fichier à téléverser en chunks."""
+    _purge_stale_stagings()
+    ext = Path(payload.filename or "").suffix.lower()
+    if ext not in MEDIA_EXT:
+        raise HTTPException(400, "format non accepté (audio ou vidéo attendu)")
+    if payload.size <= 0 or payload.size > MAX_VIDEO_BYTES:
+        raise HTTPException(413, "fichier trop volumineux (max 16 Go)")
+    if payload.token:
+        staging = _staging(payload.token)   # valide le token et son existence
+        token = payload.token
+    else:
+        token = uuid.uuid4().hex
+        staging = _staging_root() / token
+        (staging / "files").mkdir(parents=True, exist_ok=True)
+    inc = staging / "incoming"
+    inc.mkdir(parents=True, exist_ok=True)
+    file_id = uuid.uuid4().hex
+    meta = {
+        "filename": Path(payload.filename).name,
+        "ext": ext,
+        "size": int(payload.size),
+        "sanitized": _sanitize_filename(Path(payload.filename).stem) or "media",
+    }
+    (inc / f"{file_id}.json").write_text(json.dumps(meta))
+    (inc / f"{file_id}.part").touch()
+    return {"token": token, "file_id": file_id, "received": 0}
+
+
+@router.get("/upload/{token}/{file_id}")
+def upload_status(token: str, file_id: str,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Octet déjà reçu — permet au client de reprendre un upload interrompu."""
+    staging = _staging(token)
+    part, meta = _incoming(staging, file_id)
+    return {"received": part.stat().st_size, "size": meta["size"],
+            "filename": meta["filename"]}
+
+
+@router.put("/upload/{token}/{file_id}")
+async def upload_chunk(token: str, file_id: str, request: Request,
+                       identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Appende un chunk à l'offset annoncé. Refuse un offset désynchronisé (409
+    avec l'octet réellement reçu) pour que le client se recale sans corrompre."""
+    staging = _staging(token)
+    part, meta = _incoming(staging, file_id)
+    try:
+        offset = int(request.headers.get("X-Chunk-Offset", ""))
+    except ValueError:
+        raise HTTPException(400, "en-tête X-Chunk-Offset manquant ou invalide")
+    cur = part.stat().st_size
+    if offset != cur:
+        # Le client doit reprendre à partir de `received` : ni trou ni doublon.
+        raise HTTPException(409, {"error": "offset désynchronisé", "received": cur})
+    written = 0
+    with part.open("r+b") as fh:
+        fh.seek(offset)
+        async for chunk in request.stream():
+            written += len(chunk)
+            if written > MAX_CHUNK_BYTES:
+                raise HTTPException(413, "chunk trop volumineux (max 90 Mo)")
+            if cur + written > meta["size"]:
+                raise HTTPException(413, "dépasse la taille annoncée")
+            fh.write(chunk)
+    return {"received": part.stat().st_size}
+
+
+@router.post("/upload/{token}/{file_id}/finish")
+def upload_finish(token: str, file_id: str, payload: UploadFinishIn,
+                  identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Clôt un upload : vérifie la taille et déplace le fichier dans le staging."""
+    staging = _staging(token)
+    files_dir = staging / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+    part, meta = _incoming(staging, file_id)
+    size = part.stat().st_size
+    if size != meta["size"] or size != payload.size:
+        raise HTTPException(400, f"upload incomplet ({size}/{meta['size']} octets)")
+    if len(list(files_dir.iterdir())) >= MAX_FILES:
+        raise HTTPException(413, f"trop de fichiers (max {MAX_FILES})")
+    dest = _unique_path(files_dir, f"{meta['sanitized']}{meta['ext']}")
+    shutil.move(str(part), str(dest))
+    (staging / "incoming" / f"{file_id}.json").unlink(missing_ok=True)
+    return {"token": token, "file": dest.name, "size": size}
+
 
 @router.post("/analyze")
 async def analyze(files: list[UploadFile] = File(...),
@@ -282,13 +448,35 @@ async def analyze(files: list[UploadFile] = File(...),
         shutil.rmtree(_staging_root() / token, ignore_errors=True)
         raise
 
-    audio = sorted([p for p in files_dir.iterdir()
-                    if p.suffix.lower() in AUDIO_EXT], key=lambda p: p.name)
-    if not audio:
-        shutil.rmtree(_staging_root() / token, ignore_errors=True)
-        raise HTTPException(400, "aucun MP3 trouvé dans le dépôt")
+    return _analyze_files_dir(token, files_dir, warnings)
 
-    tracks = [_read_mp3(p) for p in audio]
+
+@router.post("/analyze-staged")
+def analyze_staged(payload: StagedIn,
+                   identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Analyse un staging déjà rempli par l'upload chunké (gros MP3/MP4).
+
+    Symétrique de `/analyze` (dépôt multipart) mais sans corps : les fichiers
+    sont déjà sur le volume. Sert l'import de concerts vidéo trop lourds pour un
+    envoi en une requête."""
+    staging = _staging(payload.token)
+    return _analyze_files_dir(payload.token, staging / "files", [])
+
+
+def _analyze_files_dir(token: str, files_dir: Path, warnings: list[str]) -> dict:
+    """Lit les fichiers d'un staging et propose un pré-remplissage du formulaire.
+
+    Accepte audio (MP3) comme vidéo (MP4…) : les pistes vidéo pré-découpées sont
+    traitées comme des pistes à part entière ; un fichier vidéo unique sera
+    découpé plus tard par l'IA (le front pilote ce choix)."""
+    media = sorted([p for p in files_dir.iterdir()
+                    if p.suffix.lower() in MEDIA_EXT], key=lambda p: p.name)
+    if not media:
+        shutil.rmtree(_staging_root() / token, ignore_errors=True)
+        raise HTTPException(400, "aucun fichier audio ou vidéo trouvé dans le dépôt")
+
+    tracks = [_read_media(p) for p in media]
+    has_video = any(t.get("media") == "video" for t in tracks)
 
     # Numérotation : on garde celle des tags/noms de fichiers si elle est
     # complète et sans doublon, sinon on renumérote dans l'ordre alphabétique.
@@ -333,7 +521,9 @@ async def analyze(files: list[UploadFile] = File(...),
         "album": {"artist": artist, "title": album_title, "date": date,
                   "venue": "", "festival": ""},
         "tracks": [{"n": t["n"], "title": t["title"], "file": t["file"],
-                    "duration": round(t["duration"], 1)} for t in tracks],
+                    "duration": round(t["duration"], 1),
+                    "media": t.get("media", "audio")} for t in tracks],
+        "has_video": has_video,
         "cover": cover, "cover_source": cover_source, "traycard": traycard,
         "images": sorted(images),
         "slug": slug, "slug_exists": exists,

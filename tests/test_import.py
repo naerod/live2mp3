@@ -283,3 +283,97 @@ def test_cancel_purges_staging(client, tmp_path):
     assert c.post("/api/import/cancel", headers=GEST,
                   json={"token": a["token"]}).status_code == 200
     assert not (projects / ".l2m-import" / a["token"]).exists()
+
+
+# ── Upload chunké résumable (gros audio/vidéo) ──────────────────────────────
+
+def _chunked_upload(c, name, data, *, token=None, chunk=64):
+    """Téléverse `data` en morceaux de `chunk` octets, avec vérif de reprise."""
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": name, "size": len(data),
+                        **({"token": token} if token else {})})
+    assert init.status_code == 200, init.text
+    tok, fid = init.json()["token"], init.json()["file_id"]
+    off = 0
+    while off < len(data):
+        part = data[off:off + chunk]
+        r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": str(off)},
+                  content=part)
+        assert r.status_code == 200, r.text
+        off += len(part)
+        assert r.json()["received"] == off
+    fin = c.post(f"/api/import/upload/{tok}/{fid}/finish", headers=GEST,
+                 json={"size": len(data)})
+    assert fin.status_code == 200, fin.text
+    return tok, fin.json()["file"]
+
+
+def test_chunked_upload_then_analyze_mp3(client, tmp_path):
+    c, projects = client
+    p = _mp3(tmp_path / "src" / "01_Song.mp3")
+    _tag(p, n=1, title="Song", artist="TOP", album="Live", date="2024-01-01")
+    data = p.read_bytes()
+    tok, fname = _chunked_upload(c, "01_Song.mp3", data)
+    assert (projects / ".l2m-import" / tok / "files" / fname).exists()
+    a = c.post("/api/import/analyze-staged", headers=GEST, json={"token": tok}).json()
+    assert a["token"] == tok
+    assert len(a["tracks"]) == 1
+    assert a["has_video"] is False
+
+
+def test_chunked_upload_resume_after_interruption(client):
+    c, _ = client
+    data = b"A" * 500
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": "clip.mp4", "size": len(data)}).json()
+    tok, fid = init["token"], init["file_id"]
+    # Premier morceau, puis "coupure" : on interroge l'état pour reprendre.
+    c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "0"},
+          content=data[:200])
+    st = c.get(f"/api/import/upload/{tok}/{fid}", headers=GEST).json()
+    assert st["received"] == 200 and st["size"] == 500
+    # Reprise à l'octet reçu.
+    r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "200"},
+              content=data[200:])
+    assert r.json()["received"] == 500
+
+
+def test_chunked_upload_rejects_desynced_offset(client):
+    c, _ = client
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": "clip.mp4", "size": 300}).json()
+    tok, fid = init["token"], init["file_id"]
+    c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "0"},
+          content=b"X" * 100)
+    # Offset erroné : refus 409 avec l'octet réellement reçu.
+    r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "999"},
+              content=b"Y" * 50)
+    assert r.status_code == 409
+    assert r.json()["detail"]["received"] == 100
+
+
+def test_chunked_upload_rejects_bad_extension(client):
+    c, _ = client
+    r = c.post("/api/import/upload/init", headers=GEST,
+               json={"filename": "notes.txt", "size": 10})
+    assert r.status_code == 400
+
+
+def test_chunked_upload_requires_gestionnaire(client):
+    c, _ = client
+    r = c.post("/api/import/upload/init", headers=USER,
+               json={"filename": "clip.mp4", "size": 10})
+    assert r.status_code == 403
+
+
+def test_chunked_second_file_same_staging(client, tmp_path):
+    c, projects = client
+    p = _mp3(tmp_path / "src" / "a.mp3")
+    _tag(p, n=1, title="A", artist="TOP", album="Live", date="2024-01-01")
+    tok, _ = _chunked_upload(c, "01_A.mp3", p.read_bytes())
+    q = _mp3(tmp_path / "src" / "b.mp3")
+    _tag(q, n=2, title="B", artist="TOP", album="Live", date="2024-01-01")
+    tok2, _ = _chunked_upload(c, "02_B.mp3", q.read_bytes(), token=tok)
+    assert tok2 == tok
+    a = c.post("/api/import/analyze-staged", headers=GEST, json={"token": tok}).json()
+    assert len(a["tracks"]) == 2
