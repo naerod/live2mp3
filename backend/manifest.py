@@ -238,13 +238,24 @@ class Manifest:
 
 
 def new_manifest(album: dict[str, Any], tracks: list[dict[str, Any]], target: str,
-                 source_url: str = "") -> Manifest:
-    """Construit un manifest neuf depuis les données du formulaire."""
+                 source_url: str = "",
+                 clips: list[dict[str, Any]] | None = None) -> Manifest:
+    """Construit un manifest neuf depuis les données du formulaire.
+
+    `clips` (optionnel) : mode multi-liens — plusieurs sources concaténées en
+    un master unique à la préparation, une piste par clip. `source.url` reste
+    vide ; c'est `source.clips` (ordonné) qui pilote le téléchargement.
+    """
+    source: dict[str, Any] = {"url": source_url, "master_mkv": "source/master.mkv",
+                              "master_wav": "source/master.wav"}
+    if clips:
+        source["multi"] = True
+        source["clips"] = [{"url": c["url"], "duration": float(c.get("duration") or 0.0)}
+                           for c in clips]
     data: dict[str, Any] = {
         "album": album,
         "target": target,
-        "source": {"url": source_url, "master_mkv": "source/master.mkv",
-                   "master_wav": "source/master.wav"},
+        "source": source,
         "pipeline_state": {s: "pending" for s in STAGES},
         "tracks": [],
     }

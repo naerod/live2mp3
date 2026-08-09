@@ -38,6 +38,8 @@ const show=id=>{STEPS.forEach(s=>$(s).classList.toggle("hidden",s!==id));
 
 let slug=null;          // slug du projet en cours
 let videoInfo=null;     // métadonnées de la vidéo sondée
+let multiMode=false;    // import multi-liens : 1 clip = 1 piste, concaténés
+let multiThumb="";      // miniature du 1er clip lisible (pochette proposée)
 let setlistSource=null; // provenance de la setlist (setlist.fm) + attribution
 let currentPhase=null;  // "prepare" | "render" (pour le bouton réessayer)
 let peaksInstance=null;
@@ -64,11 +66,11 @@ function artistValue(){
 // ============================================================
 // Étape 1 — Analyse du lien
 // ============================================================
-function setAnalyzing(on){
+function setAnalyzing(on,key="analyzing"){
   $("btn-analyze").disabled=on;
   const st=$("analyze-status");
   st.classList.toggle("hidden",!on);
-  if(on)st.innerHTML=`<span class="material-symbols-outlined spin">progress_activity</span><span>${T("analyzing")}</span>`;
+  if(on)st.innerHTML=`<span class="material-symbols-outlined spin">progress_activity</span><span>${T(key)}</span>`;
 }
 function analyzeError(text){
   const st=$("analyze-status");
@@ -100,14 +102,80 @@ $("btn-analyze").onclick=async()=>{
 };
 $("l-url").addEventListener("keydown",e=>{if(e.key==="Enter")$("btn-analyze").click();});
 
+// ── Import multi-liens ─────────────────────────────────────────────────────
+$("multi-toggle").addEventListener("change",e=>{
+  const on=e.target.checked;
+  $("single-url-row").classList.toggle("hidden",on);
+  $("multi-url-wrap").classList.toggle("hidden",!on);
+  $("analyze-status").classList.add("hidden");
+});
+$("btn-analyze-multi").onclick=async()=>{
+  const urls=$("l-urls").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!urls.length){$("l-urls").focus();return;}
+  setAnalyzing(true,"analyzing_multi");$("btn-analyze-multi").disabled=true;
+  try{
+    const r=await fetch("/api/tool/analyze-multi",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({urls})});
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      throw new Error(d.detail||`HTTP ${r.status}`);
+    }
+    const d=await r.json();
+    setAnalyzing(false);
+    fillFormMulti(d);
+    show("step-form");
+  }catch(e){
+    setAnalyzing(false);
+    analyzeError(`${T("err_analyze_multi")} ${e.message||""}`);
+  }finally{$("btn-analyze-multi").disabled=false;}
+};
+
+function fillFormMulti(d){
+  multiMode=true;videoInfo=null;setlistSource=null;
+  multiThumb=d.thumbnail||"";
+  const sug=d.suggestion||{};
+  mountArtistAC(sug.artist_id||"",sug.artist||"");
+  $("f-title").value="";$("f-date").value="";$("f-venue").value="";$("f-festival").value="";
+  $("src-card").classList.add("hidden");
+  $("setlist-src").classList.add("hidden");
+  // Consigne setlist adaptée : 1 piste = 1 lien (pas de détection IA à l'écoute).
+  $("setlist-hint").setAttribute("data-i18n","setlist_hint_multi");
+  // « Ajouter une piste » n'a pas de sens ici (une piste sans lien est ignorée).
+  $("btn-add-track").classList.add("hidden");
+  // Flèches de réordonnancement visibles (l'ordre pilote la concaténation).
+  $("track-rows").classList.add("reorderable");
+  applyI18n(LANG());
+  // Vidéo indisponible en multi-liens (V1 audio seul) : on masque l'option.
+  const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.add("hidden");
+  $("f-video").checked=false;
+  $("track-rows").innerHTML="";
+  (d.clips||[]).forEach(c=>addFormRow({
+    title:c.title||"",artist:c.artist||"",url:c.url,error:c.error||"",
+    clipArtist:c.clip_artist||"",
+  }));
+  if(!(d.clips||[]).length)addFormRow({});
+}
+
+function exitMultiMode(){
+  multiMode=false;multiThumb="";
+  const vwrap=$("f-video").closest(".opt-check");
+  if(vwrap)vwrap.classList.remove("hidden");
+  $("f-video").checked=true;
+  // Restaure les libellés du mode mono-lien.
+  $("setlist-hint").setAttribute("data-i18n","setlist_hint");
+  $("btn-add-track").classList.remove("hidden");
+  $("track-rows").classList.remove("reorderable");
+  applyI18n(LANG());
+}
 $("btn-manual").onclick=()=>{
+  exitMultiMode();
   videoInfo=null;
   mountArtistAC("","");
   $("src-card").classList.add("hidden");
   if(!$("track-rows").children.length)addFormRow({});
   show("step-form");
 };
-$("btn-back-link").onclick=()=>show("step-link");
+$("btn-back-link").onclick=()=>{exitMultiMode();show("step-link");};
 
 // ============================================================
 // Étape 2 — Formulaire de vérification
@@ -183,18 +251,47 @@ function addFormRow(t){
     <input class="t-title" placeholder="${T("tr_title_ph")}" value="">
     <input class="t-artist" placeholder="${T("tr_artist_ph")}" value="">
     <span class="t-badge">${hasTime?`<span class="material-symbols-outlined" title="timecodes">schedule</span>${fmtDur(t.start)}`:""}</span>
+    <span class="row-move">
+      <button class="icon-btn icon-only row-up" title="${T("move_up")}"><span class="material-symbols-outlined">arrow_upward</span></button>
+      <button class="icon-btn icon-only row-down" title="${T("move_down")}"><span class="material-symbols-outlined">arrow_downward</span></button>
+    </span>
     <button class="icon-btn icon-only row-del" title="${T("del")}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title||"";
   row.querySelector(".t-artist").value=t.artist||"";
   row.dataset.start=t.start!=null?t.start:"";
   row.dataset.end=t.end!=null?t.end:"";
+  // Mode multi-liens : la ligne mémorise son lien source. Un lien illisible
+  // est signalé et devra être corrigé ou retiré avant la préparation.
+  if(t.url!==undefined)row.dataset.url=t.url||"";
+  if(t.error){
+    row.classList.add("row-error");
+    row.title=t.error;
+    const b=row.querySelector(".t-badge");
+    if(b)b.innerHTML=`<span class="material-symbols-outlined" style="color:var(--like)" title="${t.error}">error</span>`;
+  }else if(t.url){
+    const b=row.querySelector(".t-badge");
+    if(b)b.innerHTML=`<a href="${t.url}" target="_blank" rel="noopener" title="${T("open_link")}"><span class="material-symbols-outlined">link</span></a>`;
+  }
   row.querySelector(".row-del").onclick=()=>{row.remove();renumber(rows);};
+  // Réordonnancement (mode multi-liens) : l'ordre des lignes = l'ordre de
+  // concaténation à la préparation. On déplace la ligne entière, ce qui
+  // préserve titre/artiste/lien saisis.
+  row.querySelector(".row-up").onclick=()=>{
+    const prev=row.previousElementSibling;
+    if(prev)rows.insertBefore(row,prev);renumber(rows);};
+  row.querySelector(".row-down").onclick=()=>{
+    const next=row.nextElementSibling;
+    if(next)rows.insertBefore(next,row);renumber(rows);};
   rows.appendChild(row);
   renumber(rows);
 }
 function renumber(container){
-  [...container.querySelectorAll(".track-row")].forEach((r,i)=>{
+  const rows=[...container.querySelectorAll(".track-row")];
+  rows.forEach((r,i)=>{
     r.querySelector(".tn").textContent=(i+1)+".";
+    const up=r.querySelector(".row-up"),down=r.querySelector(".row-down");
+    if(up)up.disabled=(i===0);
+    if(down)down.disabled=(i===rows.length-1);
   });
 }
 $("btn-add-track").onclick=()=>addFormRow({});
@@ -212,18 +309,35 @@ $("btn-create").onclick=async()=>{
     if(r.dataset.end!=="")t.end=parseFloat(r.dataset.end);
     return t;
   }).filter(t=>t.title);
-  const body={
-    album:{artist,artist_id:av.id,title,date:$("f-date").value||null,
-      venue:$("f-venue").value.trim()||null,
-      festival:$("f-festival").value.trim()||null},
-    tracks,
-    target:$("f-target").value,
-    source_url:(videoInfo&&videoInfo.webpage_url)||$("l-url").value.trim(),
-    video:$("f-video").checked,
-    thumbnail_url:(videoInfo&&videoInfo.thumbnail)||"",
-    setlistfm_url:(setlistSource&&setlistSource.url)||"",
-    duration:(videoInfo&&videoInfo.duration)||null,
-  };
+  const album={artist,artist_id:av.id,title,date:$("f-date").value||null,
+    venue:$("f-venue").value.trim()||null,
+    festival:$("f-festival").value.trim()||null};
+  let body;
+  if(multiMode){
+    // Un lien illisible casserait la concaténation : on bloque avant l'envoi.
+    if($("track-rows").querySelector(".track-row.row-error")){
+      alert(T("err_multi_broken"));return;}
+    const clips=[...$("track-rows").querySelectorAll(".track-row")].map(r=>{
+      const url=r.dataset.url||"";
+      if(!url)return null;
+      const c={url,title:r.querySelector(".t-title").value.trim()};
+      const a=r.querySelector(".t-artist").value.trim();
+      if(a)c.artist=a;
+      return c;
+    }).filter(Boolean);
+    if(!clips.length){alert(T("err_required"));return;}
+    body={album,target:$("f-target").value,tracks:[],clips,
+      thumbnail_url:multiThumb,video:false,source_url:""};
+  }else{
+    body={album,tracks,
+      target:$("f-target").value,
+      source_url:(videoInfo&&videoInfo.webpage_url)||$("l-url").value.trim(),
+      video:$("f-video").checked,
+      thumbnail_url:(videoInfo&&videoInfo.thumbnail)||"",
+      setlistfm_url:(setlistSource&&setlistSource.url)||"",
+      duration:(videoInfo&&videoInfo.duration)||null,
+    };
+  }
   $("btn-create").disabled=true;
   try{
     const r=await fetch("/api/jobs",{method:"POST",
@@ -275,8 +389,10 @@ function runProgress(titleKey,stages,onComplete,onCancelled){
   const items={};
   stages.forEach(s=>{
     const li=document.createElement("li");
+    // Multi-liens : plusieurs sources téléchargées -> libellé au pluriel.
+    const label=(s==="download"&&multiMode)?T("stage_download_multi"):T("stage_"+s);
     li.innerHTML=`<div class="stage-head"><span class="dot"></span>`+
-      `<span class="stage-label">${T("stage_"+s)}</span>`+
+      `<span class="stage-label">${label}</span>`+
       `<span class="stage-pct"></span></div>`+
       `<div class="stage-bar"><div class="stage-fill"></div></div>`;
     ul.appendChild(li);items[s]=li;
@@ -391,8 +507,10 @@ const DISC_SECONDS=88*60;   // capacité d'un disque physique (88 min)
 // Modèle de l'éditeur. `linked` : le début de la piste suit la fin de la
 // précédente (grisé, pas de gap). Toujours false pour la 1re piste (début
 // libre) ; la fin de la dernière piste reste toujours éditable.
-let EDIT=[];   // [{title, artist, start, end, linked}]
+let EDIT=[];   // [{title, artist, start, end, linked, oi}]
 let EDIT_ORIG=null;   // instantané de l'analyse IA d'origine (pour "Réinitialiser")
+let editMulti=false;      // album multi-liens : réordonnancement possible
+let reorderPending=false; // ordre modifié localement, pas encore ré-assemblé
 
 // Reconstruit EDIT depuis les pistes brutes du manifeste (analyse IA).
 function buildEditFromTracks(tracks){
@@ -424,6 +542,14 @@ async function openEditor(){
   wireMediaResilience();
   if(peaksInstance){peaksInstance.destroy();peaksInstance=null;}
   EDIT=buildEditFromTracks(m.tracks);
+  // Réordonnancement réservé aux albums multi-liens (pistes = chansons entières
+  // et contiguës). `oi` = index de la piste dans le manifeste (ordre temporel,
+  // préservé par l'autosave qui re-trie toujours par start) : c'est la
+  // permutation envoyée à /reorder.
+  editMulti=!!(m.source&&(m.source.multi||m.source.clips));
+  EDIT.forEach((t,i)=>{t.oi=i;});
+  reorderPending=false;
+  $("reorder-bar").classList.add("hidden");
   // Copie profonde figée : référence pour le bouton « Réinitialiser ».
   // Toujours prise sur le manifeste, jamais sur la reprise locale : sinon
   // « Réinitialiser » ne ramènerait plus à l'analyse IA d'origine.
@@ -436,6 +562,9 @@ async function openEditor(){
   const localEdit=loadEditLocal(slug);
   if(localEdit&&(reedit||!EDIT.length)){
     EDIT=localEdit.edit;
+    // Ordre local non mappable au manifeste : on désactive le réordonnancement
+    // pour cette session (oi ne correspondrait plus aux index du manifeste).
+    editMulti=false;
     toast(T("edit_restored"));
   }else if(localEdit)clearEditLocal(slug);
   relinkEnds();
@@ -583,6 +712,9 @@ const SAVE_NOW=0, SAVE_TYPING=700;
 let draftTimer=null, draftInFlight=false, draftDirty=false;
 function scheduleDraftSave(delay){
   if(reedit||!slug)return;
+  // Ordre modifié non appliqué : ne pas autosauver (le serveur re-trie par
+  // start et figerait des timecodes incohérents avec l'ordre affiché).
+  if(reorderPending)return;
   clearTimeout(draftTimer);
   draftTimer=setTimeout(runDraftSave,delay==null?SAVE_NOW:delay);
 }
@@ -835,6 +967,10 @@ function buildEditRow(t,i){
         : `<span class="t-lock-spacer"></span>`}
     </span>
     <span class="t-actions-sep"></span>
+    ${editMulti?`<span class="row-move">
+      <button class="icon-btn icon-only mini row-up" title="${T('move_up')}"${i===0?' disabled':''}><span class="material-symbols-outlined">arrow_upward</span></button>
+      <button class="icon-btn icon-only mini row-down" title="${T('move_down')}"${i===EDIT.length-1?' disabled':''}><span class="material-symbols-outlined">arrow_downward</span></button>
+    </span>`:''}
     <button class="icon-btn icon-only mini row-play" title="${T('play')}"><span class="material-symbols-outlined">play_arrow</span></button>
     <button class="icon-btn icon-only mini row-del" title="${T('del')}"><span class="material-symbols-outlined">delete</span></button>`;
   row.querySelector(".t-title").value=t.title;
@@ -877,8 +1013,53 @@ function buildEditRow(t,i){
   row.querySelector(".row-play").onclick=()=>{
     const a=$("ed-audio");a.currentTime=EDIT[i].start;a.play();};
   row.querySelector(".row-del").onclick=()=>{EDIT.splice(i,1);commitEdit();};
+  const up=row.querySelector(".row-up"),down=row.querySelector(".row-down");
+  if(up)up.onclick=()=>moveEditRow(i,-1);
+  if(down)down.onclick=()=>moveEditRow(i,1);
   return row;
 }
+
+// Réordonnancement (albums multi-liens) : on permute les pistes localement puis
+// l'utilisateur applique (re-concaténation serveur). L'audio n'est pas encore
+// ré-assemblé ici ; les timecodes affichés restent ceux du master actuel
+// jusqu'à l'application — d'où la barre d'action explicite.
+function moveEditRow(i,dir){
+  const j=i+dir;
+  if(j<0||j>=EDIT.length)return;
+  const tmp=EDIT[i];EDIT[i]=EDIT[j];EDIT[j]=tmp;
+  reorderPending=true;
+  renderRows();
+  updateReorderBar();
+}
+function updateReorderBar(){
+  const bar=$("reorder-bar");
+  if(bar)bar.classList.toggle("hidden",!reorderPending);
+  // Tant que l'ordre n'est pas ré-assemblé, la validation est bloquée : les
+  // MP3 seraient produits dans l'ordre du master actuel, pas celui affiché.
+  const rb=$("btn-render");if(rb)rb.disabled=reorderPending;
+}
+async function applyReorder(){
+  const order=EDIT.map(t=>t.oi);
+  const apply=$("btn-reorder-apply");apply.disabled=true;
+  const cancel=$("btn-reorder-cancel");if(cancel)cancel.disabled=true;
+  toast(T("reorder_applying"));
+  try{
+    const r=await fetch(`/api/jobs/${slug}/reorder`,{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify({order})});
+    if(!r.ok){const d=await r.json().catch(()=>({}));
+      throw new Error(d.detail||`HTTP ${r.status}`);}
+    clearEditLocal(slug);   // l'ordre local est désormais dans le master
+    reorderPending=false;
+    await openEditor();     // recharge tout depuis le manifeste ré-assemblé
+    toast(T("reorder_done"));
+  }catch(e){
+    alert(`${T("err_reorder")} ${e.message||""}`);
+  }finally{
+    apply.disabled=false;if(cancel)cancel.disabled=false;
+  }
+}
+$("btn-reorder-apply").onclick=applyReorder;
+$("btn-reorder-cancel").onclick=()=>{reorderPending=false;openEditor();};
 
 // Reprend la position exacte du lecteur comme début ou fin de la piste.
 function setFromPlayhead(i,which){

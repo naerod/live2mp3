@@ -333,3 +333,85 @@ def test_uploaded_track_survives_a_rerender(api, tmp_path):
     render.run(project, video=False, force=True)
 
     assert mp3.exists(), "le MP3 déposé a été purgé par le rendu"
+
+
+# --- Découpe précise (prep-clip) -------------------------------------------
+
+def _wait_prep(client, slug, token, timeout=60.0):
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        job = client.get(f"/api/albums/{slug}/tracks/prep-clip/{token}",
+                         headers=GEST).json()
+        if job["state"] in ("done", "error"):
+            return job
+        time.sleep(0.2)
+    raise AssertionError("préparation jamais terminée")
+
+
+def test_prep_clip_produces_waveform_and_preview(api):
+    """La préparation télécharge la source une fois, en sort une waveform
+    (en-tête binaire audiowaveform v2) et un MP3 de lecture."""
+    client, project = api
+    slug = project.name
+    r = client.post(f"/api/albums/{slug}/tracks/prep-clip", headers=GEST,
+                    json={"url": VIDEO["webpage_url"]})
+    assert r.status_code == 200
+    token = r.json()["token"]
+    job = _wait_prep(client, slug, token)
+    assert job["state"] == "done", job.get("error")
+    assert job["duration"] > 0
+
+    wf = client.get(f"/api/albums/{slug}/tracks/prep-clip/{token}/waveform.dat",
+                    headers=GEST)
+    assert wf.status_code == 200
+    import struct
+    version = struct.unpack("<i", wf.content[:4])[0]
+    assert version == 2, "en-tête waveform.dat inattendu"
+
+    au = client.get(f"/api/albums/{slug}/tracks/prep-clip/{token}/audio",
+                    headers=GEST)
+    assert au.status_code == 200
+    assert au.headers["content-type"] == "audio/mpeg"
+    assert len(au.content) > 0
+
+
+def test_add_track_reuses_prep_source_without_redownload(api, monkeypatch):
+    """Avec un prep_token, l'ajout ne re-télécharge pas : il réutilise la
+    source déjà préparée. On le prouve en faisant échouer tout re-download."""
+    client, project = api
+    slug = project.name
+    from backend.pipeline import download
+
+    r = client.post(f"/api/albums/{slug}/tracks/prep-clip", headers=GEST,
+                    json={"url": VIDEO["webpage_url"]})
+    token = _wait_prep(client, slug, r.json()["token"])
+    prep_token = r.json()["token"]
+
+    def boom(*a, **k):
+        raise AssertionError("download_audio ne doit pas être rappelé")
+    monkeypatch.setattr(download, "download_audio", boom)
+
+    r2 = client.post(f"/api/albums/{slug}/tracks/from-url", headers=GEST, json={
+        "url": VIDEO["webpage_url"],
+        "title": "Guest - Reused Source",
+        "start": 1.0, "end": 3.0,
+        "cover_from_thumbnail": False,
+        "prep_token": prep_token,
+    })
+    assert r2.status_code == 200
+    job = _wait(client, slug, r2.json()["token"])
+    assert job["state"] == "done", job.get("error")
+
+    mp3 = project / "build" / "audio" / job["file"]
+    assert mp3.exists() and mp3.stat().st_size > 0
+    # La préparation consommée est nettoyée (pas de source qui traîne).
+    from backend import addtrack
+    assert addtrack._prep_source(prep_token) is None
+
+
+def test_prep_clip_requires_gestionnaire(api):
+    client, project = api
+    r = client.post(f"/api/albums/{project.name}/tracks/prep-clip",
+                    json={"url": VIDEO["webpage_url"]})
+    assert r.status_code in (401, 403)

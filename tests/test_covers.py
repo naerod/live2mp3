@@ -488,3 +488,38 @@ def test_unpublished_album_does_not_touch_media(client, monkeypatch):
 
     _post_cover(c, slug, USER)
     assert hits == []
+
+
+def test_reorder_tracks_renumbers_n(client, monkeypatch):
+    """Réordonner la tracklist renumérote `n` par position.
+
+    Régression coldplay-untitled : la fiche métadonnées réordonnait la liste
+    mais gardait l'ancien `n`, alors que fichiers et tags suivaient déjà la
+    position — la fiche publique affichait donc des numéros désordonnés
+    (02,03,…,01). Le `n` doit refléter la position finale.
+    """
+    from backend import jellyfin
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: None)
+    c, root = client
+    payload = {"album": {"artist": "Coldplay", "title": "Live", "date": "2026-01-01"},
+               "tracks": [
+                   {"n": 1, "title": "First", "start": 0.0, "end": 3.0, "locked": True},
+                   {"n": 2, "title": "Second", "start": 3.0, "end": 6.0, "locked": True},
+                   {"n": 3, "title": "Third", "start": 6.0, "end": 9.0, "locked": True},
+               ],
+               "target": "data_disc"}
+    slug = c.post("/api/jobs", json=payload, headers=GEST).json()["slug"]
+    c.patch(f"/api/albums/{slug}/published", json={"published": True}, headers=GEST)
+    (root / slug / "build" / "audio").mkdir(parents=True, exist_ok=True)
+
+    # Nouvel ordre : Third, First, Second (on envoie les `n` d'origine).
+    r = c.put(f"/api/albums/{slug}/tracks", headers=GEST, json={"tracks": [
+        {"n": 3, "title": "Third"},
+        {"n": 1, "title": "First"},
+        {"n": 2, "title": "Second"},
+    ]})
+    assert r.status_code == 200
+
+    tracks = c.get(f"/api/catalogue/{slug}", headers=GEST).json()["tracks"]
+    assert [(t["n"], t["title"]) for t in tracks] == [
+        (1, "Third"), (2, "First"), (3, "Second")]

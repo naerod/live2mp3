@@ -371,6 +371,34 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   color:var(--accent);border:1px solid var(--accent);border-radius:999px;
   padding:3px 10px;margin-top:8px}
 .track-rows{display:flex;flex-direction:column;gap:8px;margin:14px 0}
+#l-urls{width:100%;font-family:"Google Sans Code",monospace;font-size:13px}
+.track-row .row-move{display:none;gap:2px}
+#track-rows.reorderable .row-move{display:inline-flex}
+.track-row .row-move button:disabled{opacity:.3;cursor:default}
+/* Éditeur : les flèches sont rendues conditionnellement (editMulti) donc
+   toujours visibles quand présentes. Empilées verticalement pour un
+   encombrement horizontal minimal (sinon la ligne déborde sur 2 lignes). */
+#edit-rows .row-move{display:inline-flex;flex-direction:column;gap:3px;flex-shrink:0}
+#edit-rows .row-move .icon-btn.mini{height:17px;width:28px;border-radius:6px}
+#edit-rows .row-move .icon-btn.mini .material-symbols-outlined{font-size:15px}
+/* Desktop : garder chaque piste sur une seule ligne — les champs texte se
+   rétractent, le bloc timecodes et les actions restent intacts. Le wrap
+   mobile (≤768px) est géré plus bas. */
+@media(min-width:769px){
+  #edit-rows .track-row{flex-wrap:nowrap}
+  #edit-rows .t-title{min-width:120px}
+  #edit-rows .t-artist{min-width:96px}
+  #edit-rows .t-times{flex-shrink:0}
+}
+.reorder-bar{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:10px;
+  background:var(--card2,rgba(136,147,242,.12));
+  border:1px solid var(--accent,#8893f2)}
+.reorder-bar .reorder-msg{display:flex;align-items:center;gap:8px;font-size:14px}
+.reorder-bar .reorder-actions{display:flex;gap:8px}
+.track-row.row-error{outline:1px solid var(--like);outline-offset:4px;border-radius:8px}
+.track-row .t-badge a{color:var(--muted);display:inline-flex;text-decoration:none}
+.track-row .t-badge a:hover{color:var(--accent,var(--fg))}
 .track-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .track-row .tn{color:var(--muted);font-size:13px;width:26px;text-align:right;
   font-variant-numeric:tabular-nums;flex-shrink:0}
