@@ -128,6 +128,45 @@ def test_pinned_cover_beats_likes(client):
     assert r["covers"][0]["pinned"] is True
 
 
+def _insert_auto_cover(slug, username="mod"):
+    """Simule la miniature récupérée à l'import par lien (auto=1), sans réseau."""
+    from uuid import uuid4
+    from backend import covers as cov
+    from backend.db import get_conn
+    key = uuid4().hex
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, auto, created_at, updated_at) "
+            "VALUES(?,?,?,?,'','',1,'2000-01-01T00:00:00+00:00','2000-01-01T00:00:00+00:00')",
+            (slug, username, key, ".png"),
+        )
+        cid = conn.execute("SELECT last_insert_rowid() AS i").fetchone()["i"]
+        cov.covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        cov.cover_file(slug, key, ".png").write_bytes(_png((10, 10, 10)))
+    cov._on_covers_changed(slug)
+    return cid
+
+
+def test_manual_cover_beats_auto_thumbnail(client):
+    """Bug : une pochette auto (miniature d'import), plus ANCIENNE, l'emportait
+    au départage `created_at`. Une pochette manuelle doit passer devant d'office,
+    et le crédit « Pochette automatique » disparaître aussitôt."""
+    c, _ = client
+    slug = _album(c)
+    auto = _insert_auto_cover(slug)
+    # Tant qu'elle est seule, l'auto gagne et l'album est crédité « automatique ».
+    assert c.get(f"/api/social/albums/{slug}/covers").json()["covers"][0]["id"] == auto
+    assert c.get(f"/api/catalogue/{slug}", headers=GEST).json()["cover_auto"] is True
+    # Upload manuel (auto=0) : postérieur, mais doit gagner malgré tout.
+    manual = _post_cover(c, slug, USER, color=(0, 255, 0)).json()
+    assert manual["covers"][0]["id"] != auto
+    assert manual["covers"][0]["auto"] is False
+    won = c.get(f"/api/social/albums/{slug}/covers").json()["covers"]
+    assert won[0]["id"] != auto and won[0]["auto"] is False
+    assert c.get(f"/api/catalogue/{slug}", headers=GEST).json()["cover_auto"] is False
+
+
 def test_pin_is_exclusive_and_toggles(client):
     c, _ = client
     slug = _album(c)

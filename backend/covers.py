@@ -85,14 +85,16 @@ def rank_covers(conn: sqlite3.Connection, slug: str) -> list[sqlite3.Row]:
     """Covers d'un album, la gagnante en tête.
 
     Ordre : épinglée d'abord (au plus une, garantie par index partiel), puis
-    likes décroissants, puis la plus ancienne — départage stable, donc le rang
-    utilisé pour nommer les fichiers du ZIP ne bouge pas sans raison.
+    les pochettes manuelles avant l'auto (une miniature d'import ne doit jamais
+    l'emporter sur une pochette proposée à la main), puis likes décroissants,
+    puis la plus ancienne — départage stable, donc le rang utilisé pour nommer
+    les fichiers du ZIP ne bouge pas sans raison.
     """
     return conn.execute(
         "SELECT c.*, COUNT(l.cover_id) AS likes "
         "FROM covers c LEFT JOIN cover_likes l ON l.cover_id = c.id "
         "WHERE c.slug=? GROUP BY c.id "
-        "ORDER BY c.pinned DESC, likes DESC, c.created_at ASC, c.id ASC",
+        "ORDER BY c.pinned DESC, c.auto ASC, likes DESC, c.created_at ASC, c.id ASC",
         (slug,),
     ).fetchall()
 
@@ -193,6 +195,9 @@ def _cover_dict(row: sqlite3.Row, rank: int, profiles: dict[str, dict],
         "avatar": prof["avatar"],
         "caption": row["caption"] or "",
         "pinned": bool(row["pinned"]),
+        # Pochette récupérée automatiquement (miniature d'import) : le front
+        # affiche « Pochette automatique » au lieu de « Pochette par X ».
+        "auto": bool(row["auto"]),
         "likes": row["likes"],
         "liked": row["id"] in liked,
         "comments": comment_counts.get(row["id"], 0),

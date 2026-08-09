@@ -166,6 +166,11 @@ CREATE TABLE IF NOT EXISTS covers (
     traycard_ext TEXT NOT NULL DEFAULT '',
     caption      TEXT NOT NULL DEFAULT '',
     pinned       INTEGER NOT NULL DEFAULT 0,
+    -- 1 = pochette récupérée automatiquement (miniature de la vidéo à l'import
+    -- par lien), 0 = proposée manuellement. Sert au crédit « Pochette
+    -- automatique » et au classement : une pochette auto passe DERRIÈRE toute
+    -- pochette manuelle, pour qu'un upload la remplace aussitôt.
+    auto         INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
@@ -237,6 +242,13 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_comments_cover ON comments(cover_id)"
         )
+
+        # Migration : distinction pochette auto (miniature d'import) / manuelle.
+        ccols = {r["name"] for r in conn.execute("PRAGMA table_info(covers)")}
+        if "auto" not in ccols:
+            conn.execute(
+                "ALTER TABLE covers ADD COLUMN auto INTEGER NOT NULL DEFAULT 0"
+            )
 
         # Migration : personnalisation du profil (ville, artiste favori).
         pcols = {r["name"] for r in conn.execute("PRAGMA table_info(profiles)")}

@@ -670,13 +670,12 @@ const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
 function footerHtml(c,kind){
   if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
-  // Pochette auto (miniature d'import) : pas d'entrée covers → créditée
-  // « Pochette automatique », au même emplacement que « Pochette par X ».
-  if(!c.id){
-    if(COVER_AUTO&&kind==='cover')
-      return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
-    return `<div class="cr-footer"></div>`;
-  }
+  // Pochette auto (miniature d'import) : créditée « Pochette automatique », au
+  // même emplacement que « Pochette par X ». Vaut pour la pseudo-cover manifest
+  // (id:0, COVER_AUTO) comme pour une vraie ligne marquée `auto`.
+  if(kind==='cover'&&((!c.id&&COVER_AUTO)||c.auto))
+    return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
+  if(!c.id)return `<div class="cr-footer"></div>`;
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
   return `<div class="cr-footer">${poster}</div>`;
@@ -717,8 +716,14 @@ function renderCarousel(){
     ${footerHtml(c,kind)}
   `;
 
-  if(c&&c.id&&!(kind==='traycard'&&c.traycard_kind==='pdf'))
-    document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
+  // Clic sur la pochette : vraie ligne sociale → fiche pochette (agrandir,
+  // épingler, commenter) ; pseudo-cover manifest (id:0, fréquente quand la base
+  // sociale de l'environnement n'a pas la ligne) → au moins l'agrandissement.
+  const art=document.getElementById('cr-art');
+  if(art&&c&&!(kind==='traycard'&&c.traycard_kind==='pdf')){
+    if(c.id)art.onclick=()=>openCoverModal(c.id);
+    else if(c.cover_url)art.onclick=()=>openLbx('image',c.cover_url);
+  }
   const prev=document.getElementById('cr-prev'), next=document.getElementById('cr-next');
   if(prev)prev.onclick=()=>go(-1);
   if(next)next.onclick=()=>go(1);
