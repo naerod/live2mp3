@@ -1401,6 +1401,12 @@ def start_prepare(slug: str,
     return {"ok": True, "slug": slug}
 
 
+class AITrackIn(BaseModel):
+    n: int = 0
+    title: str
+    artist: str | None = None
+
+
 class PrepareAIIn(BaseModel):
     token: str            # staging de l'upload chunké
     file: str             # nom du fichier complet déposé
@@ -1411,6 +1417,37 @@ class PrepareAIIn(BaseModel):
     festival: str = ""
     setlistfm_url: str = ""
     target: str = "data_disc"
+    # Setlist vérifiée dans le formulaire (prioritaire) ; vide → recherche
+    # serveur (URL/date) puis, à défaut, découpe auto par l'IA.
+    tracks: list[AITrackIn] | None = None
+
+
+class SetlistLookupIn(BaseModel):
+    artist: str = ""
+    date: str = ""
+    url: str = ""
+
+
+@app.post("/api/import/setlist-lookup")
+def import_setlist_lookup(payload: SetlistLookupIn,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Propose la setlist officielle (setlist.fm) pour pré-remplir le formulaire
+    d'un import fichier : URL explicite prioritaire, sinon (artiste, date)."""
+    try:
+        if payload.url.strip():
+            sl = setlistfm.lookup_by_url(payload.url.strip())
+        elif payload.artist.strip() and payload.date.strip():
+            sl = setlistfm.lookup(payload.artist.strip(), payload.date.strip())
+        else:
+            return {"found": False, "reason": "artiste et date requis (ou une URL)"}
+    except setlistfm.SetlistUnavailable as e:
+        return {"found": False, "reason": str(e)}
+    if not sl:
+        return {"found": False}
+    return {"found": True, "url": sl.get("url", ""), "venue": sl.get("venue", ""),
+            "tour": sl.get("tour", ""), "name": setlistfm.ATTRIBUTION,
+            "tracks": [{"n": t["n"], "title": t["title"], "artist": t.get("artist")}
+                       for t in sl["tracks"]]}
 
 
 @app.post("/api/import/prepare-ai")
@@ -1440,29 +1477,43 @@ def prepare_ai(payload: PrepareAIIn,
              "date": payload.date.strip(), "venue": payload.venue.strip(),
              "festival": payload.festival.strip()}
 
-    # Setlist officielle : URL explicite prioritaire, sinon (artiste, date).
-    setlist, setlist_url = None, ""
-    try:
-        if payload.setlistfm_url.strip():
-            setlist = setlistfm.lookup_by_url(payload.setlistfm_url.strip())
-        elif album["date"]:
-            setlist = setlistfm.lookup(album["artist"], album["date"])
-    except setlistfm.SetlistUnavailable:
-        setlist = None
-    if setlist:
-        setlist_url = setlist.get("url") or payload.setlistfm_url.strip()
-        tracks = [{"n": t["n"], "title": t["title"],
-                   "artist": t.get("artist"), "locked": False}
-                  for t in setlist["tracks"]]
-        auto_setlist = False
-        if not album["venue"] and setlist.get("venue"):
-            album["venue"] = setlist["venue"]
-        if not album["title"] and setlist.get("tour"):
-            album["title"] = setlist["tour"]
+    setlist_url = payload.setlistfm_url.strip()
+    setlist_source = "ai"
+    if payload.tracks:
+        # Pistes vérifiées dans le formulaire : prioritaires, aucune recherche.
+        tracks = [{"n": t.n or i, "title": t.title.strip(),
+                   "artist": (t.artist or None), "locked": False}
+                  for i, t in enumerate(payload.tracks, start=1) if t.title.strip()]
+        auto_setlist = not tracks
+        if not tracks:
+            tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
+        else:
+            setlist_source = "form"
     else:
-        # Setlist inconnue : piste unique provisoire, l'IA la remplacera.
-        tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
-        auto_setlist = True
+        # Setlist officielle : URL explicite prioritaire, sinon (artiste, date).
+        setlist = None
+        try:
+            if setlist_url:
+                setlist = setlistfm.lookup_by_url(setlist_url)
+            elif album["date"]:
+                setlist = setlistfm.lookup(album["artist"], album["date"])
+        except setlistfm.SetlistUnavailable:
+            setlist = None
+        if setlist:
+            setlist_source = "setlistfm"
+            setlist_url = setlist.get("url") or setlist_url
+            tracks = [{"n": t["n"], "title": t["title"],
+                       "artist": t.get("artist"), "locked": False}
+                      for t in setlist["tracks"]]
+            auto_setlist = False
+            if not album["venue"] and setlist.get("venue"):
+                album["venue"] = setlist["venue"]
+            if not album["title"] and setlist.get("tour"):
+                album["title"] = setlist["tour"]
+        else:
+            # Setlist inconnue : piste unique provisoire, l'IA la remplacera.
+            tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
+            auto_setlist = True
     if not album["title"]:
         album["title"] = f"{album['artist']} — Live"
 
@@ -1507,13 +1558,11 @@ def prepare_ai(payload: PrepareAIIn,
 
     shutil.rmtree(staging, ignore_errors=True)
 
-    progress.reset(m.slug)
-    _skip_detection.discard(m.slug)
-    threading.Thread(target=_run_prepare_bg,
-                     args=(m.slug, identity.get("username") or ""),
-                     daemon=True).start()
+    # Comme create_job : on ne lance PAS la préparation ici. Le front enchaîne
+    # sur POST /api/jobs/{slug}/prepare (même parcours que l'import par lien),
+    # ce qui évite toute course sur le flux d'événements SSE.
     return {"ok": True, "slug": m.slug, "media": m.data["source"]["media"],
-            "setlist_source": "setlistfm" if setlist else "ai",
+            "setlist_source": setlist_source,
             "auto_setlist": auto_setlist, "tracks": len(tracks)}
 
 

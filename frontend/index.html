@@ -51,6 +51,21 @@
     </div>
     <label class="opt-check" style="margin-top:14px"><input type="checkbox" id="multi-toggle"> <span data-i18n="multi_toggle">Importer depuis plusieurs liens</span></label>
     <p id="analyze-status" class="note hidden"></p>
+
+    <!-- Import d'un fichier complet (MP3/MP4) déjà sur le PC → découpe IA -->
+    <div class="file-import" style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+      <p class="note"><span class="material-symbols-outlined">info</span><span data-i18n="import_file_hint">Vous avez le concert en fichier ? Téléversez-le : l'IA le découpe en pistes.</span></p>
+      <input type="file" id="l-file" accept=".mp3,.mp4,.mkv,.webm,.mov,.m4v,audio/*,video/*" style="display:none">
+      <button id="btn-file" class="primary"><span class="material-symbols-outlined">movie</span> <span data-i18n="import_file">Importer un fichier complet (MP3/MP4) — découpé par l'IA</span></button>
+      <div id="l-file-progress" class="hidden" style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span id="l-file-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%"></span>
+          <span id="l-file-pct">0 %</span>
+        </div>
+        <div class="stage-bar"><div class="stage-fill" id="l-file-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+
     <div class="actions" style="margin-top:18px">
       <button id="btn-manual" class="icon-btn"><span class="material-symbols-outlined">edit_note</span> <span data-i18n="manual">Remplir manuellement</span></button>
     </div>
@@ -79,6 +94,13 @@
           <option value="audio_cd" data-i18n="audio_cd">CD audio (CUE+WAV)</option>
         </select>
       </label>
+    </div>
+    <div id="local-setlist-box" class="hidden" style="margin-top:6px">
+      <label data-i18n="setlistfm_url_label">Lien setlist.fm (optionnel)</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input id="f-setlistfm" placeholder="https://www.setlist.fm/…" autocomplete="off" style="flex:1">
+        <button id="btn-fetch-setlist" class="btn-secondary" type="button"><span class="material-symbols-outlined">travel_explore</span> <span data-i18n="fetch_setlist">Récupérer la setlist</span></button>
+      </div>
     </div>
     <h2 class="sub-h"><span class="material-symbols-outlined">queue_music</span> <span data-i18n="setlist_title">Setlist</span></h2>
     <p class="note"><span class="material-symbols-outlined">info</span><span id="setlist-hint" data-i18n="setlist_hint">Vérifiez les titres. Laissez vide : l'IA identifiera les chansons à l'écoute (plus long). Artiste par piste uniquement s'il diffère de l'album (invité, duo).</span></p>

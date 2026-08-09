@@ -175,7 +175,161 @@ $("btn-manual").onclick=()=>{
   if(!$("track-rows").children.length)addFormRow({});
   show("step-form");
 };
-$("btn-back-link").onclick=()=>{exitMultiMode();show("step-link");};
+$("btn-back-link").onclick=()=>{exitMultiMode();exitLocalMode();show("step-link");};
+
+// ============================================================
+// Import d'un fichier complet (MP3/MP4) → découpe IA
+// ============================================================
+let localMode=false, localToken="", localFile="", localMedia="";
+const VIDEO_EXTS=["mp4","mkv","webm","mov","m4v"];
+
+function exitLocalMode(){
+  localMode=false;localToken="";localFile="";localMedia="";
+  const box=$("local-setlist-box");if(box)box.classList.add("hidden");
+  const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.remove("hidden");
+}
+
+function showFileProgress(frac,name){
+  const box=$("l-file-progress");if(!box)return;
+  box.classList.remove("hidden");
+  $("l-file-name").textContent=name;
+  const pct=Math.round(frac*100);
+  $("l-file-pct").textContent=pct+" %";
+  $("l-file-fill").style.width=pct+"%";
+}
+const _sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+// Téléverse un fichier en chunks (~8 Mo) : sous la limite Cloudflare (100 Mo)
+// et repris automatiquement après une coupure réseau (offset côté serveur).
+async function uploadLocalFile(file){
+  const CHUNK=8*1024*1024;
+  showFileProgress(0,file.name);
+  let r=await fetch("/api/import/upload/init",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({filename:file.name,size:file.size})});
+  if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||"init");
+  const {token,file_id}=await r.json();
+  const base=`/api/import/upload/${token}/${file_id}`;
+  let off=0, fails=0;
+  while(off<file.size){
+    const buf=await file.slice(off,off+CHUNK).arrayBuffer();
+    try{
+      const pr=await fetch(base,{method:"PUT",
+        headers:{"X-Chunk-Offset":String(off)},body:buf});
+      if(pr.status===409){off=((await pr.json()).detail||{}).received||off;continue;}
+      if(!pr.ok)throw new Error("HTTP "+pr.status);
+      off=(await pr.json()).received;
+      showFileProgress(off/file.size,file.name);
+      fails=0;
+    }catch(e){
+      // Coupure réseau (4G) : on se recale sur l'octet reçu et on réessaie.
+      if(++fails>8)throw e;
+      await _sleep(1500);
+      try{off=(await(await fetch(base)).json()).received;}catch(_){ }
+    }
+  }
+  r=await fetch(`${base}/finish`,{method:"POST",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({size:file.size})});
+  if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||"finish");
+  return {token, file:(await r.json()).file};
+}
+
+$("btn-file").onclick=()=>$("l-file").click();
+$("l-file").addEventListener("change",async e=>{
+  const f=e.target.files[0];e.target.value="";
+  if(!f)return;
+  const ext=(f.name.split(".").pop()||"").toLowerCase();
+  localMedia=VIDEO_EXTS.includes(ext)?"video":"audio";
+  $("btn-file").disabled=true;
+  try{
+    const up=await uploadLocalFile(f);
+    localToken=up.token;localFile=up.file;localMode=true;
+    enterLocalForm(f.name);
+  }catch(err){
+    alert(T("err_upload")+" "+(err.message||""));
+    $("l-file-progress").classList.add("hidden");
+  }finally{$("btn-file").disabled=false;}
+});
+
+function enterLocalForm(name){
+  exitMultiMode();
+  videoInfo=null;setlistSource=null;
+  mountArtistAC("","");
+  $("f-title").value="";$("f-date").value="";$("f-venue").value="";$("f-festival").value="";
+  $("src-card").classList.remove("hidden");
+  $("src-thumb").style.display="none";
+  $("src-title").textContent=name;
+  $("src-sub").textContent=T(localMedia==="video"?"local_video":"local_audio");
+  $("src-chip").classList.remove("hidden");
+  $("src-chip-txt").textContent=T("ai_badge");
+  $("local-setlist-box").classList.remove("hidden");
+  $("f-setlistfm").value="";
+  $("setlist-src").classList.add("hidden");
+  // Pas de téléchargement vidéo à cocher : le média est celui du fichier fourni.
+  const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.add("hidden");
+  $("track-rows").innerHTML="";addFormRow({});
+  show("step-form");
+}
+
+$("btn-fetch-setlist").onclick=async()=>{
+  const av=artistValue();
+  const body={artist:av.label,date:$("f-date").value||"",url:$("f-setlistfm").value.trim()};
+  const btn=$("btn-fetch-setlist");btn.disabled=true;
+  try{
+    const r=await fetch("/api/import/setlist-lookup",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json();
+    if(d.found){
+      setlistSource={tracks:d.tracks.length,url:d.url,name:d.name||"setlist.fm"};
+      if(!$("f-venue").value&&d.venue)$("f-venue").value=d.venue;
+      if(!$("f-title").value&&d.tour)$("f-title").value=d.tour;
+      if(d.url)$("f-setlistfm").value=d.url;
+      $("track-rows").innerHTML="";d.tracks.forEach(t=>addFormRow(t));
+      if(!d.tracks.length)addFormRow({});
+      const src=$("setlist-src");
+      if(src&&d.url){
+        src.classList.remove("hidden");
+        src.innerHTML=`<span class="material-symbols-outlined">verified</span>`+
+          `<span>${T("setlist_official")(d.tracks.length)} `+
+          `<a href="${d.url}" target="_blank" rel="noopener">${setlistSource.name}</a></span>`;
+      }
+    }else{
+      alert(T("setlist_none")+(d.reason?` (${d.reason})`:""));
+    }
+  }catch(e){alert(T("err_generic"));}
+  finally{btn.disabled=false;}
+};
+
+async function createLocalAlbum(){
+  const av=artistValue();
+  if(!av.label){alert(T("err_required"));return;}
+  const tracks=[...$("track-rows").querySelectorAll(".track-row")].map((r,i)=>{
+    const t={n:i+1,title:r.querySelector(".t-title").value.trim()};
+    const a=r.querySelector(".t-artist").value.trim();if(a)t.artist=a;
+    return t;
+  }).filter(t=>t.title);
+  const body={token:localToken,file:localFile,artist:av.label,
+    title:$("f-title").value.trim(),date:$("f-date").value||"",
+    venue:$("f-venue").value.trim(),festival:$("f-festival").value.trim(),
+    setlistfm_url:$("f-setlistfm").value.trim(),target:$("f-target").value,
+    tracks:tracks.length?tracks:null};
+  $("btn-create").disabled=true;
+  try{
+    const r=await fetch("/api/import/prepare-ai",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok){const d=await r.json().catch(()=>({}));
+      const err=new Error(d.detail||`HTTP ${r.status}`);err.status=r.status;throw err;}
+    slug=(await r.json()).slug;
+    location.hash=slug;
+    localMode=false;
+    await startPrepare();
+  }catch(e){
+    if(e.status===409){
+      confirmDialog(e.message||T("err_generic"),()=>{location.href="/app/drafts";},
+        {icon:"drafts",yes:T("dup_goto_drafts"),no:T("dup_close")});
+    }else{alert(e.message||T("err_generic"));}
+  }finally{$("btn-create").disabled=false;}
+}
 
 // ============================================================
 // Étape 2 — Formulaire de vérification
@@ -297,6 +451,7 @@ function renumber(container){
 $("btn-add-track").onclick=()=>addFormRow({});
 
 $("btn-create").onclick=async()=>{
+  if(localMode)return createLocalAlbum();
   const av=artistValue();
   const artist=av.label;
   const title=$("f-title").value.trim();

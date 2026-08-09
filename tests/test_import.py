@@ -385,10 +385,7 @@ def test_prepare_ai_with_setlistfm(client, tmp_path, monkeypatch):
     """Fichier complet téléversé → projet créé, master prêt, setlist officielle
     pré-remplie, pipeline IA lancé (neutralisé ici)."""
     c, projects = client
-    from backend import main as bmain, setlistfm
-    started = {}
-    monkeypatch.setattr(bmain, "_run_prepare_bg",
-                        lambda slug, user: started.update(slug=slug, user=user))
+    from backend import setlistfm
     monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: {
         "url": "https://www.setlist.fm/setlist/top/2024/x-abcdef12.html",
         "venue": "Scottrade Center", "tour": "Clancy",
@@ -403,9 +400,8 @@ def test_prepare_ai_with_setlistfm(client, tmp_path, monkeypatch):
     d = r.json()
     assert d["setlist_source"] == "setlistfm"
     assert d["auto_setlist"] is False and d["tracks"] == 2
-    assert started["slug"] == d["slug"]           # pipeline IA déclenché
     man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
-    assert man["pipeline_state"]["download"] == "done"
+    assert man["pipeline_state"]["download"] == "done"   # prêt pour /prepare
     assert man["source"]["media"] == "audio"
     assert man["source"]["duration"] > 0
     assert man["meta"]["setlistfm_url"].endswith(".html")
@@ -458,3 +454,42 @@ def test_prepare_ai_uses_setlistfm_url(client, tmp_path, monkeypatch):
     assert r.status_code == 200, r.text
     assert seen["url"] == url
     assert r.json()["setlist_source"] == "setlistfm"
+
+
+def test_prepare_ai_with_form_tracks(client, tmp_path, monkeypatch):
+    """Setlist vérifiée dans le formulaire : prioritaire, pas de recherche."""
+    c, _ = client
+    from backend import setlistfm
+    called = {"n": 0}
+    monkeypatch.setattr(setlistfm, "lookup",
+                        lambda *a: called.update(n=called["n"] + 1) or None)
+    p = _mp3(tmp_path / "src" / "c5.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c5.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "TOP", "date": "2024-08-15",
+        "tracks": [{"n": 1, "title": "A"}, {"n": 2, "title": "B", "artist": "TOP with X"}]})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "form" and d["auto_setlist"] is False and d["tracks"] == 2
+    assert called["n"] == 0            # aucune recherche setlist.fm
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert [t["title"] for t in man["tracks"]] == ["A", "B"]
+
+
+def test_setlist_lookup(client, monkeypatch):
+    c, _ = client
+    from backend import setlistfm
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: {
+        "url": "https://setlist.fm/x-1a2b3c.html", "venue": "V", "tour": "T",
+        "tracks": [{"n": 1, "title": "S1", "artist": None}]})
+    r = c.post("/api/import/setlist-lookup", headers=GEST,
+               json={"artist": "TOP", "date": "2024-08-15"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["found"] is True and len(d["tracks"]) == 1 and d["url"].endswith(".html")
+
+
+def test_setlist_lookup_needs_artist_and_date(client):
+    c, _ = client
+    r = c.post("/api/import/setlist-lookup", headers=GEST, json={"artist": "TOP"})
+    assert r.status_code == 200 and r.json()["found"] is False
