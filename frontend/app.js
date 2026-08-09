@@ -138,6 +138,9 @@ function fillFormMulti(d){
   $("f-title").value="";$("f-date").value="";$("f-venue").value="";$("f-festival").value="";
   $("src-card").classList.add("hidden");
   $("setlist-src").classList.add("hidden");
+  // La recherche setlist.fm n'a pas de sens en multi-liens (1 piste = 1 lien).
+  const lbox=$("local-setlist-box");if(lbox)lbox.classList.add("hidden");
+  const lhint=$("setlist-ai-none");if(lhint)lhint.classList.add("hidden");
   // Consigne setlist adaptée : 1 piste = 1 lien (pas de détection IA à l'écoute).
   $("setlist-hint").setAttribute("data-i18n","setlist_hint_multi");
   // « Ajouter une piste » n'a pas de sens ici (une piste sans lien est ignorée).
@@ -186,6 +189,7 @@ const VIDEO_EXTS=["mp4","mkv","webm","mov","m4v"];
 function exitLocalMode(){
   localMode=false;localToken="";localFile="";localMedia="";
   const box=$("local-setlist-box");if(box)box.classList.add("hidden");
+  const hint=$("setlist-ai-none");if(hint)hint.classList.add("hidden");
   const vwrap=$("f-video").closest(".opt-check");if(vwrap)vwrap.classList.remove("hidden");
 }
 
@@ -263,6 +267,7 @@ function enterLocalForm(name){
   $("src-chip").classList.remove("hidden");
   $("src-chip-txt").textContent=T("ai_badge");
   $("local-setlist-box").classList.remove("hidden");
+  $("setlist-ai-none").classList.add("hidden");
   $("f-setlistfm").value="";
   $("setlist-src").classList.add("hidden");
   // Pas de téléchargement vidéo à cocher : le média est celui du fichier fourni.
@@ -281,6 +286,7 @@ $("btn-fetch-setlist").onclick=async()=>{
     const d=await r.json();
     if(d.found){
       setlistSource={tracks:d.tracks.length,url:d.url,name:d.name||"setlist.fm"};
+      const _h=$("setlist-ai-none");if(_h)_h.classList.add("hidden");
       if(!$("f-venue").value&&d.venue)$("f-venue").value=d.venue;
       if(!$("f-title").value&&d.tour)$("f-title").value=d.tour;
       if(d.url)$("f-setlistfm").value=d.url;
@@ -393,6 +399,20 @@ function fillForm(sug,video,ai){
   $("track-rows").innerHTML="";
   (sug.tracks||[]).forEach(t=>addFormRow(t));
   if(!(sug.tracks||[]).length)addFormRow({});
+  // Aucune setlist trouvée par l'IA → proposer de coller un lien setlist.fm.
+  // On réutilise la boîte de recherche setlist.fm (bouton « Récupérer la setlist »).
+  const noSetlist=!(sug.tracks||[]).length && !setlistSource;
+  const box=$("local-setlist-box"),hint=$("setlist-ai-none");
+  if(box){
+    if(noSetlist){
+      box.classList.remove("hidden");
+      $("f-setlistfm").value="";
+      if(hint)hint.classList.remove("hidden");
+    }else{
+      box.classList.add("hidden");
+      if(hint)hint.classList.add("hidden");
+    }
+  }
 }
 
 function addFormRow(t){
