@@ -1,3 +1,25 @@
+2026-08-09 : **Généralisation de l'import + IA (EN COURS)** — objectif : importer
+des concerts MP4 depuis le PC (upload site) et réutiliser le pipeline IA
+(découpe auto, setlist.fm) même en import manuel. Concert pilote : *Twenty One
+Pilots — More Than We Ever Imagined* (+ Q&A bonus). Transport = upload navigateur
+**chunké résumable** (Cloudflare bloque > 100 Mo ; le chunké donne la reprise
+sur coupure 4G). Q&A voulu à la fois **piste audio bonus** ET **extra vidéo
+Jellyfin**. Visuels Jellyfin (poster/backdrop/landscape/logo, dans le dossier
+« Jellyfin metadata » du partage) = pochette album + artwork média.
+- **Fait & déployé preprod v1.23.2** : endpoints upload chunké
+  `/api/import/upload/{init,PUT chunk,GET status,finish}` (append disque, reprise
+  via offset, 409 si désync) + `/api/import/analyze-staged` + lecture vidéo
+  (`_read_video` ffprobe, `_read_media`, `has_video`). Refacto `analyze` →
+  `_analyze_files_dir`. 6 tests (test_import.py). Suite 266 OK.
+- **Reste à faire** : (1) refonte pop-up import + textes (MP3/MP4, pré-découpé /
+  complet / ZIP) ; (2) UI upload chunké avec barre + reprise (vitrine.html) ;
+  (3) commit vidéo (build/video, extraction audio) ; (4) **cœur** : réutiliser
+  `_run_prepare_bg` sur un fichier local (sauter le stage download) pour la
+  découpe IA d'un MP4/MP3 complet, avec artiste+date (ou URL setlist.fm) saisis ;
+  (5) Q&A bonus (audio + extra Jellyfin) ; (6) artwork Jellyfin.
+- Bugs pochettes (crédit auto, classement, clic agrandir) : corrigés v1.23.1,
+  voir workspace/debugging/2026-08-09_pochettes-credit-auto-classement-clic.md
+
 2026-08-05 : **Découpe précise à la waveform pour l'ajout de piste**
 (preprod v1.22.1). La saisie « minute:seconde » ne permettait pas de caler un
 début pile sur l'attaque (parlote d'intro). Bouton « Découpe précise » dans le
