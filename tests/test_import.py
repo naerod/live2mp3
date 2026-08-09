@@ -377,3 +377,84 @@ def test_chunked_second_file_same_staging(client, tmp_path):
     assert tok2 == tok
     a = c.post("/api/import/analyze-staged", headers=GEST, json={"token": tok}).json()
     assert len(a["tracks"]) == 2
+
+
+# ── Import complet + découpe IA (prepare-ai) ────────────────────────────────
+
+def test_prepare_ai_with_setlistfm(client, tmp_path, monkeypatch):
+    """Fichier complet téléversé → projet créé, master prêt, setlist officielle
+    pré-remplie, pipeline IA lancé (neutralisé ici)."""
+    c, projects = client
+    from backend import main as bmain, setlistfm
+    started = {}
+    monkeypatch.setattr(bmain, "_run_prepare_bg",
+                        lambda slug, user: started.update(slug=slug, user=user))
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: {
+        "url": "https://www.setlist.fm/setlist/top/2024/x-abcdef12.html",
+        "venue": "Scottrade Center", "tour": "Clancy",
+        "tracks": [{"n": 1, "title": "Overcompensate", "artist": None},
+                   {"n": 2, "title": "Holding On to You", "artist": None}]})
+    p = _mp3(tmp_path / "src" / "concert.mp3", seconds=0.6)
+    tok, fname = _chunked_upload(c, "concert.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "Twenty One Pilots",
+        "date": "2024-08-15"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "setlistfm"
+    assert d["auto_setlist"] is False and d["tracks"] == 2
+    assert started["slug"] == d["slug"]           # pipeline IA déclenché
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert man["pipeline_state"]["download"] == "done"
+    assert man["source"]["media"] == "audio"
+    assert man["source"]["duration"] > 0
+    assert man["meta"]["setlistfm_url"].endswith(".html")
+    assert len(man["tracks"]) == 2
+    assert (projects / d["slug"] / "source" / "master.wav").exists()
+    assert not (projects / ".l2m-import" / tok).exists()   # staging purgé
+
+
+def test_prepare_ai_auto_setlist_when_no_match(client, tmp_path, monkeypatch):
+    c, _ = client
+    from backend import main as bmain, setlistfm
+    monkeypatch.setattr(bmain, "_run_prepare_bg", lambda slug, user: None)
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: None)
+    p = _mp3(tmp_path / "src" / "c2.mp3", seconds=0.4)
+    tok, fname = _chunked_upload(c, "c2.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "Obscure Band", "date": "1999-01-01"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "ai" and d["auto_setlist"] is True
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert man["auto_setlist"] is True
+
+
+def test_prepare_ai_requires_artist(client, tmp_path):
+    c, _ = client
+    p = _mp3(tmp_path / "src" / "c3.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c3.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST,
+               json={"token": tok, "file": fname, "artist": "  "})
+    assert r.status_code == 400
+
+
+def test_prepare_ai_uses_setlistfm_url(client, tmp_path, monkeypatch):
+    """URL setlist.fm fournie à la main : branche lookup_by_url prioritaire."""
+    c, _ = client
+    from backend import main as bmain, setlistfm
+    monkeypatch.setattr(bmain, "_run_prepare_bg", lambda slug, user: None)
+    seen = {}
+    def fake_by_url(url):
+        seen["url"] = url
+        return {"url": url, "venue": "V", "tour": "T",
+                "tracks": [{"n": 1, "title": "Song", "artist": None}]}
+    monkeypatch.setattr(setlistfm, "lookup_by_url", fake_by_url)
+    p = _mp3(tmp_path / "src" / "c4.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c4.mp3", p.read_bytes())
+    url = "https://www.setlist.fm/setlist/top/2021/x-1a2b3c4d.html"
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "TOP", "setlistfm_url": url})
+    assert r.status_code == 200, r.text
+    assert seen["url"] == url
+    assert r.json()["setlist_source"] == "setlistfm"

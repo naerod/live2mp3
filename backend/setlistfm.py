@@ -140,6 +140,51 @@ def _score(parsed: dict, artist: str) -> tuple:
     return (len(parsed["tracks"]), exact)
 
 
+def _fetch_by_id(setlist_id: str) -> dict:
+    key = _api_key()
+    if not key:
+        raise SetlistUnavailable("SETLISTFM_API_KEY absente")
+    _throttle()
+    r = requests.get(
+        f"{BASE_URL}/setlist/{setlist_id}",
+        headers={"x-api-key": key, "Accept": "application/json",
+                 "User-Agent": "live2mp3 (+https://live2mp3.naerod.com)"},
+        timeout=TIMEOUT,
+    )
+    if r.status_code == 404:
+        raise SetlistUnavailable("setlist introuvable")
+    r.raise_for_status()
+    return r.json()
+
+
+def lookup_by_url(url: str) -> dict | None:
+    """Setlist depuis une URL setlist.fm fournie à la main.
+
+    Utile à l'import manuel : le gestionnaire colle le lien exact du concert,
+    on n'a donc pas à deviner (artiste, date). L'id est le jeton hexadécimal en
+    fin d'URL (`…-6bd6a0f1.html`)."""
+    m = re.search(r"([0-9a-fA-F]{6,})\.html", url or "")
+    if not m:
+        return None
+    setlist_id = m.group(1)
+    ck = f"slid:{setlist_id}"
+    cached = _cache_get(ck)
+    if cached is not None:
+        return cached or None
+    try:
+        raw = _fetch_by_id(setlist_id)
+    except SetlistUnavailable:
+        raise
+    except Exception as e:
+        raise SetlistUnavailable(str(e)) from e
+    parsed = parse_setlist(raw)
+    if not parsed["tracks"]:
+        _cache_put(ck, {})
+        return None
+    _cache_put(ck, parsed)
+    return parsed
+
+
 def lookup(artist: str, iso_date: str) -> dict | None:
     """Setlist officielle du concert, ou None si introuvable/indisponible."""
     artist = (artist or "").strip()

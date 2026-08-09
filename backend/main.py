@@ -32,7 +32,7 @@ from pydantic import BaseModel
 import re
 from uuid import uuid4
 from . import catalogue, entities, jellyfin, linktool, llm
-from . import progress, renderqueue
+from . import progress, renderqueue, setlistfm
 from .albumfiles import (
     _rename_audio_files,
     _write_album_cover,
@@ -1399,6 +1399,122 @@ def start_prepare(slug: str,
                      args=(slug, identity.get("username") or ""),
                      daemon=True).start()
     return {"ok": True, "slug": slug}
+
+
+class PrepareAIIn(BaseModel):
+    token: str            # staging de l'upload chunké
+    file: str             # nom du fichier complet déposé
+    artist: str
+    title: str = ""
+    date: str = ""
+    venue: str = ""
+    festival: str = ""
+    setlistfm_url: str = ""
+    target: str = "data_disc"
+
+
+@app.post("/api/import/prepare-ai")
+def prepare_ai(payload: PrepareAIIn,
+               identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Crée un projet depuis un fichier complet déjà téléversé et lance la
+    découpe IA. Réutilise le pipeline de l'import par lien (silences → Whisper →
+    setlist.fm → DeepSeek) en sautant le téléchargement : le master est déjà là.
+
+    La setlist officielle vient de l'URL setlist.fm fournie (prioritaire) ou
+    d'une recherche (artiste, date) ; à défaut, l'IA devine les titres depuis la
+    transcription (`auto_setlist`)."""
+    from . import import_album as imp
+
+    if not payload.artist.strip():
+        raise HTTPException(400, "artiste requis")
+    staging = imp._staging(payload.token)
+    src_file = staging / "files" / Path(payload.file).name
+    if not src_file.is_file():
+        raise HTTPException(400, "fichier absent du dépôt")
+    ext = src_file.suffix.lower()
+    if ext not in imp.MEDIA_EXT:
+        raise HTTPException(400, "format non pris en charge (audio ou vidéo)")
+    is_video = ext in imp.VIDEO_EXT
+
+    album = {"artist": payload.artist.strip(), "title": payload.title.strip(),
+             "date": payload.date.strip(), "venue": payload.venue.strip(),
+             "festival": payload.festival.strip()}
+
+    # Setlist officielle : URL explicite prioritaire, sinon (artiste, date).
+    setlist, setlist_url = None, ""
+    try:
+        if payload.setlistfm_url.strip():
+            setlist = setlistfm.lookup_by_url(payload.setlistfm_url.strip())
+        elif album["date"]:
+            setlist = setlistfm.lookup(album["artist"], album["date"])
+    except setlistfm.SetlistUnavailable:
+        setlist = None
+    if setlist:
+        setlist_url = setlist.get("url") or payload.setlistfm_url.strip()
+        tracks = [{"n": t["n"], "title": t["title"],
+                   "artist": t.get("artist"), "locked": False}
+                  for t in setlist["tracks"]]
+        auto_setlist = False
+        if not album["venue"] and setlist.get("venue"):
+            album["venue"] = setlist["venue"]
+        if not album["title"] and setlist.get("tour"):
+            album["title"] = setlist["tour"]
+    else:
+        # Setlist inconnue : piste unique provisoire, l'IA la remplacera.
+        tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
+        auto_setlist = True
+    if not album["title"]:
+        album["title"] = f"{album['artist']} — Live"
+
+    target = payload.target if payload.target in ("audio_cd", "data_disc") else "data_disc"
+    m = new_manifest(album, tracks, target=target)
+    project_dir = PROJECTS_DIR / m.slug
+    if (project_dir / "manifest.yaml").exists():
+        raise HTTPException(409, f"un album existe déjà sous ce slug ({m.slug}) — "
+                                 "modifier l'artiste ou la date")
+    m.data["auto_setlist"] = auto_setlist
+    m.data["source"]["media"] = "video" if is_video else "audio"
+    m.data["published"] = False
+    if APP_ENV != "prod":
+        m.data["origin_env"] = APP_ENV
+    m.data["meta"] = {
+        "imported_by": identity.get("username") or "",
+        "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "import_source": "upload",
+    }
+    if setlist_url:
+        m.data["meta"]["setlistfm_url"] = setlist_url
+
+    source_dir = project_dir / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # Le fichier téléversé devient le master (déplacement sur le même volume).
+        if is_video:
+            master = project_dir / m.data["source"]["master_mkv"]
+        else:
+            master = source_dir / f"master_audio{ext}"
+            m.data["source"]["master_audio"] = f"source/master_audio{ext}"
+        shutil.move(str(src_file), str(master))
+        # Extraction WAV lossless : étape commune, remplace ce que ferait download.
+        wav = project_dir / m.data["source"]["master_wav"]
+        download.extract_wav(master, wav)
+        m.set_state("download", "done")
+        m.data["source"]["duration"] = download._wav_seconds(wav)
+        m.save(project_dir / "manifest.yaml")
+    except Exception:
+        shutil.rmtree(project_dir, ignore_errors=True)
+        raise
+
+    shutil.rmtree(staging, ignore_errors=True)
+
+    progress.reset(m.slug)
+    _skip_detection.discard(m.slug)
+    threading.Thread(target=_run_prepare_bg,
+                     args=(m.slug, identity.get("username") or ""),
+                     daemon=True).start()
+    return {"ok": True, "slug": m.slug, "media": m.data["source"]["media"],
+            "setlist_source": "setlistfm" if setlist else "ai",
+            "auto_setlist": auto_setlist, "tracks": len(tracks)}
 
 
 class ReorderIn(BaseModel):
