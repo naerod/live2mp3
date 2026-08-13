@@ -1,0 +1,119 @@
+{
+  "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
+  "versions": [
+    {
+      "v": "1.23",
+      "date": "2026-08-13",
+      "title": { "fr": "Import IA & gros fichiers", "en": "AI import & large files" },
+      "fr": [
+        "Import IA d'un fichier complet : téléversement résumable découpé en morceaux, pour des fichiers audio/vidéo de plusieurs gigaoctets.",
+        "Analyse et découpage assistés (prepare-ai) directement depuis un fichier importé.",
+        "Correctifs d'affichage des pochettes.",
+        "Nouvelle page Changelog et badge de version cliquable."
+      ],
+      "en": [
+        "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
+        "Assisted analysis and splitting (prepare-ai) directly from an imported file.",
+        "Cover artwork display fixes.",
+        "New Changelog page and clickable version badge."
+      ]
+    },
+    {
+      "v": "1.22",
+      "date": "2026-08-06",
+      "title": { "fr": "Import multi-liens", "en": "Multi-link import" },
+      "fr": [
+        "Import depuis plusieurs liens : chaque lien devient une piste, concaténées en un album live continu — idéal pour regrouper les apparitions éparses d'un artiste.",
+        "Réordonnancement des pistes avant et après préparation (flèches ↑↓)."
+      ],
+      "en": [
+        "Multi-link import: each link becomes a track, concatenated into one continuous live album — ideal to group an artist's scattered appearances.",
+        "Track reordering before and after preparation (↑↓ arrows)."
+      ]
+    },
+    {
+      "v": "1.20",
+      "date": "2026-08-03",
+      "title": { "fr": "Rendu découplé", "en": "Decoupled rendering" },
+      "fr": [
+        "Rendus MP3 et MP4 séparés en deux tâches indépendantes : l'album audio est prêt sans attendre la vidéo.",
+        "Barre d'avancement par étape et rendu partiel (.part) servi au fil de l'eau.",
+        "Correctifs de l'éditeur audio."
+      ],
+      "en": [
+        "MP3 and MP4 rendering split into two independent jobs: the audio album is ready without waiting for the video.",
+        "Step-by-step progress bar and partial (.part) render served on the fly.",
+        "Audio editor fixes."
+      ]
+    },
+    {
+      "v": "1.15",
+      "date": "2026-07-25",
+      "title": { "fr": "Éditeur & Jellyfin", "en": "Editor & Jellyfin" },
+      "fr": [
+        "Réouverture de l'éditeur audio sur un album déjà publié.",
+        "Enregistrement immédiat de chaque modification dans l'éditeur.",
+        "Rafraîchissement automatique de la bibliothèque Jellyfin après un re-rendu."
+      ],
+      "en": [
+        "Re-open the audio editor on an already published album.",
+        "Immediate save of every change in the editor.",
+        "Automatic Jellyfin library refresh after a re-render."
+      ]
+    },
+    {
+      "v": "1.8",
+      "date": "2026-07-19",
+      "title": { "fr": "Progression & détection", "en": "Progress & detection" },
+      "fr": [
+        "Barre de progression pendant le rendu et éditeur enrichi.",
+        "Détection automatique des pistes par énergie du signal."
+      ],
+      "en": [
+        "Progress bar during rendering and an enriched editor.",
+        "Automatic track detection based on signal energy."
+      ]
+    },
+    {
+      "v": "1.6",
+      "date": "2026-07-18",
+      "title": { "fr": "Outil lien → album", "en": "Link → album tool" },
+      "fr": [
+        "Nouvel outil : créer un album à partir d'un lien, en 5 étapes (analyse, préparation, setlist, rendu).",
+        "Albums en brouillon par défaut, avec visibilité selon le rôle."
+      ],
+      "en": [
+        "New tool: build an album from a link in 5 steps (analysis, preparation, setlist, rendering).",
+        "Albums are drafts by default, with role-based visibility."
+      ]
+    },
+    {
+      "v": "1.5",
+      "date": "2026-07-18",
+      "title": { "fr": "Mobile & navigation", "en": "Mobile & navigation" },
+      "fr": [
+        "Interface entièrement responsive sur mobile.",
+        "Navigation fluide entre les pages et pochette style vinyle."
+      ],
+      "en": [
+        "Fully responsive interface on mobile.",
+        "Smooth navigation between pages and vinyl-style cover."
+      ]
+    },
+    {
+      "v": "1.4",
+      "date": "2026-07-16",
+      "title": { "fr": "En-tête unifié", "en": "Unified header" },
+      "fr": [
+        "En-tête unifié sur toutes les pages du site.",
+        "Menu « Voir en tant que » pour prévisualiser l'affichage selon le rôle.",
+        "Nombreux correctifs d'affichage."
+      ],
+      "en": [
+        "Unified header across all pages of the site.",
+        "\"View as\" menu to preview the display per role.",
+        "Many display fixes."
+      ]
+    }
+  ]
+}

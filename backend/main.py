@@ -1120,6 +1120,14 @@ def tool() -> HTMLResponse:
     return HTMLResponse("<h1>live2mp3 — outil</h1>")
 
 
+@app.get("/changelog", response_class=HTMLResponse)
+def changelog() -> HTMLResponse:
+    page = FRONTEND / "changelog.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — changelog</h1>")
+
+
 @app.get("/app/album/{slug}", response_class=HTMLResponse)
 def album_admin_page(slug: str,
                      identity: dict = Depends(require_gestionnaire)):

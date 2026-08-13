@@ -1001,7 +1001,7 @@ async function loadVersion(){
     const cls=v.env==="prod"?"":"env-preprod";
     const commit=v.commit?` · ${v.commit}`:"";
     const el=document.getElementById("site-foot");
-    if(el)el.innerHTML=`<span class="badge ${cls}">v${v.version} · ${v.env}${commit}</span>`;
+    if(el)el.innerHTML=`<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
   }catch(e){}
 }
 loadPage();
