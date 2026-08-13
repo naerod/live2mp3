@@ -104,20 +104,22 @@ def top_cover(conn: sqlite3.Connection, slug: str) -> sqlite3.Row | None:
     return rows[0] if rows else None
 
 
-def _on_covers_changed(slug: str) -> None:
+def _on_covers_changed(slug: str, *, force: bool = False) -> None:
     """Répercute un changement de classement sur le reste du système.
 
-    On se contente de repointer `album.cover` du manifest vers la gagnante :
-    c'est ce que lisent le catalogue et les consommateurs du YAML. Le ZIP reste
-    volontairement *paresseux* (`_zip_media` le rafraîchit au téléchargement).
+    On repointe `album.cover` du manifest vers la gagnante : c'est ce que lisent
+    le catalogue et les consommateurs du YAML. Le ZIP reste volontairement
+    *paresseux* (`_zip_media` le rafraîchit au téléchargement).
 
-    En revanche, si la gagnante *change réellement* pour un album **publié**,
-    on répercute vers le média servi à Jellyfin/Finamp : sinon la pochette
-    resterait figée côté serveur (le cron `sync-media.sh` ne re-scanne que sur
-    apparition/disparition de symlink, jamais sur un changement de contenu).
-    Ce n'est pas coûteux à chaque like : l'early-return sur `album.cover`
-    inchangé ci-dessous garantit qu'on ne propage qu'aux vrais changements de
-    gagnante, événement rare.
+    Propagation vers le média servi à Jellyfin/Finamp (ré-embarquement APIC) :
+    - par défaut (`force=False`, cas des likes fréquents), seulement si la
+      gagnante *change réellement* — optimisation, la propagation est rare ;
+    - `force=True` pour les actions de gestion explicites (import, épinglage,
+      suppression) : on propage **même si le pointeur `album.cover` est
+      inchangé**. Indispensable car l'APIC embarqué peut diverger du pointeur
+      (ex. pochette posée *avant* le rendu, ou embarquée par un rendu antérieur).
+      Sans ça, épingler/supprimer une cover ne rafraîchit jamais ce que voient
+      Finamp/Jellyfin (bug 2026-08-13).
     """
     mpath = PROJECTS_DIR / slug / "manifest.yaml"
     if not mpath.exists():
@@ -131,14 +133,15 @@ def _on_covers_changed(slug: str) -> None:
     rel = (
         f"artwork/covers/{win['file_key']}_cover{win['cover_ext']}" if win else None
     )
-    if album.get("cover") == rel:
-        return
-    if rel:
-        album["cover"] = rel
-    else:
-        album.pop("cover", None)
-    m.save()
-    _propagate_cover_to_media(slug, m)
+    changed = album.get("cover") != rel
+    if changed:
+        if rel:
+            album["cover"] = rel
+        else:
+            album.pop("cover", None)
+        m.save()
+    if changed or force:
+        _propagate_cover_to_media(slug, m)
 
 
 def _propagate_cover_to_media(slug: str, m) -> None:
@@ -405,7 +408,7 @@ async def upload_cover(slug: str,
         if text:
             traycard_file(slug, key, text).write_bytes(tdata)
         payload = _list_payload(conn, slug, username)
-    _on_covers_changed(slug)
+    _on_covers_changed(slug, force=True)
     return {"ok": True, "cover_id": cover_id, **payload}
 
 
@@ -471,6 +474,7 @@ def delete_manifest_cover(slug: str, identity: dict = Depends(require_gestionnai
         (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
         m.data.get("album", {}).pop("cover", None)
         m.save()
+    _propagate_cover_to_media(slug, m)
     with get_conn() as conn:
         payload = _list_payload(conn, slug, identity.get("username"))
     return {"ok": True, **payload}
@@ -506,6 +510,7 @@ def delete_album_cover_auto(slug: str, identity: dict = Depends(require_gestionn
         (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
         m.data.get("album", {}).pop("cover", None)
         m.save()
+    _propagate_cover_to_media(slug, m)
 
     return {"ok": True, "has_cover": False}
 
@@ -523,7 +528,7 @@ def delete_cover(cover_id: int, identity: dict = Depends(require_user)) -> dict:
             traycard_file(slug, row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
         conn.execute("DELETE FROM covers WHERE id=?", (cover_id,))
         payload = _list_payload(conn, slug, identity.get("username"))
-    _on_covers_changed(slug)
+    _on_covers_changed(slug, force=True)
     return {"ok": True, **payload}
 
 
@@ -571,7 +576,7 @@ def pin_cover(cover_id: int, identity: dict = Depends(require_gestionnaire)) -> 
                 "UPDATE covers SET pinned=1, updated_at=? WHERE id=?", (now, cover_id)
             )
         payload = _list_payload(conn, slug, identity.get("username"))
-    _on_covers_changed(slug)
+    _on_covers_changed(slug, force=True)
     return {"ok": True, **payload}
 
 

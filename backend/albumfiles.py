@@ -179,9 +179,23 @@ def _write_track_tags(slug: str, m: Manifest) -> int:
 def _write_album_cover(slug: str, m: Manifest) -> int:
     """Embarque la pochette du site (album.cover) comme APIC dans tous les MP3."""
     audio_dir = _projects_dir() / slug / "build" / "audio"
-    cover_rel = m.data.get("album", {}).get("cover")
-    if not audio_dir.exists() or not cover_rel:
+    if not audio_dir.exists():
         return 0
+    cover_rel = m.data.get("album", {}).get("cover")
+    if not cover_rel:
+        # Plus de pochette d'album : retirer l'APIC de toutes les pistes pour
+        # que Finamp/Jellyfin cessent d'afficher une pochette embarquée obsolète.
+        cleared = 0
+        for mp3_path in audio_dir.glob("*.mp3"):
+            try:
+                tags = ID3(str(mp3_path))
+                if tags.getall("APIC"):
+                    tags.delall("APIC")
+                    tags.save(str(mp3_path))
+                    cleared += 1
+            except Exception:
+                pass
+        return cleared
     cover_path = _projects_dir() / slug / cover_rel
     if not cover_path.exists():
         return 0

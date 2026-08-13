@@ -4,26 +4,34 @@
     {
       "v": "1.23",
       "date": "2026-08-13",
-      "title": { "fr": "Import IA & gros fichiers", "en": "AI import & large files" },
+      "title": {
+        "fr": "Import IA & gros fichiers",
+        "en": "AI import & large files"
+      },
       "fr": [
         "Import IA d'un fichier complet : téléversement résumable découpé en morceaux, pour des fichiers audio/vidéo de plusieurs gigaoctets.",
         "Analyse et découpage assistés (prepare-ai) directement depuis un fichier importé.",
         "Correctifs d'affichage des pochettes.",
         "Nouvelle page Changelog et badge de version cliquable.",
-        "Fiabilisation de l'import multi-liens (réessais) et des téléchargements YouTube."
+        "Fiabilisation de l'import multi-liens (réessais) et des téléchargements YouTube.",
+        "Correction : épingler/supprimer une pochette met bien à jour Finamp/Jellyfin (ré-embarquement APIC)."
       ],
       "en": [
         "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
         "Assisted analysis and splitting (prepare-ai) directly from an imported file.",
         "Cover artwork display fixes.",
         "New Changelog page and clickable version badge.",
-        "More reliable multi-link import (retries) and YouTube downloads."
+        "More reliable multi-link import (retries) and YouTube downloads.",
+        "Fix: pinning/deleting a cover now updates Finamp/Jellyfin (APIC re-embed)."
       ]
     },
     {
       "v": "1.22",
       "date": "2026-08-06",
-      "title": { "fr": "Import multi-liens", "en": "Multi-link import" },
+      "title": {
+        "fr": "Import multi-liens",
+        "en": "Multi-link import"
+      },
       "fr": [
         "Import depuis plusieurs liens : chaque lien devient une piste, concaténées en un album live continu — idéal pour regrouper les apparitions éparses d'un artiste.",
         "Réordonnancement des pistes avant et après préparation (flèches ↑↓)."
@@ -36,7 +44,10 @@
     {
       "v": "1.20",
       "date": "2026-08-03",
-      "title": { "fr": "Rendu découplé", "en": "Decoupled rendering" },
+      "title": {
+        "fr": "Rendu découplé",
+        "en": "Decoupled rendering"
+      },
       "fr": [
         "Rendus MP3 et MP4 séparés en deux tâches indépendantes : l'album audio est prêt sans attendre la vidéo.",
         "Barre d'avancement par étape et rendu partiel (.part) servi au fil de l'eau.",
@@ -51,7 +62,10 @@
     {
       "v": "1.15",
       "date": "2026-07-25",
-      "title": { "fr": "Éditeur & Jellyfin", "en": "Editor & Jellyfin" },
+      "title": {
+        "fr": "Éditeur & Jellyfin",
+        "en": "Editor & Jellyfin"
+      },
       "fr": [
         "Réouverture de l'éditeur audio sur un album déjà publié.",
         "Enregistrement immédiat de chaque modification dans l'éditeur.",
@@ -66,7 +80,10 @@
     {
       "v": "1.8",
       "date": "2026-07-19",
-      "title": { "fr": "Progression & détection", "en": "Progress & detection" },
+      "title": {
+        "fr": "Progression & détection",
+        "en": "Progress & detection"
+      },
       "fr": [
         "Barre de progression pendant le rendu et éditeur enrichi.",
         "Détection automatique des pistes par énergie du signal."
@@ -79,7 +96,10 @@
     {
       "v": "1.6",
       "date": "2026-07-18",
-      "title": { "fr": "Outil lien → album", "en": "Link → album tool" },
+      "title": {
+        "fr": "Outil lien → album",
+        "en": "Link → album tool"
+      },
       "fr": [
         "Nouvel outil : créer un album à partir d'un lien, en 5 étapes (analyse, préparation, setlist, rendu).",
         "Albums en brouillon par défaut, avec visibilité selon le rôle."
@@ -92,7 +112,10 @@
     {
       "v": "1.5",
       "date": "2026-07-18",
-      "title": { "fr": "Mobile & navigation", "en": "Mobile & navigation" },
+      "title": {
+        "fr": "Mobile & navigation",
+        "en": "Mobile & navigation"
+      },
       "fr": [
         "Interface entièrement responsive sur mobile.",
         "Navigation fluide entre les pages et pochette style vinyle."
@@ -105,7 +128,10 @@
     {
       "v": "1.4",
       "date": "2026-07-16",
-      "title": { "fr": "En-tête unifié", "en": "Unified header" },
+      "title": {
+        "fr": "En-tête unifié",
+        "en": "Unified header"
+      },
       "fr": [
         "En-tête unifié sur toutes les pages du site.",
         "Menu « Voir en tant que » pour prévisualiser l'affichage selon le rôle.",
