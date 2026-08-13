@@ -88,6 +88,16 @@
   .date-field #e-date.date-invalid{border-color:#e5484d}
   .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
   .date-hint.show{display:block}
+  .title-row{display:flex;gap:8px;align-items:stretch}
+  .title-row input{flex:1}
+  .suggest-btn{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:1px solid var(--border);
+    border-radius:8px;background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap;font-size:13px}
+  .suggest-btn:hover{border-color:var(--fg,#1db954);color:var(--fg,#1db954)}
+  .suggest-btn .material-symbols-outlined{font-size:18px}
+  .naming-hint{margin-top:8px;display:flex;gap:8px;padding:9px 11px;border-radius:8px;
+    background:var(--card);border:1px solid var(--border);font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .naming-hint::before{content:"info";font-family:"Material Symbols Outlined";font-size:18px;flex-shrink:0;line-height:1.4}
+  .naming-hint code{background:var(--border);padding:1px 5px;border-radius:4px;font-size:11.5px}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
@@ -285,7 +295,9 @@
         <h2 id="t-meta">Informations</h2>
         <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-meta-legend"></span></p>
         <div class="field-grid">
-          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-title" type="text"></div>
+          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span>
+            <div class="title-row"><input id="e-title" type="text"><button type="button" class="suggest-btn" id="btn-suggest-title"><span class="material-symbols-outlined">auto_fix_high</span><span id="t-suggest">Suggérer</span></button></div>
+            <div class="naming-hint" id="naming-hint"></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
             <div class="date-field">
@@ -319,6 +331,8 @@
           <div class="fg"><label id="t-f-venue">Lieu</label><input id="e-venue" type="text"></div>
           <div class="fg"><label id="t-f-city">Ville</label><div id="e-city"></div></div>
           <div class="fg full"><label id="t-f-festival">Festival</label><div id="e-festival"></div></div>
+          <div class="fg"><label id="t-f-tour">Tournée</label><input id="e-tour" type="text"></div>
+          <div class="fg"><label id="t-f-subtitle">Sous-titre (bonus)</label><input id="e-subtitle" type="text"></div>
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
         </div>
@@ -408,7 +422,9 @@ L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();
 
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
-      f_venue:"Lieu",f_city:"Ville",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_venue:"Lieu",f_city:"Ville",f_festival:"Festival",f_tour:"Tournée",f_subtitle:"Sous-titre (bonus)",suggest:"Suggérer",
+      naming_hint:'Format conseillé pour un concert : <code>Artiste - Live in Ville AAAA (Tournée - bonus)</code>. Ex. : <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Renseigne Ville, Tournée et le sous-titre, puis « Suggérer ». Les plateaux TV / compilations gardent un titre libre.',
+      f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
       fix_url:"Corriger l'URL",
@@ -463,7 +479,9 @@ const TT={
       fx_uploading:n=>`Envoi de ${n} fichier${n>1?"s":""}…`,
       fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
-      f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_venue:"Venue",f_city:"City",f_festival:"Festival",f_tour:"Tour",f_subtitle:"Subtitle (bonus)",suggest:"Suggest",
+      naming_hint:'Recommended format for a concert: <code>Artist - Live in City YYYY (Tour - bonus)</code>. E.g. <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Fill in City, Tour and the subtitle, then "Suggest". TV shows / compilations keep a free title.',
+      f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
       fix_url:"Fix the URL",
@@ -543,6 +561,10 @@ function applyLang(){
   document.getElementById("t-f-venue").textContent=t.f_venue;
   document.getElementById("t-f-city").textContent=t.f_city;
   document.getElementById("t-f-festival").textContent=t.f_festival;
+  document.getElementById("t-f-tour").textContent=t.f_tour;
+  document.getElementById("t-f-subtitle").textContent=t.f_subtitle;
+  document.getElementById("t-suggest").textContent=t.suggest;
+  document.getElementById("naming-hint").innerHTML=t.naming_hint;
   // Placeholders des autocompletes (mis à jour au changement de langue).
   const acPh=(id,ph)=>{const i=document.querySelector(`#${id} input`);if(i)i.placeholder=ph;};
   acPh("e-artist",t.artist_ph);acPh("e-city",t.city_ph);acPh("e-festival",t.festival_ph);acPh("e-guest-add",t.guests_ph);
@@ -1199,6 +1221,26 @@ function validateDate(){
   txt.addEventListener("input",()=>{ if(txt.classList.contains("date-invalid"))validateDate(); });
 })();
 
+// Bouton « Suggérer » : compose le titre au formalisme maison depuis les champs
+// courants (artiste, ville, année, tournée, sous-titre) — miroir de
+// backend/titles.suggest_concert_title. Le résultat n'est qu'une proposition,
+// éditable ensuite.
+function composeConcertTitle(){
+  const g=id=>(document.getElementById(id)?.value||"").trim();
+  const artist=(artistAC&&artistAC.get?artistAC.get().label:"")||g("e-artist")||"";
+  const city=(cityAC&&cityAC.get?cityAC.get().label:"")||"";
+  const year=(g("e-date").match(/(\d{4})/)||[])[1]||"";
+  const extra=[g("e-tour"),g("e-subtitle")].filter(Boolean).join(" - ");
+  let s=(artist?artist+" - ":"")+(city?("Live in "+city):"Live");
+  if(year) s+=" "+year;
+  if(extra) s+=" ("+extra+")";
+  return s.trim();
+}
+document.getElementById("btn-suggest-title").onclick=()=>{
+  document.getElementById("e-title").value=composeConcertTitle();
+  document.getElementById("e-title").focus();
+};
+
 // Save all
 document.getElementById("save-all").onclick=async()=>{
   const aPick=artistAC?artistAC.get():{id:"",label:""};
@@ -1208,6 +1250,8 @@ document.getElementById("save-all").onclick=async()=>{
     title:document.getElementById("e-title").value.trim(),
     date:document.getElementById("e-date").value.trim(),
     venue:document.getElementById("e-venue").value.trim(),
+    tour:document.getElementById("e-tour").value.trim(),
+    subtitle:document.getElementById("e-subtitle").value.trim(),
     city:(cPick.label||"").trim(),city_id:cPick.id||"",
     festival:(fPick.label||"").trim(),festival_id:fPick.id||"",
     guests:guests.map(g=>({id:String(g.id),name:g.name})),
@@ -1385,6 +1429,8 @@ async function load(){
   document.getElementById("e-title").value=a.title||"";
   document.getElementById("e-date").value=a.date||"";
   document.getElementById("e-venue").value=a.venue||"";
+  document.getElementById("e-tour").value=a.tour||"";
+  document.getElementById("e-subtitle").value=a.subtitle||"";
   const tt=TT[L()];
   // Artiste principal : autocomplete Deezer, texte libre autorisé (un artiste
   // absent de Deezer reste enregistrable, simplement non lié à une page).
