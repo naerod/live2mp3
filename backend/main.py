@@ -226,6 +226,8 @@ class AlbumMetaIn(BaseModel):
     venue: str | None = None
     city: str | None = None        # ville (optionnelle) — ≠ venue (lieu précis)
     city_id: str = ""              # id canonique OSM (dérivé de la liste)
+    tour: str | None = None        # tournée (ex. « The Clancy World Tour »)
+    subtitle: str | None = None    # texte bonus optionnel (nom d'album live, etc.)
     festival: str | None = None
     festival_id: str = ""          # slug canonique (dérivé si absent)
     guests: list[GuestIn] = []     # artistes invités canoniques (id Deezer)
@@ -788,6 +790,13 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     alb["date"] = payload.date or ""
     alb["venue"] = payload.venue or ""
     alb["festival"] = payload.festival or ""
+    # Tournée + sous-titre bonus (facultatifs) — nettoyés si vides.
+    for _f in ("tour", "subtitle"):
+        _v = (getattr(payload, _f) or "").strip()
+        if _v:
+            alb[_f] = _v
+        else:
+            alb.pop(_f, None)
     # Ville (optionnelle). Nettoyée si vide pour garder le manifest lisible.
     if payload.city and payload.city.strip():
         alb["city"] = payload.city.strip()
@@ -822,6 +831,18 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     m.save()
     tagged = _write_album_tags(slug, m)
     return {"ok": True, "mp3_tagged": tagged}
+
+
+@app.get("/api/albums/{slug}/suggested-title")
+def album_suggested_title(slug: str,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Titre suggéré au formalisme maison, pour pré-remplir le champ titre."""
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    from .titles import suggest_concert_title
+    m = Manifest.load(path)
+    return {"suggested_title": suggest_concert_title(m.data.get("album", {}))}
 
 
 @app.get("/api/albums/{slug}/url-preview")
