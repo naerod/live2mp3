@@ -9,13 +9,15 @@
         "Import IA d'un fichier complet : téléversement résumable découpé en morceaux, pour des fichiers audio/vidéo de plusieurs gigaoctets.",
         "Analyse et découpage assistés (prepare-ai) directement depuis un fichier importé.",
         "Correctifs d'affichage des pochettes.",
-        "Nouvelle page Changelog et badge de version cliquable."
+        "Nouvelle page Changelog et badge de version cliquable.",
+        "Fiabilisation de l'import multi-liens (réessais) et des téléchargements YouTube."
       ],
       "en": [
         "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
         "Assisted analysis and splitting (prepare-ai) directly from an imported file.",
         "Cover artwork display fixes.",
-        "New Changelog page and clickable version badge."
+        "New Changelog page and clickable version badge.",
+        "More reliable multi-link import (retries) and YouTube downloads."
       ]
     },
     {
