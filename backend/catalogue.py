@@ -105,7 +105,10 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         album = m.data.get("album", {})
         has_mp3 = _has_files(pdir / "build" / "audio", "mp3")
         has_mp4 = _has_files(pdir / "build" / "video", "mp4")
-        if not (has_mp3 or has_mp4):
+        # Concert complet (MP4 unique) : distinct des clips par piste (build/video).
+        # C'est lui qu'on met en avant (icône vidéo, miniature, download).
+        has_video_full = _has_files(pdir / "build" / "video-full", "mp4")
+        if not (has_mp3 or has_mp4 or has_video_full):
             continue
         cover_rel = album.get("cover")
         # Priorité à la DB sociale ; fallback sur le manifest pour les covers
@@ -141,6 +144,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "tracks": len(m.tracks),
             "has_mp3": has_mp3,
             "has_mp4": has_mp4,
+            "has_video_full": has_video_full,
             "has_cover": has_cover,
             "cover_v": cover_v,
             "has_traycard": has_traycard,

@@ -433,6 +433,7 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
+        "has_video_full": cat.get("has_video_full", False),
         "tracks": tracks,
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
@@ -567,6 +568,18 @@ def download_track(slug: str, n: int,
     from .manifest import numbered_title, sanitize_filename
     dl_name = f"{sanitize_filename(numbered_title(n, title))}.mp3" if title else f.name
     return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
+
+
+@app.get("/download/{slug}/video")
+def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
+    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
+    m = _ensure_album_visible(slug, identity)
+    vfdir = PROJECTS_DIR / slug / "build" / "video-full"
+    mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
+    if not mp4s:
+        raise HTTPException(404, "pas de concert complet")
+    return FileResponse(mp4s[0], filename=mp4s[0].name, media_type="video/mp4")
 
 
 @app.get("/download/{slug}/cover")

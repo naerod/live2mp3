@@ -226,6 +226,48 @@ def _propagate_images_to_jellyfin(slug: str, m) -> None:
     jellyfin.refresh_album(slug)
 
 
+def _ensure_auto_thumbnail(slug: str) -> None:
+    """Crée une miniature « auto » (frame 16:9 1920×1080 extraite du concert
+    complet) si l'album a une vidéo complète et aucune miniature encore. Marquée
+    auto=1 : un import manuel passe aussitôt devant (même règle que les covers).
+    Best-effort : ne lève jamais.
+    """
+    import subprocess
+    vfdir = PROJECTS_DIR / slug / "build" / "video-full"
+    mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
+    if not mp4s:
+        return
+    with get_conn() as conn:
+        if conn.execute(
+            "SELECT 1 FROM covers WHERE slug=? AND kind='thumbnail' LIMIT 1", (slug,)
+        ).fetchone():
+            return
+    key = uuid4().hex
+    out = cover_file(slug, key, ".jpg", "thumbnail")
+    covers_dir(slug).mkdir(parents=True, exist_ok=True)
+    try:
+        dur = float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nokey=1:noprint_wrappers=1", str(mp4s[0])],
+            capture_output=True, text=True).stdout.strip() or 0)
+        ts = max(1.0, dur * 0.33)  # frame au premier tiers (évite l'écran noir d'intro)
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(ts), "-i", str(mp4s[0]), "-frames:v", "1",
+             "-vf", "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080",
+             str(out)], check=True, capture_output=True)
+    except Exception as exc:
+        log.warning("miniature auto de %s impossible : %s", slug, exc)
+        return
+    now = _now()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, kind, auto, created_at, updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)",
+            (slug, "auto", key, ".jpg", "", "", "thumbnail", now, now),
+        )
+    _on_covers_changed(slug, kind="thumbnail", force=True)
+
+
 def zip_basename(rank: int, username: str) -> str:
     """Préfixe commun cover/tray card dans le ZIP : `01-nathan`.
 
@@ -486,6 +528,8 @@ def list_images(slug: str, kind: str,
     _check_image_kind(kind)
     if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
+    if kind == "thumbnail":
+        _ensure_auto_thumbnail(slug)  # miniature auto (frame) si vidéo + aucune encore
     with get_conn() as conn:
         return {"kind": kind, **_list_payload(conn, slug, identity.get("username"), kind)}
 
