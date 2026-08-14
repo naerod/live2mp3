@@ -130,7 +130,10 @@ def test_prep_master_present_serves_waveform_and_preview(api):
         f"/api/albums/{slug}/tracks/2/recut/{token}/waveform.dat",
         headers=GEST)
     assert wf.status_code == 200
-    assert struct.unpack("<i", wf.content[:4])[0] == 2, "en-tête waveform.dat"
+    # Le binaire audiowaveform produit v1 ou v2 selon les entrées ; les deux
+    # sont acceptés par le composant ClipTrimmer (`if version !== 1 && version
+    # !== 2`). On vérifie donc juste que l'en-tête est celui d'un des deux.
+    assert struct.unpack("<i", wf.content[:4])[0] in (1, 2), "en-tête waveform.dat"
 
     au = client.get(f"/api/albums/{slug}/tracks/2/recut/{token}/audio",
                     headers=GEST)

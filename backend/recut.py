@@ -69,7 +69,7 @@ from .addtrack import (
     _wav_seconds,
     encode_track,
 )
-from .albumfiles import _rename_audio_files, _write_album_tags, _write_track_tags
+from . import manifest as _manifest_mod
 from .auth import require_gestionnaire
 from .manifest import PROJECTS_DIR, Manifest
 from .pipeline import download, preanalyze, render
@@ -208,10 +208,12 @@ def _run_recut_prep_master(token: str, project_dir: Path, m: Manifest,
                  cur_end=round(cur_end, 3),
                  ext_start=round(ext_start, 3), ext_end=round(ext_end, 3),
                  master_duration=round(master_dur, 3))
-    except HTTPException:
+    except HTTPException as e:
+        # Ne PAS re-raise : on est dans un thread, l'HTTPException remonterait
+        # sans destinataire. L'état est publié dans le job pour que le sondage
+        # front reçoive un message lisible.
         shutil.rmtree(work, ignore_errors=True)
-        _job_set(token, state="error", error="master absent")
-        raise
+        _job_set(token, state="error", error=e.detail or "master absent")
     except Exception as e:
         shutil.rmtree(work, ignore_errors=True)
         _job_set(token, state="error", error=str(e) or e.__class__.__name__)
@@ -403,6 +405,41 @@ def _rerender_track_audio(project_dir: Path, m: Manifest, track: dict) -> Path:
     return out
 
 
+def _tag_one(mp3: Path, m: Manifest, track: dict) -> None:
+    """Réapplique les tags ID3 sur UN fichier — équivalent scopé de
+    `_write_track_tags` + `_write_album_tags` sans toucher aux voisins.
+
+    `render.render_audio` produit un MP3 nu (`-c:a libmp3lame -q:a 0` sans
+    métadonnées) ; sans ça, un lecteur perdrait titre + n° + album/artiste
+    au moindre recut. Les tags album sont identiques d'une piste à l'autre,
+    donc lisibles depuis le manifest sans référence croisée.
+    """
+    from mutagen.easyid3 import EasyID3
+    from mutagen.id3 import ID3NoHeaderError
+    if not mp3.exists():
+        return
+    total = len(m.tracks)
+    pos = int(track.get("n") or 0)
+    try:
+        tags = EasyID3(str(mp3))
+    except ID3NoHeaderError:
+        tags = EasyID3()
+        tags.save(str(mp3))
+        tags = EasyID3(str(mp3))
+    alb = m.data.get("album", {}) or {}
+    if alb.get("title"):
+        tags["album"] = [alb["title"]]
+    if alb.get("artist"):
+        tags["artist"] = [alb["artist"]]
+        tags["albumartist"] = [alb["artist"]]
+    date = alb.get("date") or ""
+    if date:
+        tags["date"] = [date[:4] if len(date) >= 4 else date]
+    tags["title"] = [_manifest_mod.numbered_title(pos, track.get("title", ""))]
+    tags["tracknumber"] = [f"{pos}/{total}"]
+    tags.save()
+
+
 def _apply_recut_external(project_dir: Path, m: Manifest, track: dict,
                           token: str, seg_start: float, seg_end: float) -> Path:
     """Ré-encode le MP3 d'une piste externe depuis la source re-préparée."""
@@ -517,11 +554,11 @@ def recut_apply(slug: str, n: int, payload: RecutApplyIn,
     except Exception:
         pass
 
-    # Tags ID3 : le renommage n'est pertinent que si le titre a bougé (pas ici),
-    # mais les tags durée changent — resynchronisation défensive et cheap.
+    # Retag la seule piste re-coupée : le MP3 ré-encodé sort sans tags (ffmpeg
+    # rend un flux nu, cf. render.render_audio). Un retag *global* toucherait
+    # les mtime des voisines et casserait « seule la piste K a changé ».
     try:
-        _write_track_tags(slug, m)
-        _write_album_tags(slug, m)
+        _tag_one(project_dir / "build" / "audio" / info["file"], m, track)
     except Exception:
         pass
 
