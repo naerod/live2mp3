@@ -16,7 +16,8 @@
         "Fiabilisation de l'import multi-liens (réessais) et des téléchargements YouTube.",
         "Correction : épingler/supprimer une pochette met bien à jour Finamp/Jellyfin (ré-embarquement APIC).",
         "Nom des concerts formalisé (« Artiste - Live in Ville AAAA (Tournée) ») + champs Tournée/sous-titre.",
-        "Fiche de gestion : champs Tournée/sous-titre, titre pré-rempli au formalisme (bouton « Suggérer ») et encadré de bonnes pratiques de nommage."
+        "Fiche de gestion : champs Tournée/sous-titre, titre pré-rempli au formalisme (bouton « Suggérer ») et encadré de bonnes pratiques de nommage.",
+        "Concerts vidéo : section « Vidéo du concert » + pop-up (téléchargement MP4, 3 visuels Jellyfin bannière/poster/miniature avec import/tri/épinglage/suppression), miniature auto, icône vidéo en vitrine."
       ],
       "en": [
         "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
@@ -26,7 +27,8 @@
         "More reliable multi-link import (retries) and YouTube downloads.",
         "Fix: pinning/deleting a cover now updates Finamp/Jellyfin (APIC re-embed).",
         "Standardized concert naming (\"Artist - Live in City YYYY (Tour)\") + Tour/subtitle fields.",
-        "Management page: Tour/subtitle fields, title pre-filled to the naming format (\"Suggest\" button) and a naming best-practices box."
+        "Management page: Tour/subtitle fields, title pre-filled to the naming format (\"Suggest\" button) and a naming best-practices box.",
+        "Video concerts: 'Concert video' section + pop-up (MP4 download, 3 Jellyfin artworks banner/poster/thumbnail with import/ranking/pin/delete), auto thumbnail, video badge on the gallery."
       ]
     },
     {
