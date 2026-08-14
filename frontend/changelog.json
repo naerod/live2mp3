@@ -9,6 +9,7 @@
         "en": "AI import & large files"
       },
       "fr": [
+        "Re-couper une piste existante à la waveform depuis la page de gestion, sans repasser par l'éditeur d'album entier : bouton par piste, poignées début/fin sur la forme d'onde (avec le contexte des voisines), coupe au millième de seconde. Marche sur les concerts, les compilations multi-liens et les pistes ajoutées depuis un lien.",
         "Import IA d'un fichier complet : téléversement résumable découpé en morceaux, pour des fichiers audio/vidéo de plusieurs gigaoctets.",
         "Analyse et découpage assistés (prepare-ai) directement depuis un fichier importé.",
         "Correctifs d'affichage des pochettes.",
@@ -20,6 +21,7 @@
         "Concerts vidéo : section « Vidéo du concert » + pop-up (téléchargement MP4, 3 visuels Jellyfin bannière/poster/miniature avec import/tri/épinglage/suppression), miniature auto, icône vidéo en vitrine."
       ],
       "en": [
+        "Re-cut an existing track on the waveform straight from the management page, without reopening the full album editor: per-track button, start/end handles on the waveform (with the neighbouring context), millisecond precision. Works on concerts, multi-link compilations and tracks added from a link.",
         "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
         "Assisted analysis and splitting (prepare-ai) directly from an imported file.",
         "Cover artwork display fixes.",

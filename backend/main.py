@@ -50,6 +50,7 @@ from .auth import (
 from .db import get_conn, init_db
 from . import addtrack
 from .addtrack import router as addtrack_router
+from .recut import router as recut_router
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
@@ -118,6 +119,8 @@ app.include_router(covers_router)
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
 app.include_router(import_router)
 app.include_router(addtrack_router)
+# Re-couper une piste existante à la waveform — routes /api/albums/{slug}/tracks/{n}/recut*.
+app.include_router(recut_router)
 
 # Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
 app.include_router(linktool.router)
