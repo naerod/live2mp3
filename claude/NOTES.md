@@ -1,3 +1,75 @@
+2026-08-15 : **Re-couper une piste existante à la waveform depuis la fiche
+de gestion** (preprod v1.23.21). Le TODO du 2026-08-05 (« remplacer une
+piste ») est livré, mais plus large que prévu : le geste est **par piste
+existante** (bouton dédié dans la ligne), pas seulement pour ré-importer.
+- **Backend** `backend/recut.py` : trois cas dans la même famille
+  d'endpoints `/api/albums/{slug}/tracks/{n}/recut{,/prep,/{token}/…}`,
+  distingués par `_track_kind(m, track)` :
+  - **mono-source** (concert) → `_run_recut_prep_master` extrait
+    [start-15 s, end+15 s] du master.wav local (le master est CONSERVÉ
+    par défaut, `L2M_PURGE_MASTERS` n'est activé nulle part), produit
+    waveform + preview via `preanalyze.generate_waveform` / ffmpeg. La
+    nouvelle coupe met à jour `track.start`/`track.end` du manifest et
+    re-encode **uniquement** ce MP3 depuis le master via
+    `render._render_or_cleanup(render.render_audio, …)`. Les pistes
+    voisines ne sont **pas** touchées (mtime préservés, garanti en test).
+  - **multi-source** (`source.clips` présents) → `_rebuild_master_multi`
+    re-assemble le master en remplaçant la K-ième tranche par la
+    sous-tranche demandée (segments PCM concat via filter complex,
+    remplacement atomique via `Path.replace`). Recalcule les timecodes
+    cumulés (monotones, contigus) pour toutes les pistes ; les pistes
+    suivantes gardent leurs mêmes MP3 (bytes identiques, seuls les
+    offsets ont bougé), seul le MP3 de K est ré-encodé.
+  - **externe** (`track.source.url` : piste ajoutée par addtrack) →
+    fallback re-download via `download.download_audio` sur la source
+    d'origine, puis `encode_track` remplace le MP3 et écrit
+    `track.source.start`/`end`/`recut_at` dans le manifest.
+- **Réutilisations clés** : `addtrack._JOBS` / `_job_set` / `_job_get` /
+  `_purge_jobs` (même pool en mémoire → un seul balayage), même TTL
+  1 h, même racine `.l2m-addtrack/` (avec `_sweep_recut_dirs` symétrique
+  à `_sweep_prep_dirs`). `render._render_or_cleanup` pour éviter les
+  MP3 tronqués sous le nom final si SIGKILL. `_tag_one` réapplique les
+  tags ID3 (title, tracknumber, album/artist/date) sur la SEULE piste
+  re-coupée — un retag global via `_write_track_tags`/`_write_album_tags`
+  touche tous les mtime et casse l'invariant « seule la piste K a changé »
+  (piégé en test, corrigé avant merge).
+- **Frontend** (`frontend/album.html`) : bouton par piste avec Material
+  Symbol `content_cut`, visible seulement si la piste a une source
+  ré-exploitable (`track.source.url` OU `DATA.has_editor_source`).
+  Modale ClipTrimmer (patron partagé avec les modales tcv/tm), avec
+  sous-titre + hint spécialisés selon le kind (mono/multi/external),
+  i18n FR/EN complet, thèmes clair/sombre vérifiés en screenshot sur
+  l'album U2 en preprod. ⚠️ Piège CSS : `.rc-box` est un flex-column,
+  la classe partagée `.tcv-close` a `all:unset` APRÈS `position:absolute`
+  → le bouton × redevenait un enfant flex étiré à toute la largeur
+  (ovale gris au-dessus du titre). Override scopé `.rc-box>.tcv-close`
+  pour re-forcer `position:absolute` + `background:transparent`.
+- **Tests** (`tests/test_recut.py`, 10 cas) : prep master présent/absent
+  (409 explicite si purgé), fallback external, application mono avec
+  vérification que les MP3 voisins ne sont pas touchés (mtime préservés),
+  application multi avec invariants de conservation (le master rétrécit
+  du delta exact, timecodes cumulés monotones et contigus), rollback sur
+  bornes inversées, token périmé, auth gestionnaire requise. 281/283 sur
+  la suite complète (les 2 échecs restants sont l'échec préexistant de
+  `test_waveform_dat_format` et son doublon `prep-clip`, tous deux dus à
+  la variante v1/v2 du binaire audiowaveform, indépendants).
+- **E2E réel preprod** : appel curl direct sur l'album U2
+  `u2-chris-matrin-bruce-springsteen-2014-12-01` (piste 2 = With or
+  Without You, [5:22, 10:02] dans un master de 20 min) → prep renvoie
+  kind=mono, duration=350 s (piste + 15 s de contexte de part et
+  d'autre), cur_start=15, cur_end=335, ext_start=267.262. Waveform
+  70 ko, preview MP3 5,6 Mo. **Aucune application** effectuée
+  (données prod/preprod partagées ; `apply` réservé à la validation
+  manuelle utilisateur). Screenshots clair et sombre pris via tunnel
+  SSH + proxy de rôle gestionnaire (cf. [[reference_live2mp3_e2e_roles]]).
+- **Fichiers touchés** : `backend/recut.py` (nouveau, ~430 l),
+  `backend/main.py` (+2 l pour enregistrer le router),
+  `frontend/album.html` (modale + JS + CSS + i18n FR/EN),
+  `frontend/changelog.json` (bullet fr+en dans 1.23),
+  `tests/test_recut.py` (nouveau, 10 cas). Version prod encore v1.20.x
+  (dernière promo 2026-08-03) — la ligne preprod v1.23.x n'est pas
+  encore promue en prod.
+
 2026-08-09 : **Généralisation de l'import + IA (EN COURS)** — objectif : importer
 des concerts MP4 depuis le PC (upload site) et réutiliser le pipeline IA
 (découpe auto, setlist.fm) même en import manuel. Concert pilote : *Twenty One
