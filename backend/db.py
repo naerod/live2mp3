@@ -249,6 +249,24 @@ def init_db() -> None:
             conn.execute(
                 "ALTER TABLE covers ADD COLUMN auto INTEGER NOT NULL DEFAULT 0"
             )
+        # Migration : type d'image. 'cover' = pochette d'album (historique) ;
+        # 'banner'/'poster'/'thumbnail' = visuels Jellyfin d'un concert vidéo.
+        # Chaque type est une collection indépendante (même système de tri,
+        # d'épinglage et de suppression que les covers).
+        if "kind" not in ccols:
+            conn.execute(
+                "ALTER TABLE covers ADD COLUMN kind TEXT NOT NULL DEFAULT 'cover'"
+            )
+        # L'épinglage unique devient par (album, type) et non plus par album seul :
+        # on peut épingler une pochette ET une bannière ET un poster… en parallèle.
+        conn.execute("DROP INDEX IF EXISTS idx_covers_pinned")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_covers_pinned_kind "
+            "ON covers(slug, kind) WHERE pinned = 1"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_covers_slug_kind ON covers(slug, kind)"
+        )
 
         # Migration : personnalisation du profil (ville, artiste favori).
         pcols = {r["name"] for r in conn.execute("PRAGMA table_info(profiles)")}
