@@ -1,3 +1,82 @@
+2026-08-15 (encore plus tard) : **Recut RÉACTIVÉ en mode triptyque +
+cadenas** (preprod v1.23.25). Après avoir désactivé la version « piste
+seule » (peu pertinente pour un album live), le patron correct est
+livré : jusqu'à 3 pistes visibles (N-1, N, N+1) + cadenas par frontière
+partagée qui fait suivre les 2 bornes voisines ensemble. Miroir de
+l'éditeur Peaks.js d'album (NOTES 2026-07-19) mais scoppé à un
+sous-ensemble — bouger une frontière rallonge une piste et raccourcit
+la voisine du même geste, ce qui est le cas d'usage majoritaire.
+- **Backend `recut.py` étendu** :
+  - `prep` (mono) : la tranche extraite du master couvre désormais
+    `[prev.start - 3 s, next.end + 3 s]` (bornes du master respectées).
+    Padding réduit à 3 s (contexte fourni par les voisines elles-mêmes,
+    plus besoin des 15 s d'avant). Renvoie `tracks: [{n, title, start,
+    end}]` (1 à 3 entrées) + `boundaries: [{left_n, right_n, linked}]`
+    où `linked` est déduit par égalité `start[k+1]==end[k]` à ±50 ms.
+    Bords propres (N=1 → pas de prev, N=last → pas de next). Pistes
+    externes au sein du sous-ensemble ignorées comme voisines (pas de
+    timecodes d'album, cf. addtrack).
+  - `apply` (mono) : signature `edits: [{n, start, end}]` (1 à 3
+    entrées) au lieu de `{start, end}` uniques. Chaque piste modifiée
+    est ré-encodée depuis le master ; les autres sont intactes (mtime
+    préservés — invariant historique verrouillé en test). Piste cible
+    obligatoire dans `edits` (400 sinon), pistes hors triptyque
+    refusées (400), bornes inversées ou hors master idem.
+  - **Multi-liens : 409 synchrone dès `prep`** (avant sondage) avec
+    message « utilisez Ouvrir l'éditeur audio ». Chaque clip est une
+    source indépendante sans frontière logique avec ses voisines —
+    la mécanique triptyque n'a pas de sens (validé avec l'utilisateur
+    sur live-crossovers).
+  - **External** inchangé : piste seule, ClipTrimmer classique, la
+    signature `{start, end}` reste supportée en compat pour ce chemin.
+  - `_tag_one` (retag scoppé à un fichier) toujours utilisé après
+    chaque ré-encodage : le MP3 sort nu de `render.render_audio`.
+- **Frontend** :
+  - Nouveau composant `frontend/shared/multi-trimmer.js` (~320 l,
+    autonome, mêmes couleurs CSS que ClipTrimmer). Waveform sur les
+    3 pistes avec régions colorées (accent sur la cible, muted sur
+    voisines), 4 handles internes (bord gauche/droit + 2 frontières
+    partagées). 2 cadenas cliquables au bas des frontières :
+    - **fermé (par défaut)** : une frontière = un seul curseur qui
+      bouge les 2 bornes voisines ensemble. Icône `link`.
+    - **ouvert** : 2 handles indépendants → gap ou chevauchement
+      volontaire. Icône `link_off`.
+    Cliquer un cadenas re-ferme automatiquement l'alignement (le
+    droit se recale sur le gauche). `getEdits()` renvoie
+    UNIQUEMENT les pistes réellement bougées depuis le montage
+    (delta > 1 ms) — le backend n'écrit et ne ré-encode que celles-là.
+  - Modale agrandie à 960 px pour accueillir le triptyque, sous-titre
+    et hint spécialisés selon `kind` (mono/external), compteur
+    « N piste(s) modifiée(s) » qui se met à jour en direct via un poll
+    (le composant ne notifie pas les changements de handles), bouton
+    « Appliquer » désactivé tant que la cible n'est pas dans les edits.
+  - ⚠️ **Piège CSS résolu** : le parent `.mt-locks` avait
+    `bottom:6px; height:0` — ses enfants absolute sans top/bottom
+    partaient à `y = stage.h - 6` dans un stage `overflow:hidden` de
+    150 px de haut → seuls 6 px du haut des cadenas visibles.
+    Corrigé en donnant `inset:0` au parent et `bottom:6px` à chaque
+    bouton lui-même (plus `z-index:2` pour rester au-dessus des labels).
+    Vérifié en clair et sombre sur U2 en preprod (screenshots).
+- **Tests** (`tests/test_recut.py`, 16 cas, tous verts en conteneur) :
+  prep triptyque avec les 3 pistes + 2 boundaries, cas de bord N=1 et
+  N=last, waveform + preview servis, master absent (état error), 409
+  multi-liens synchrone, **apply lié** (bouge N ET N+1 aux mêmes
+  bornes, ré-encode les 2 MP3), **apply cible seule** (voisines
+  intactes en manifest ET fichiers non touchés — invariant historique),
+  rejet edit hors triptyque, bornes inversées, cible absente, token
+  périmé, fallback external avec `cur_start/cur_end`, application
+  externe qui met à jour `source.start/end` du manifest, auth
+  gestionnaire requise sur les 2 endpoints.
+- **E2E réel preprod** sur U2 piste 2 (With or Without You) :
+  prep retourne 3 pistes (Beautiful Day, With or Without You, Where
+  the Streets Have No Name), 2 boundaries `linked:true`, master
+  20:11, tranche 15:57 (bornée en 0 vu que piste 1 commence à 0).
+  Waveform + preview servis. Screenshots clair et sombre livrés
+  (modale, waveform teintée par piste, cadenas visibles aux 2
+  frontières, timecodes correctement rendus 4:42.3 → 10:02.3).
+- **Prod inchangée** (v1.20.x). Attente d'autorisation explicite
+  avant promotion, conformément à [feedback_no_prod_without_authorization].
+
 2026-08-15 (fin de journée) : **Recut par piste DÉSACTIVÉ juste après
 livraison** (preprod v1.23.22+). Fonctionnalité livrée le matin même
 (v1.23.21), retirée le même jour après retour utilisateur.
