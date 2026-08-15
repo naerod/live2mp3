@@ -1,5 +1,23 @@
 """Re-couper une piste existante à la waveform.
 
+⚠️ **MODULE DÉSACTIVÉ** (2026-08-15) — le router n'est pas monté dans
+`main.py` (import commenté). Le geste par piste est peu pertinent sur
+des albums live où les frontières entre chansons s'enchaînent : ré-ajuster
+une seule piste laisse presque toujours un gap ou un chevauchement avec
+la voisine. Le workflow retenu est de rouvrir l'éditeur audio complet
+(`btn-open-editor` de la fiche de gestion → `/app#{slug}` → éditeur
+Peaks.js déjà présent), qui traite l'album dans son ensemble et gère
+correctement les liens fin ↔ début suivant.
+
+Le code reste ici en l'état comme point de départ pour une éventuelle
+réactivation ultérieure. **Prérequis identifié avant de le rebrancher** :
+l'écran doit permettre d'ajuster aussi le début de la piste **suivante**
+et la fin de la piste **précédente**, sinon la coupe crée un gap ou un
+chevauchement sur un album live où les frontières s'enchaînent. Un
+usage ponctuel reste envisageable (pour les compilations
+`live-crossovers`, où chaque piste est indépendante ; cas ~1 % du
+catalogue). Voir `claude/NOTES.md` (2026-08-15) pour le contexte complet.
+
 Complète `addtrack.py` en s'attaquant au symétrique : au lieu d'*ajouter*
 une piste, on rogne à nouveau une piste déjà rendue, poignées début/fin
 sur sa forme d'onde exacte. Ces poignées font foi au millième de seconde,

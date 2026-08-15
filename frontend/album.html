@@ -203,28 +203,6 @@
   .track-gear{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
   .track-gear:hover{background:var(--border);color:var(--text)}
   .track-gear .material-symbols-outlined{font-size:18px}
-  /* Bouton « re-couper » par piste : même style visuel que la roue crantée. */
-  .track-recut{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
-  .track-recut:hover{background:var(--border);color:var(--accent)}
-  .track-recut .material-symbols-outlined{font-size:18px}
-  /* Modale « re-couper cette piste » — même patron que tcv/tm, wider pour la waveform. */
-  .rc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
-  .rc-overlay.open{display:flex}
-  .rc-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 22px 22px 46px;max-width:780px;width:100%;display:flex;flex-direction:column;gap:14px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.4)}
-  /* Sort le bouton close du flux flex (sinon il s'étire à toute la largeur
-     et affiche son fond gris comme un long ovale au-dessus du titre). */
-  .rc-box>.tcv-close{position:absolute;top:12px;left:12px;width:24px;height:24px;padding:2px;background:transparent}
-  .rc-box>.tcv-close:hover{background:var(--border)}
-  .rc-box h3{margin:0;font-size:15px;font-weight:600;color:var(--text)}
-  .rc-box .rc-sub{margin:0;color:var(--muted);font-size:12.5px}
-  .rc-hint{margin:0;font-size:12.5px;color:var(--muted);line-height:1.4}
-  .rc-status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);min-height:22px}
-  .rc-status.err{color:var(--danger,#e57373)}
-  .rc-status .spin{animation:fu-spin 1s linear infinite;font-size:17px}
-  .rc-trimmer{min-height:120px}
-  .rc-trimmer.hidden{display:none}
-  .rc-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
-  .rc-footer button{margin:0}
   /* Cover viewer modal */
   .tcv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center}
   .tcv-overlay.open{display:flex}
@@ -499,24 +477,7 @@ const TT={
       fx_hint:"Des MP3 déjà découpés sont ajoutés à la suite de la tracklist. Le titre est lu dans les tags ID3, à défaut dans le nom du fichier — vous pourrez le corriger ensuite.",
       fx_pick:"Choisir des fichiers MP3",
       fx_uploading:n=>`Envoi de ${n} fichier${n>1?"s":""}…`,
-      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`,
-      rc_toggle:"Re-couper cette piste à la waveform",
-      rc_title:n=>`Re-couper la piste ${String(n).padStart(2,"0")}`,
-      rc_sub_mono:"Concert · lecture directe du master, aucun re-téléchargement.",
-      rc_sub_multi:"Album multi-liens · les timecodes des pistes suivantes seront recalés.",
-      rc_sub_external:"Piste externe · la source d'origine sera re-téléchargée pour vous permettre d'ajuster.",
-      rc_hint_master:"Faites glisser les poignées pour caler début et fin sur la musique. Les pistes voisines ne sont pas modifiées.",
-      rc_hint_multi:"Faites glisser les poignées. La nouvelle sous-tranche remplace celle-ci ; les pistes suivantes conservent leur son mais leurs timecodes sont recalculés.",
-      rc_hint_external:"Faites glisser les poignées pour ré-ajuster le rognage dans la source d'origine.",
-      rc_preparing:"Préparation de la forme d'onde…",
-      rc_downloading:"Téléchargement de la source…",
-      rc_applying:"Application de la nouvelle coupe…",
-      rc_apply:"Appliquer la nouvelle coupe",
-      rc_cancel:"Annuler",
-      rc_done:t=>`Coupe appliquée pour « ${t} »`,
-      rc_err_prep:"Impossible de préparer cette piste — voir la console.",
-      rc_err_no_master:"Master indisponible : ouvrez « Ouvrir l'éditeur audio » pour le régénérer, puis relancez la re-coupe.",
-      rc_err_apply:"Application impossible."},
+      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_city:"City",f_festival:"Festival",f_tour:"Tour",f_subtitle:"Subtitle (bonus)",suggest:"Suggest",
       naming_hint:'Recommended format for a concert: <code>Artist - Live in City YYYY (Tour - bonus)</code>. E.g. <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Fill in City, Tour and the subtitle, then "Suggest". TV shows / compilations keep a free title.',
@@ -572,24 +533,7 @@ const TT={
       fx_hint:"Already-split MP3s are appended to the tracklist. The title is read from the ID3 tags, or from the filename — you can fix it afterwards.",
       fx_pick:"Choose MP3 files",
       fx_uploading:n=>`Uploading ${n} file${n>1?"s":""}…`,
-      fx_done:n=>`${n} track${n>1?"s":""} added`,
-      rc_toggle:"Re-cut this track on the waveform",
-      rc_title:n=>`Re-cut track ${String(n).padStart(2,"0")}`,
-      rc_sub_mono:"Concert · reading the master directly, no re-download.",
-      rc_sub_multi:"Multi-link album · timecodes of the following tracks will be rebased.",
-      rc_sub_external:"External track · the original source will be re-downloaded so you can adjust.",
-      rc_hint_master:"Drag the handles to line the start and end up with the music. Neighbouring tracks are not touched.",
-      rc_hint_multi:"Drag the handles. The new sub-slice replaces this one; following tracks keep their sound but their timecodes are recomputed.",
-      rc_hint_external:"Drag the handles to re-adjust the trim inside the original source.",
-      rc_preparing:"Preparing the waveform…",
-      rc_downloading:"Downloading the source…",
-      rc_applying:"Applying the new cut…",
-      rc_apply:"Apply the new cut",
-      rc_cancel:"Cancel",
-      rc_done:t=>`Cut applied for “${t}”`,
-      rc_err_prep:"Could not prepare this track — see the console.",
-      rc_err_no_master:"Master unavailable: open “Open the audio editor” to regenerate it, then try re-cutting again.",
-      rc_err_apply:"Could not apply."}
+      fx_done:n=>`${n} track${n>1?"s":""} added`}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
@@ -834,18 +778,10 @@ function renderTracks(){
     // sinon rien ne distingue une compilation d'un concert découpé.
     const src=tr.source&&tr.source.url
       ?`<span class="material-symbols-outlined track-src" title="${t.fu_track_src} — ${esc(tr.source.url)}">link</span>`:"";
-    // « Re-couper » : disponible uniquement quand une source ré-exploitable
-    // existe. Pour une piste externe c'est track.source.url ; pour une piste
-    // de concert/multi c'est le master, indiqué par has_editor_source à
-    // l'album. Sans ça le bouton mènerait à un 409 immédiat.
-    const canRecut=(tr.source&&tr.source.url)||(!(tr.source)&&DATA&&DATA.has_editor_source);
-    const recut=canRecut
-      ?`<button class="track-recut" data-n="${tr.n}" data-i="${i}" title="${t.rc_toggle}"><span class="material-symbols-outlined">content_cut</span></button>`
-      :"";
     return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
     <input type="text" value="${esc(tr.title)}" data-i="${i}">
-    ${src}${recut}${gear}
+    ${src}${gear}
     <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
     </li>`;
   }).join("");
@@ -860,9 +796,6 @@ function renderTracks(){
       btn.addEventListener("click",()=>openTmModal(+btn.dataset.n,+btn.dataset.i));
     });
   }
-  ul.querySelectorAll(".track-recut").forEach(btn=>{
-    btn.addEventListener("click",()=>openRcModal(+btn.dataset.n,+btn.dataset.i));
-  });
   ul.querySelectorAll(".drag-handle").forEach(handle=>{
     const li=handle.closest("li");
     handle.addEventListener("dragstart",e=>{dragSrcIdx=+handle.dataset.i;e.dataTransfer.effectAllowed="move";li.style.opacity="0.4";});
@@ -1488,167 +1421,6 @@ async function saveTmModal(){
   }else toast("Erreur",true);
 }
 
-// ── Re-couper une piste existante ──────────────────────────────────────────
-// Ouvre une modale ClipTrimmer sur la waveform de la piste :
-//   - piste externe → source re-téléchargée, poignées sur toute la source ;
-//   - piste concert/multi → tranche du master avec 15 s de contexte de part
-//     et d'autre pour caler la jonction avec les voisines.
-// Le backend distingue les cas ; ici on relaie juste le résultat au trimmer.
-let RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,jobExt:null};
-function rcEl(id){return document.getElementById(id);}
-function rcStatus(msg,{err=false,spin=false}={}){
-  const el=rcEl("rc-status");
-  if(!msg){el.classList.remove("err");el.innerHTML="";return;}
-  el.classList.toggle("err",err);
-  const ico=err?"error":(spin?"progress_activity":"check_circle");
-  el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
-  el.lastChild.textContent=msg;
-}
-function rcReset(){
-  if(RC.poll){clearInterval(RC.poll);RC.poll=null;}
-  if(RC.inst){try{RC.inst.destroy();}catch(e){}RC.inst=null;}
-  RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,jobExt:null};
-  rcEl("rc-trimmer").classList.add("hidden");
-  rcEl("rc-trimmer").innerHTML="";
-  rcEl("rc-apply-btn").disabled=true;
-  rcStatus("");
-}
-function closeRc(e){if(e&&e.target!==rcEl("rc-overlay"))return;closeRcModal();}
-function closeRcModal(){rcEl("rc-overlay").classList.remove("open");rcReset();}
-
-function openRcModal(n,i){
-  rcReset();
-  const t=TT[L()];
-  RC.n=n;RC.i=i;
-  const tr=tracks[i];
-  rcEl("rc-title").textContent=t.rc_title(n);
-  const nameSuffix=tr&&tr.title?` — ${tr.title}`:"";
-  rcEl("rc-title").textContent=t.rc_title(n)+nameSuffix;
-  // Le sous-titre + hint sont posés dès qu'on connaît le kind (retourné par prep).
-  rcEl("rc-sub").textContent="";
-  rcEl("rc-hint").textContent="";
-  rcEl("t-rc-cancel").textContent=t.rc_cancel;
-  rcEl("t-rc-apply").textContent=t.rc_apply;
-  rcEl("rc-apply-btn").disabled=true;
-  rcEl("rc-overlay").classList.add("open");
-  rcStatus(t.rc_preparing,{spin:true});
-
-  fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${n}/recut/prep`,{
-    method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
-  }).then(async r=>{
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok){
-      // Cas identifiable : master purgé (409) → message d'aide dédié.
-      if(r.status===409){rcStatus(t.rc_err_no_master,{err:true});return;}
-      throw new Error(d.detail||`HTTP ${r.status}`);
-    }
-    RC.token=d.token;RC.kind=d.kind;
-    // Sous-titre + hint calqués sur la nature de la piste (mono/multi/external).
-    const subMap={mono:t.rc_sub_mono,multi:t.rc_sub_multi,external:t.rc_sub_external};
-    const hintMap={mono:t.rc_hint_master,multi:t.rc_hint_multi,external:t.rc_hint_external};
-    rcEl("rc-sub").textContent=subMap[RC.kind]||"";
-    rcEl("rc-hint").textContent=hintMap[RC.kind]||"";
-    if(RC.kind==="external"){rcStatus(t.rc_downloading,{spin:true});}
-    rcPollPrep();
-  }).catch(e=>{
-    console.warn("recut prep:",e);
-    rcStatus(t.rc_err_prep,{err:true});
-  });
-}
-
-function rcPollPrep(){
-  const t=TT[L()];
-  RC.poll=setInterval(async()=>{
-    if(!RC.token)return;
-    let job;
-    try{
-      const r=await fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}`);
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);
-      job=await r.json();
-    }catch(e){return;}
-    if(job.state==="error"){
-      clearInterval(RC.poll);RC.poll=null;
-      rcStatus(job.error||t.rc_err_prep,{err:true});
-      return;
-    }
-    if(job.state==="done"){
-      clearInterval(RC.poll);RC.poll=null;
-      RC.jobExt={ext_start:job.ext_start||0,ext_end:job.ext_end||job.duration||0};
-      rcStatus("");
-      rcMountTrimmer(job);
-      return;
-    }
-    // Progression du téléchargement (external uniquement).
-    if(RC.kind==="external"&&job.stage==="download"&&job.pct){
-      rcStatus(t.rc_downloading+" "+Math.round(job.pct)+" %",{spin:true});
-    }
-  },500);
-}
-
-function rcMountTrimmer(job){
-  const t=TT[L()];
-  const box=rcEl("rc-trimmer");
-  box.classList.remove("hidden");
-  const duration=+job.duration||0;
-  // Position d'ouverture des poignées :
-  //  - mono/multi : bornes actuelles de la piste dans la tranche extraite,
-  //    fournies par le backend (cur_start / cur_end).
-  //  - external   : bornes précédentes de track.source.start/end, si connues.
-  let s0=0,e0=duration;
-  if(RC.kind!=="external"){
-    s0=+job.cur_start||0;e0=+job.cur_end||duration;
-  }else{
-    const tr=tracks[RC.i];
-    if(tr&&tr.source){
-      if(typeof tr.source.start==="number")s0=Math.max(0,tr.source.start);
-      if(typeof tr.source.end==="number")e0=Math.min(duration,tr.source.end);
-    }
-  }
-  RC.inst=new ClipTrimmer(box,{
-    waveformUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/waveform.dat`,
-    audioUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/audio`,
-    duration,start:s0,end:e0,
-    labels:{play:t.ct_play,preview:t.ct_preview,set_start:t.ct_set_start,
-            set_end:t.ct_set_end,length:t.ct_length},
-    onChange:()=>{}
-  });
-  rcEl("rc-apply-btn").disabled=false;
-}
-
-async function applyRc(){
-  if(!RC.token||!RC.inst)return;
-  const t=TT[L()];
-  const btn=rcEl("rc-apply-btn");
-  btn.disabled=true;
-  rcStatus(t.rc_applying,{spin:true});
-  try{
-    const r=await fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut`,{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({token:RC.token,start:RC.inst.getStart(),end:RC.inst.getEnd()})
-    });
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
-    const tr=tracks[RC.i];
-    // Recharge le manifest pour refléter les timecodes (mono/multi) sans perdre
-    // les saisies en cours (titres, labels côté formulaire album).
-    try{
-      const rm=await fetch(`/api/albums/${encodeURIComponent(SLUG)}`);
-      if(rm.ok){
-        const dm=await rm.json();
-        DATA=dm;
-        tracks=(dm.tracks||[]).map(x=>({...x}));
-        renderTracks();
-      }
-    }catch(e){}
-    toast(t.rc_done(tr?tr.title:""));
-    closeRcModal();
-  }catch(e){
-    console.warn("recut apply:",e);
-    rcStatus(e.message||t.rc_err_apply,{err:true});
-    btn.disabled=false;
-  }
-}
-
 async function load(){
   DATA=await(await fetch(`/api/albums/${SLUG}`)).json();
   refreshScopeRow();
@@ -1771,21 +1543,6 @@ applyLang();load();
         <button id="tcv-del" class="btn-secondary" style="color:var(--danger,#e57373);border-color:var(--danger,#e57373);display:flex;align-items:center;gap:4px">
           <span class="material-symbols-outlined">delete</span><span id="t-tc-del-lbl"></span>
         </button>
-      </div>
-    </div>
-  </div>
-  <!-- Recut modal : re-couper une piste existante à la waveform -->
-  <div class="rc-overlay" id="rc-overlay" onclick="closeRc(event)">
-    <div class="rc-box">
-      <button class="tcv-close" onclick="closeRcModal()"><span class="material-symbols-outlined">close</span></button>
-      <h3 id="rc-title"></h3>
-      <p class="rc-sub" id="rc-sub"></p>
-      <p class="rc-hint" id="rc-hint"></p>
-      <div class="rc-status" id="rc-status"></div>
-      <div class="rc-trimmer hidden" id="rc-trimmer"></div>
-      <div class="rc-footer">
-        <button class="btn-secondary" onclick="closeRcModal()" id="t-rc-cancel"></button>
-        <button class="btn-primary" onclick="applyRc()" id="rc-apply-btn"><span id="t-rc-apply"></span></button>
       </div>
     </div>
   </div>

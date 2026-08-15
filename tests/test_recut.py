@@ -1,5 +1,11 @@
 """Re-couper une piste existante à la waveform.
 
+⚠️ **Suite désactivée** (2026-08-15) — les endpoints ne sont plus montés
+dans `main.py` (le router `recut` a été retiré), donc tous les tests
+échoueraient sur du 404. Le code de test reste ici comme référence en
+cas de réactivation ultérieure. Voir `claude/NOTES.md` (2026-08-15) et
+le docstring de `backend/recut.py` pour le contexte.
+
 Trois cas cohabitent, chacun avec ses garde-fous :
 - **mono-source** : le master est lu directement ; on ne touche pas aux
   pistes voisines et le ré-encodage porte uniquement sur la piste re-coupée.
@@ -25,6 +31,13 @@ from fastapi.testclient import TestClient
 
 from backend import addtrack, recut
 from backend.manifest import Manifest
+
+# Skip global : cf. docstring du module. On garde la collection (l'import de
+# `recut` est même utile — il vérifie que le module continue de charger sans
+# erreur, ce qui est le prérequis pour une réactivation) mais aucun cas n'est
+# exécuté tant que le router n'est pas remonté dans main.py.
+pytestmark = pytest.mark.skip(
+    reason="Recut désactivé côté API (router non monté) — cf. NOTES 2026-08-15")
 
 GEST = {"X-authentik-username": "g", "X-authentik-groups": "live2mp3-gestionnaire"}
 USER = {"X-authentik-username": "u", "X-authentik-groups": "live2mp3-user"}

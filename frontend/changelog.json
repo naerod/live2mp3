@@ -9,7 +9,7 @@
         "en": "AI import & large files"
       },
       "fr": [
-        "Re-couper une piste existante à la waveform depuis la page de gestion, sans repasser par l'éditeur d'album entier : bouton par piste, poignées début/fin sur la forme d'onde (avec le contexte des voisines), coupe au millième de seconde. Marche sur les concerts, les compilations multi-liens et les pistes ajoutées depuis un lien.",
+        "Re-couper une piste existante à la waveform (fonctionnalité développée puis désactivée) : le geste piste par piste s'avère peu pertinent sur des albums live où les frontières entre chansons s'enchaînent — ajuster une seule piste laisserait presque toujours un gap ou un chevauchement. Utilisez plutôt « Ouvrir l'éditeur audio » depuis la page de gestion, qui rouvre l'éditeur Peaks.js complet et traite toutes les pistes ensemble. La fonctionnalité par piste reste dans le code pour un usage ponctuel futur (compilations où chaque piste est indépendante).",
         "Import IA d'un fichier complet : téléversement résumable découpé en morceaux, pour des fichiers audio/vidéo de plusieurs gigaoctets.",
         "Analyse et découpage assistés (prepare-ai) directement depuis un fichier importé.",
         "Correctifs d'affichage des pochettes.",
@@ -21,7 +21,7 @@
         "Concerts vidéo : section « Vidéo du concert » + pop-up (téléchargement MP4, 3 visuels Jellyfin bannière/poster/miniature avec import/tri/épinglage/suppression), miniature auto, icône vidéo en vitrine."
       ],
       "en": [
-        "Re-cut an existing track on the waveform straight from the management page, without reopening the full album editor: per-track button, start/end handles on the waveform (with the neighbouring context), millisecond precision. Works on concerts, multi-link compilations and tracks added from a link.",
+        "Re-cut an existing track on the waveform (feature built then disabled): the per-track gesture proves to be of little use on live albums where track boundaries chain into each other — adjusting a single track would almost always leave a gap or an overlap. Use \"Open the audio editor\" from the management page instead, which reopens the full Peaks.js editor and handles all tracks together. The per-track feature remains in the code for possible ad-hoc future use (compilations where each track is independent).",
         "AI import of a full file: resumable chunked upload, for multi-gigabyte audio/video files.",
         "Assisted analysis and splitting (prepare-ai) directly from an imported file.",
         "Cover artwork display fixes.",

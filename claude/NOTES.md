@@ -1,3 +1,38 @@
+2026-08-15 (fin de journée) : **Recut par piste DÉSACTIVÉ juste après
+livraison** (preprod v1.23.22+). Fonctionnalité livrée le matin même
+(v1.23.21), retirée le même jour après retour utilisateur.
+- **Motif** : sur des albums live (≈99 % du catalogue), les chansons
+  s'enchaînent directement — ajuster **une seule** piste sans toucher à
+  ses voisines laisse presque toujours un gap ou un chevauchement.
+  Le geste par piste n'est pertinent que sur les compilations où chaque
+  piste est indépendante (`live-crossovers`, ~1 % du catalogue).
+- **Décision** : on garde le bouton existant « Ouvrir l'éditeur audio »
+  (livré le 2026-07-25 en v1.15.4, sur la fiche de gestion `album.html`,
+  redirige vers `/app#{slug}`) qui rouvre l'éditeur Peaks.js **complet**
+  et traite toutes les pistes ensemble, avec la liaison fin ↔ début
+  suivant déjà en place.
+- **Ce qui a été retiré** : le bouton `.track-recut` par piste, la modale
+  ClipTrimmer dédiée, tout le JS/CSS/i18n rc_*, et l'`include_router`
+  dans `backend/main.py`. Le module `backend/recut.py` et les tests
+  `tests/test_recut.py` **restent en place** (imports commentés côté
+  main.py, `pytestmark = pytest.mark.skip` côté tests) — comme point
+  de départ pour une éventuelle réactivation.
+- **Prérequis identifié avant de le rebrancher** : l'écran doit permettre
+  d'ajuster aussi le début de la piste suivante et la fin de la
+  précédente (transitions parlées, applaudissements), sinon la coupe
+  crée systématiquement une discontinuité. C'est cette limite qui rend
+  la version actuelle peu pertinente. Voir aussi le docstring de
+  `backend/recut.py` pour l'architecture (mono/multi/external).
+- **Changelog site** : l'entrée est **conservée** avec la mention
+  explicite « fonctionnalité développée puis désactivée, cf. bouton
+  Ouvrir l'éditeur audio ». Rien n'est caché.
+- **Fichiers touchés par le rollback** : `backend/main.py` (import
+  commenté), `backend/recut.py` (docstring de désactivation),
+  `tests/test_recut.py` (skip global), `frontend/album.html` (CSS +
+  HTML modal + JS + i18n FR/EN retirés — annule mes ajouts du matin),
+  `frontend/changelog.json` (entrée nuancée FR + EN), `claude/NOTES.md`
+  (cette entrée).
+
 2026-08-15 : **Re-couper une piste existante à la waveform depuis la fiche
 de gestion** (preprod v1.23.21). Le TODO du 2026-08-05 (« remplacer une
 piste ») est livré, mais plus large que prévu : le geste est **par piste
