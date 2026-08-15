@@ -44,11 +44,15 @@
       "overflow:hidden;text-overflow:ellipsis}" +
       ".mt-label.target{background:var(--accent);color:#0d0f13}" +
       // Cadenas positionnés au-dessus des frontières partagées, cliquables.
-      ".mt-locks{position:absolute;left:0;right:0;bottom:6px;pointer-events:none}" +
-      ".mt-lock{position:absolute;pointer-events:auto;transform:translateX(-50%);" +
+      // Le parent couvre tout le stage (référence de coordonnées absolues) ;
+      // les cadenas eux-mêmes se calent à `bottom:6px`. Sans ça, un parent
+      // « height:0; bottom:6px » place les enfants en haut du parent (y = stage.h - 6px),
+      // donc ~24px sous overflow:hidden → seul le haut du bouton visible.
+      ".mt-locks{position:absolute;inset:0;pointer-events:none}" +
+      ".mt-lock{position:absolute;bottom:6px;pointer-events:auto;transform:translateX(-50%);" +
       "background:var(--card,var(--bg));border:1px solid var(--border);" +
-      "border-radius:50%;width:24px;height:24px;display:flex;align-items:center;" +
-      "justify-content:center;cursor:pointer;color:var(--muted);box-shadow:0 1px 4px rgba(0,0,0,.35)}" +
+      "border-radius:50%;width:26px;height:26px;display:flex;align-items:center;" +
+      "justify-content:center;cursor:pointer;color:var(--muted);box-shadow:0 1px 4px rgba(0,0,0,.35);z-index:2}" +
       ".mt-lock.linked{color:var(--accent);border-color:var(--accent)}" +
       ".mt-lock:hover{border-color:var(--accent)}" +
       ".mt-lock .material-symbols-outlined{font-size:15px}" +
