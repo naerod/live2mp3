@@ -437,6 +437,9 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
         "has_video_full": cat.get("has_video_full", False),
+        "status": cat.get("status") or catalogue.album_status(
+            m.data.get("published", True), cat.get("has_mp3", False),
+            cat.get("has_mp4", False), cat.get("has_video_full", False)),
         "tracks": tracks,
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),

@@ -61,6 +61,16 @@
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none;
     backdrop-filter:blur(3px)}
   .draft-badge .material-symbols-outlined{font-size:12px}
+  /* Badge de statut unique et prioritaire (gestionnaire) : un seul état
+     dominant par album. Couleurs = sévérité décroissante. */
+  .status-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
+    gap:3px;padding:3px 8px 3px 5px;border-radius:7px;color:#fff;font-size:10.5px;font-weight:700;
+    letter-spacing:.03em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(3px)}
+  .status-badge .material-symbols-outlined{font-size:12px}
+  .status-badge.st-draft{background:rgba(220,60,60,.88)}
+  .status-badge.st-unpublished{background:rgba(214,158,46,.9)}
+  .status-badge.st-published_audio{background:rgba(56,142,96,.9)}
+  .status-badge.st-published_av{background:rgba(46,132,150,.9)}
   .video-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
     justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);
     color:#fff;backdrop-filter:blur(2px)}
@@ -503,6 +513,8 @@ const T={
       // inachevé (cf. page /app/drafts), un album non publié est fini mais
       // masqué au public. Deux états distincts, deux mots distincts.
       unpublished_badge:"Non publié",
+      status_draft:"Brouillon",status_unpublished:"Non publié",
+      status_published_audio:"Publié (MP3)",status_published_av:"Publié (MP3 + MP4)",
       sel_preparing:"Préparation du téléchargement…",
       sel_dl_empty:"Aucun média téléchargeable dans la sélection.",
       sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
@@ -549,6 +561,8 @@ const T={
       sel_dl_mp3:"Download",sel_dl_mp4:"Download MP4",
       sel_publish:"Publish",sel_unpublish:"Unpublish",
       unpublished_badge:"Unpublished",
+      status_draft:"Draft",status_unpublished:"Unpublished",
+      status_published_audio:"Published (MP3)",status_published_av:"Published (MP3 + MP4)",
       sel_preparing:"Preparing download…",
       sel_dl_empty:"No downloadable media in the selection.",
       sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
@@ -687,9 +701,14 @@ function albumCard(a){
     ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
-  const draftBadge=a.published===false&&md.is_gestionnaire
-    ?`<span class="draft-badge"><span class="material-symbols-outlined">visibility_off</span>${T[L()].unpublished_badge}</span>`:"";
-  const videoBadge=a.has_video_full
+  // Badge de statut unique et prioritaire — gestionnaire seulement (le public
+  // ne voit que des albums publiés, le statut de cycle de vie ne le concerne pas).
+  const ST_IC={draft:"draft",unpublished:"visibility_off",
+    published_audio:"graphic_eq",published_av:"movie"};
+  const statusBadge=md.is_gestionnaire&&a.status&&ST_IC[a.status]
+    ?`<span class="status-badge st-${a.status}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
+  // Icône vidéo conservée pour le public (info de contenu, pas de statut).
+  const videoBadge=(!md.is_gestionnaire&&a.has_video_full)
     ?`<span class="video-badge" title="${L()==="fr"?"Concert complet en vidéo":"Full concert video"}"><span class="material-symbols-outlined">movie</span></span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
@@ -697,7 +716,7 @@ function albumCard(a){
   return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}">
     ${pick}
     ${gear}
-    ${draftBadge}
+    ${statusBadge}
     ${newBadge}
     ${videoBadge}
     <div class="cover">${coverHtml(a)}</div>
