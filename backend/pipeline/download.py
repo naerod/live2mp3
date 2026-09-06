@@ -49,7 +49,13 @@ def _run_ytdlp(cmd: list[str], progress: ProgressCb | None) -> None:
 
 
 def _base_cmd(cookies: str | None) -> list[str]:
-    cmd = ["yt-dlp", "--no-playlist", "--newline"]
+    cmd = ["yt-dlp", "--no-playlist", "--newline",
+           # Résilience face aux HTTP 403 intermittents de YouTube (throttling
+           # de l'IP quand on enchaîne beaucoup de téléchargements, cf. incident
+           # 2026-08-13) : retries + backoff exponentiel + pacing des requêtes.
+           "--retries", "10", "--fragment-retries", "10",
+           "--extractor-retries", "3", "--retry-sleep", "http:exp=1:30",
+           "--sleep-requests", "1.5", "--socket-timeout", "30"]
     if cookies:
         cmd += ["--cookies", cookies]
     return cmd
@@ -83,8 +89,38 @@ def download_audio(url: str, source_dir: Path, cookies: str | None = None,
     return candidates[0]
 
 
+def _download_audio_retry(url: str, source_dir: Path, cookies: str | None,
+                          progress: ProgressCb | None, stem: str,
+                          attempts: int = 4) -> Path:
+    """download_audio avec réessais : un 403 intermittent (throttling YouTube)
+    se dissipe presque toujours à une nouvelle extraction. On repart propre à
+    chaque tentative (purge du stem) et on attend, en backoff, avant de réessayer.
+    """
+    import time
+    last: Exception | None = None
+    for k in range(attempts):
+        try:
+            return download_audio(url, source_dir, cookies, progress, stem=stem)
+        except RuntimeError as exc:
+            last = exc
+            for partial in source_dir.glob(f"{stem}.*"):
+                partial.unlink(missing_ok=True)
+            if k < attempts - 1:
+                time.sleep(5 * (k + 1))
+    raise RuntimeError(
+        f"téléchargement échoué après {attempts} tentatives : {last}")
+
+
 def extract_wav(master: Path, out_wav: Path) -> Path:
     out_wav.parent.mkdir(parents=True, exist_ok=True)
+    # Garde-fou : ffmpeg échoue toujours si l'entrée == la sortie (cas atteint
+    # si un clip_XX.wav résiduel est re-sélectionné comme source, cf. incident
+    # 2026-08-13). On refuse explicitement plutôt que de laisser une erreur
+    # ffmpeg opaque remonter à l'utilisateur.
+    if master.resolve() == out_wav.resolve():
+        raise RuntimeError(
+            f"extract_wav : source et destination identiques ({out_wav.name}) — "
+            "fichier résiduel d'un essai précédent")
     subprocess.run([
         "ffmpeg", "-y", "-i", str(master),
         "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
@@ -116,6 +152,12 @@ def run_multi(project_dir: Path, clips: list[dict],
     cookies = os.environ.get("YTDLP_COOKIES")
     source_dir = project_dir / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
+    # Repartir propre : purge des segments d'un essai précédent. Sans ça, un
+    # clip_XX.wav résiduel serait re-sélectionné comme source par download_audio
+    # (glob "clip_XX.*" + tri alphabétique) → ffmpeg entrée == sortie → échec
+    # au réessai (incident 2026-08-13).
+    for stale in source_dir.glob("clip_*"):
+        stale.unlink(missing_ok=True)
     n = len(clips)
     wavs: list[Path] = []
     durations: list[float] = []
@@ -125,8 +167,8 @@ def run_multi(project_dir: Path, clips: list[dict],
         def clip_pct(pct: float, base=i) -> None:
             if progress:
                 progress((base + pct / 100.0) / n * 90.0)
-        master = download_audio(clip["url"], source_dir, cookies, clip_pct,
-                                stem=f"clip_{i:02d}")
+        master = _download_audio_retry(clip["url"], source_dir, cookies,
+                                       clip_pct, stem=f"clip_{i:02d}")
         wav = extract_wav(master, source_dir / f"clip_{i:02d}.wav")
         durations.append(_wav_seconds(wav))   # mesure avant toute suppression
         wavs.append(wav)

@@ -24,6 +24,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=audiowaveform /usr/local/bin/audiowaveform /usr/local/bin/audiowaveform
 
+# Runtime JavaScript (deno) requis par yt-dlp pour résoudre le challenge nsig
+# de YouTube. Sans lui, certains formats renvoient HTTP 403 Forbidden
+# (incident 2026-08-13). yt-dlp détecte deno automatiquement sur le PATH.
+COPY --from=denoland/deno:bin-2.9.5 /deno /usr/local/bin/deno
+
 # yt-dlp (dernière version via pip)
 WORKDIR /app
 COPY requirements.txt .

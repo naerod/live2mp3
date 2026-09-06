@@ -67,8 +67,15 @@ def covers_dir(slug: str) -> Path:
     return PROJECTS_DIR / slug / "artwork" / "covers"
 
 
-def cover_file(slug: str, file_key: str, ext: str) -> Path:
-    return covers_dir(slug) / f"{file_key}_cover{ext}"
+# Types d'image gérés par cette collection : la pochette d'album historique
+# ('cover') et les 3 visuels Jellyfin d'un concert vidéo. Chaque type est une
+# collection indépendante (tri, épinglage, suppression) partageant le même code.
+KINDS = ("cover", "banner", "poster", "thumbnail")
+IMAGE_KINDS = ("banner", "poster", "thumbnail")
+
+
+def cover_file(slug: str, file_key: str, ext: str, kind: str = "cover") -> Path:
+    return covers_dir(slug) / f"{file_key}_{kind}{ext}"
 
 
 def traycard_file(slug: str, file_key: str, ext: str) -> Path:
@@ -81,41 +88,48 @@ def _slug_token(name: str) -> str:
 
 
 # --- Classement ------------------------------------------------------------
-def rank_covers(conn: sqlite3.Connection, slug: str) -> list[sqlite3.Row]:
+def rank_covers(conn: sqlite3.Connection, slug: str,
+                kind: str = "cover") -> list[sqlite3.Row]:
     """Covers d'un album, la gagnante en tête.
 
     Ordre : épinglée d'abord (au plus une, garantie par index partiel), puis
-    likes décroissants, puis la plus ancienne — départage stable, donc le rang
-    utilisé pour nommer les fichiers du ZIP ne bouge pas sans raison.
+    les pochettes manuelles avant l'auto (une miniature d'import ne doit jamais
+    l'emporter sur une pochette proposée à la main), puis likes décroissants,
+    puis la plus ancienne — départage stable, donc le rang utilisé pour nommer
+    les fichiers du ZIP ne bouge pas sans raison.
     """
     return conn.execute(
         "SELECT c.*, COUNT(l.cover_id) AS likes "
         "FROM covers c LEFT JOIN cover_likes l ON l.cover_id = c.id "
-        "WHERE c.slug=? GROUP BY c.id "
-        "ORDER BY c.pinned DESC, likes DESC, c.created_at ASC, c.id ASC",
-        (slug,),
+        "WHERE c.slug=? AND c.kind=? GROUP BY c.id "
+        "ORDER BY c.pinned DESC, c.auto ASC, likes DESC, c.created_at ASC, c.id ASC",
+        (slug, kind),
     ).fetchall()
 
 
-def top_cover(conn: sqlite3.Connection, slug: str) -> sqlite3.Row | None:
-    rows = rank_covers(conn, slug)
+def top_cover(conn: sqlite3.Connection, slug: str,
+              kind: str = "cover") -> sqlite3.Row | None:
+    rows = rank_covers(conn, slug, kind)
     return rows[0] if rows else None
 
 
-def _on_covers_changed(slug: str) -> None:
+def _on_covers_changed(slug: str, *, kind: str = "cover",
+                       force: bool = False) -> None:
     """Répercute un changement de classement sur le reste du système.
 
-    On se contente de repointer `album.cover` du manifest vers la gagnante :
-    c'est ce que lisent le catalogue et les consommateurs du YAML. Le ZIP reste
-    volontairement *paresseux* (`_zip_media` le rafraîchit au téléchargement).
+    On repointe `album.cover` du manifest vers la gagnante : c'est ce que lisent
+    le catalogue et les consommateurs du YAML. Le ZIP reste volontairement
+    *paresseux* (`_zip_media` le rafraîchit au téléchargement).
 
-    En revanche, si la gagnante *change réellement* pour un album **publié**,
-    on répercute vers le média servi à Jellyfin/Finamp : sinon la pochette
-    resterait figée côté serveur (le cron `sync-media.sh` ne re-scanne que sur
-    apparition/disparition de symlink, jamais sur un changement de contenu).
-    Ce n'est pas coûteux à chaque like : l'early-return sur `album.cover`
-    inchangé ci-dessous garantit qu'on ne propage qu'aux vrais changements de
-    gagnante, événement rare.
+    Propagation vers le média servi à Jellyfin/Finamp (ré-embarquement APIC) :
+    - par défaut (`force=False`, cas des likes fréquents), seulement si la
+      gagnante *change réellement* — optimisation, la propagation est rare ;
+    - `force=True` pour les actions de gestion explicites (import, épinglage,
+      suppression) : on propage **même si le pointeur `album.cover` est
+      inchangé**. Indispensable car l'APIC embarqué peut diverger du pointeur
+      (ex. pochette posée *avant* le rendu, ou embarquée par un rendu antérieur).
+      Sans ça, épingler/supprimer une cover ne rafraîchit jamais ce que voient
+      Finamp/Jellyfin (bug 2026-08-13).
     """
     mpath = PROJECTS_DIR / slug / "manifest.yaml"
     if not mpath.exists():
@@ -123,20 +137,27 @@ def _on_covers_changed(slug: str) -> None:
     from .manifest import Manifest
 
     with get_conn() as conn:
-        win = top_cover(conn, slug)
+        win = top_cover(conn, slug, kind)
     m = Manifest.load(mpath)
     album = m.data.setdefault("album", {})
+    # Pointeur legacy dans le manifest : `album.cover` pour la pochette,
+    # `album.banner`/`poster`/`thumbnail` pour les visuels Jellyfin. Permet aux
+    # consommateurs du YAML (catalogue, fiche, sync Jellyfin) de lire la gagnante.
     rel = (
-        f"artwork/covers/{win['file_key']}_cover{win['cover_ext']}" if win else None
+        f"artwork/covers/{win['file_key']}_{kind}{win['cover_ext']}" if win else None
     )
-    if album.get("cover") == rel:
-        return
-    if rel:
-        album["cover"] = rel
-    else:
-        album.pop("cover", None)
-    m.save()
-    _propagate_cover_to_media(slug, m)
+    changed = album.get(kind) != rel
+    if changed:
+        if rel:
+            album[kind] = rel
+        else:
+            album.pop(kind, None)
+        m.save()
+    if changed or force:
+        if kind == "cover":
+            _propagate_cover_to_media(slug, m)
+        else:
+            _propagate_images_to_jellyfin(slug, m)
 
 
 def _propagate_cover_to_media(slug: str, m) -> None:
@@ -169,6 +190,86 @@ def _propagate_cover_to_media(slug: str, m) -> None:
     jellyfin.refresh_album(slug)
 
 
+# Suffixes de nommage des images sidecar reconnus par Jellyfin pour un fichier
+# vidéo « <nom>.mp4 » : poster (Primary), miniature paysage (Thumb 16:9),
+# bannière (Banner). Déposés à côté du MP4 concert-complet.
+JELLYFIN_IMG_SUFFIX = {"poster": "-poster", "thumbnail": "-thumb", "banner": "-banner"}
+
+
+def _propagate_images_to_jellyfin(slug: str, m) -> None:
+    """Dépose les visuels gagnants (bannière/poster/miniature) en images sidecar
+    à côté du MP4 concert-complet (build/video-full), aux conventions Jellyfin,
+    puis déclenche un scan. Best-effort : ne lève jamais.
+    """
+    vfdir = PROJECTS_DIR / slug / "build" / "video-full"
+    mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
+    if not mp4s:
+        return  # pas de concert complet à illustrer
+    stem = mp4s[0].with_suffix("").name
+    from . import jellyfin
+    try:
+        with get_conn() as conn:
+            for kind in IMAGE_KINDS:
+                suffix = JELLYFIN_IMG_SUFFIX[kind]
+                # Purge des anciens sidecars de ce type (toutes extensions).
+                # `list(...)` : on supprime pendant le parcours, il faut donc
+                # matérialiser l'inventaire avant de toucher au répertoire.
+                for old in list(vfdir.iterdir()):
+                    if old.name.startswith(f"{stem}{suffix}."):
+                        old.unlink(missing_ok=True)
+                win = top_cover(conn, slug, kind)
+                if win:
+                    src = cover_file(slug, win["file_key"], win["cover_ext"], kind)
+                    if src.exists():
+                        (vfdir / f"{stem}{suffix}{win['cover_ext']}").write_bytes(
+                            src.read_bytes())
+    except Exception as exc:
+        log.warning("écriture des visuels Jellyfin de %s impossible : %s", slug, exc)
+    jellyfin.refresh_album(slug)
+
+
+def _ensure_auto_thumbnail(slug: str) -> None:
+    """Crée une miniature « auto » (frame 16:9 1920×1080 extraite du concert
+    complet) si l'album a une vidéo complète et aucune miniature encore. Marquée
+    auto=1 : un import manuel passe aussitôt devant (même règle que les covers).
+    Best-effort : ne lève jamais.
+    """
+    import subprocess
+    vfdir = PROJECTS_DIR / slug / "build" / "video-full"
+    mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
+    if not mp4s:
+        return
+    with get_conn() as conn:
+        if conn.execute(
+            "SELECT 1 FROM covers WHERE slug=? AND kind='thumbnail' LIMIT 1", (slug,)
+        ).fetchone():
+            return
+    key = uuid4().hex
+    out = cover_file(slug, key, ".jpg", "thumbnail")
+    covers_dir(slug).mkdir(parents=True, exist_ok=True)
+    try:
+        dur = float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=nokey=1:noprint_wrappers=1", str(mp4s[0])],
+            capture_output=True, text=True).stdout.strip() or 0)
+        ts = max(1.0, dur * 0.33)  # frame au premier tiers (évite l'écran noir d'intro)
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(ts), "-i", str(mp4s[0]), "-frames:v", "1",
+             "-vf", "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080",
+             str(out)], check=True, capture_output=True)
+    except Exception as exc:
+        log.warning("miniature auto de %s impossible : %s", slug, exc)
+        return
+    now = _now()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, kind, auto, created_at, updated_at) VALUES(?,?,?,?,?,?,?,1,?,?)",
+            (slug, "auto", key, ".jpg", "", "", "thumbnail", now, now),
+        )
+    _on_covers_changed(slug, kind="thumbnail", force=True)
+
+
 def zip_basename(rank: int, username: str) -> str:
     """Préfixe commun cover/tray card dans le ZIP : `01-nathan`.
 
@@ -193,6 +294,9 @@ def _cover_dict(row: sqlite3.Row, rank: int, profiles: dict[str, dict],
         "avatar": prof["avatar"],
         "caption": row["caption"] or "",
         "pinned": bool(row["pinned"]),
+        # Pochette récupérée automatiquement (miniature d'import) : le front
+        # affiche « Pochette automatique » au lieu de « Pochette par X ».
+        "auto": bool(row["auto"]),
         "likes": row["likes"],
         "liked": row["id"] in liked,
         "comments": comment_counts.get(row["id"], 0),
@@ -208,8 +312,9 @@ def _cover_dict(row: sqlite3.Row, rank: int, profiles: dict[str, dict],
     }
 
 
-def _list_payload(conn: sqlite3.Connection, slug: str, viewer: str | None) -> dict:
-    rows = rank_covers(conn, slug)
+def _list_payload(conn: sqlite3.Connection, slug: str, viewer: str | None,
+                  kind: str = "cover") -> dict:
+    rows = rank_covers(conn, slug, kind)
     ids = [r["id"] for r in rows]
     liked: set[int] = set()
     counts: dict[int, int] = {}
@@ -293,26 +398,33 @@ def list_covers(slug: str, identity: dict = Depends(current_identity)) -> dict:
         return _list_payload(conn, slug, identity.get("username"))
 
 
-def _serve(cover_id: int, kind: str, download: bool) -> FileResponse:
+def _serve(cover_id: int, what: str, download: bool) -> FileResponse:
+    """Sert l'image (`what="image"`, selon le type de la ligne : cover/banner/
+    poster/thumbnail) ou sa tray card (`what="traycard"`, cover uniquement)."""
     with get_conn() as conn:
         row = _get_cover(conn, cover_id)
-    ext = row["cover_ext"] if kind == "cover" else row["traycard_ext"]
-    if not ext:
-        raise HTTPException(404, "pas de tray card")
-    fn = cover_file if kind == "cover" else traycard_file
-    path = fn(row["slug"], row["file_key"], ext)
+    if what == "traycard":
+        ext = row["traycard_ext"]
+        if not ext:
+            raise HTTPException(404, "pas de tray card")
+        path = traycard_file(row["slug"], row["file_key"], ext)
+        label = "traycard"
+    else:
+        ext = row["cover_ext"]
+        path = cover_file(row["slug"], row["file_key"], ext, row["kind"])
+        label = row["kind"]
     if not path.exists():
         raise HTTPException(404, "fichier absent")
     name = None
     if download:
-        name = f"{row['slug']}-{_slug_token(row['username'])}_{kind}{ext}"
+        name = f"{row['slug']}-{_slug_token(row['username'])}_{label}{ext}"
     return FileResponse(path, media_type=MEDIA_TYPES.get(ext, "application/octet-stream"),
                         filename=name)
 
 
 @router.get("/cover-img/{cover_id}")
 def get_cover_img(cover_id: int) -> FileResponse:
-    return _serve(cover_id, "cover", download=False)
+    return _serve(cover_id, "image", download=False)
 
 
 @router.get("/traycard-img/{cover_id}")
@@ -323,7 +435,7 @@ def get_traycard_img(cover_id: int) -> FileResponse:
 @router.get("/download/cover/{cover_id}")
 def download_one_cover(cover_id: int,
                        identity: dict = Depends(require_user)) -> FileResponse:
-    return _serve(cover_id, "cover", download=True)
+    return _serve(cover_id, "image", download=True)
 
 
 @router.get("/download/traycard/{cover_id}")
@@ -400,8 +512,56 @@ async def upload_cover(slug: str,
         if text:
             traycard_file(slug, key, text).write_bytes(tdata)
         payload = _list_payload(conn, slug, username)
-    _on_covers_changed(slug)
+    _on_covers_changed(slug, force=True)
     return {"ok": True, "cover_id": cover_id, **payload}
+
+
+# --- Visuels Jellyfin (bannière / poster / miniature) ----------------------
+# Mêmes collection, tri, épinglage, likes et suppression que les covers : seul
+# le `kind` change. Les routes like/pin/delete (par cover_id) sont partagées.
+def _check_image_kind(kind: str) -> None:
+    if kind not in IMAGE_KINDS:
+        raise HTTPException(404, "type d'image inconnu")
+
+
+@router.get("/api/social/albums/{slug}/images/{kind}")
+def list_images(slug: str, kind: str,
+                identity: dict = Depends(current_identity)) -> dict:
+    _check_image_kind(kind)
+    if not _album_visible(slug, identity):
+        raise HTTPException(404, "album introuvable")
+    if kind == "thumbnail":
+        _ensure_auto_thumbnail(slug)  # miniature auto (frame) si vidéo + aucune encore
+    with get_conn() as conn:
+        return {"kind": kind, **_list_payload(conn, slug, identity.get("username"), kind)}
+
+
+@router.post("/api/social/albums/{slug}/images/{kind}")
+async def upload_image(slug: str, kind: str,
+                       cover: UploadFile = File(...),
+                       caption: str = Form(default=""),
+                       identity: dict = Depends(require_user)) -> dict:
+    """Import d'un visuel Jellyfin (bannière/poster/miniature) — sans tray card."""
+    _check_image_kind(kind)
+    if not _album_exists(slug):
+        raise HTTPException(404, "album introuvable")
+    username = identity["username"]
+    cdata, cext = await _read_upload(cover, COVER_EXTS, COVER_MAX_BYTES, "image")
+    now = _now()
+    key = uuid4().hex
+    with get_conn() as conn:
+        _ensure_profile(conn, username)
+        cur = conn.execute(
+            "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
+            "caption, kind, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            (slug, username, key, cext, "", caption.strip()[:CAPTION_MAX], kind, now, now),
+        )
+        cover_id = cur.lastrowid
+        covers_dir(slug).mkdir(parents=True, exist_ok=True)
+        cover_file(slug, key, cext, kind).write_bytes(cdata)
+        payload = _list_payload(conn, slug, username, kind)
+    _on_covers_changed(slug, kind=kind, force=True)
+    return {"ok": True, "cover_id": cover_id, "kind": kind, **payload}
 
 
 @router.put("/api/social/covers/{cover_id}/traycard")
@@ -415,6 +575,11 @@ async def set_traycard(cover_id: int, traycard: UploadFile = File(...),
         row = _get_cover(conn, cover_id)
         if not _may_edit(row, identity):
             raise HTTPException(403, "pochette d'un autre utilisateur")
+        # Une tray card n'a de sens que sur une pochette d'album : sur une
+        # bannière/poster/miniature, elle serait invisible et le classement
+        # recalculé porterait sur la mauvaise collection.
+        if row["kind"] != "cover":
+            raise HTTPException(409, "tray card réservée aux pochettes d'album")
         data, ext = await _read_upload(
             traycard, TRAYCARD_EXTS, TRAYCARD_MAX_BYTES, "tray card"
         )
@@ -438,6 +603,8 @@ def delete_traycard(cover_id: int, identity: dict = Depends(require_user)) -> di
         row = _get_cover(conn, cover_id)
         if not _may_edit(row, identity):
             raise HTTPException(403, "pochette d'un autre utilisateur")
+        if row["kind"] != "cover":
+            raise HTTPException(409, "tray card réservée aux pochettes d'album")
         if row["traycard_ext"]:
             traycard_file(row["slug"], row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
         conn.execute(
@@ -466,6 +633,7 @@ def delete_manifest_cover(slug: str, identity: dict = Depends(require_gestionnai
         (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
         m.data.get("album", {}).pop("cover", None)
         m.save()
+    _propagate_cover_to_media(slug, m)
     with get_conn() as conn:
         payload = _list_payload(conn, slug, identity.get("username"))
     return {"ok": True, **payload}
@@ -484,15 +652,18 @@ def delete_album_cover_auto(slug: str, identity: dict = Depends(require_gestionn
     if not mpath.exists():
         raise HTTPException(404, "album introuvable")
 
-    # 1. Supprimer toutes les covers en DB + leurs fichiers
+    # 1. Supprimer les pochettes (kind='cover' uniquement — les visuels Jellyfin
+    #    banner/poster/thumbnail ont leur propre gestion) en DB + fichiers.
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM covers WHERE slug=?", (slug,)).fetchall()
+        rows = conn.execute(
+            "SELECT * FROM covers WHERE slug=? AND kind='cover'", (slug,)
+        ).fetchall()
         for row in rows:
             cover_file(slug, row["file_key"], row["cover_ext"]).unlink(missing_ok=True)
             if row["traycard_ext"]:
                 traycard_file(slug, row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
         if rows:
-            conn.execute("DELETE FROM covers WHERE slug=?", (slug,))
+            conn.execute("DELETE FROM covers WHERE slug=? AND kind='cover'", (slug,))
 
     # 2. Nettoyer le manifest
     m = Manifest.load(mpath)
@@ -501,6 +672,7 @@ def delete_album_cover_auto(slug: str, identity: dict = Depends(require_gestionn
         (PROJECTS_DIR / slug / cover_rel).unlink(missing_ok=True)
         m.data.get("album", {}).pop("cover", None)
         m.save()
+    _propagate_cover_to_media(slug, m)
 
     return {"ok": True, "has_cover": False}
 
@@ -513,12 +685,13 @@ def delete_cover(cover_id: int, identity: dict = Depends(require_user)) -> dict:
         if not _may_edit(row, identity):
             raise HTTPException(403, "pochette d'un autre utilisateur")
         slug = row["slug"]
-        cover_file(slug, row["file_key"], row["cover_ext"]).unlink(missing_ok=True)
+        kind = row["kind"]
+        cover_file(slug, row["file_key"], row["cover_ext"], kind).unlink(missing_ok=True)
         if row["traycard_ext"]:
             traycard_file(slug, row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
         conn.execute("DELETE FROM covers WHERE id=?", (cover_id,))
-        payload = _list_payload(conn, slug, identity.get("username"))
-    _on_covers_changed(slug)
+        payload = _list_payload(conn, slug, identity.get("username"), kind)
+    _on_covers_changed(slug, kind=kind, force=True)
     return {"ok": True, **payload}
 
 
@@ -542,9 +715,9 @@ def toggle_cover_like(cover_id: int, identity: dict = Depends(require_user)) -> 
                 "INSERT INTO cover_likes(cover_id, username, created_at) VALUES(?,?,?)",
                 (cover_id, username, _now()),
             )
-        payload = _list_payload(conn, row["slug"], username)
-    # Un like peut faire changer la gagnante -> APIC et ZIP à rafraîchir.
-    _on_covers_changed(row["slug"])
+        payload = _list_payload(conn, row["slug"], username, row["kind"])
+    # Un like peut faire changer la gagnante -> APIC/visuels et ZIP à rafraîchir.
+    _on_covers_changed(row["slug"], kind=row["kind"])
     return {"ok": True, **payload}
 
 
@@ -554,19 +727,20 @@ def pin_cover(cover_id: int, identity: dict = Depends(require_gestionnaire)) -> 
     with get_conn() as conn:
         row = _get_cover(conn, cover_id)
         slug = row["slug"]
+        kind = row["kind"]
         now = _now()
         # Dépingler d'abord : l'index partiel n'autorise qu'une épinglée par
-        # album, poser la nouvelle avant de retirer l'ancienne échouerait.
+        # (album, type), poser la nouvelle avant de retirer l'ancienne échouerait.
         conn.execute(
-            "UPDATE covers SET pinned=0, updated_at=? WHERE slug=? AND pinned=1",
-            (now, slug),
+            "UPDATE covers SET pinned=0, updated_at=? WHERE slug=? AND kind=? AND pinned=1",
+            (now, slug, kind),
         )
         if not row["pinned"]:
             conn.execute(
                 "UPDATE covers SET pinned=1, updated_at=? WHERE id=?", (now, cover_id)
             )
-        payload = _list_payload(conn, slug, identity.get("username"))
-    _on_covers_changed(slug)
+        payload = _list_payload(conn, slug, identity.get("username"), kind)
+    _on_covers_changed(slug, kind=kind, force=True)
     return {"ok": True, **payload}
 
 

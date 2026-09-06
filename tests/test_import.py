@@ -283,3 +283,213 @@ def test_cancel_purges_staging(client, tmp_path):
     assert c.post("/api/import/cancel", headers=GEST,
                   json={"token": a["token"]}).status_code == 200
     assert not (projects / ".l2m-import" / a["token"]).exists()
+
+
+# ── Upload chunké résumable (gros audio/vidéo) ──────────────────────────────
+
+def _chunked_upload(c, name, data, *, token=None, chunk=64):
+    """Téléverse `data` en morceaux de `chunk` octets, avec vérif de reprise."""
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": name, "size": len(data),
+                        **({"token": token} if token else {})})
+    assert init.status_code == 200, init.text
+    tok, fid = init.json()["token"], init.json()["file_id"]
+    off = 0
+    while off < len(data):
+        part = data[off:off + chunk]
+        r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": str(off)},
+                  content=part)
+        assert r.status_code == 200, r.text
+        off += len(part)
+        assert r.json()["received"] == off
+    fin = c.post(f"/api/import/upload/{tok}/{fid}/finish", headers=GEST,
+                 json={"size": len(data)})
+    assert fin.status_code == 200, fin.text
+    return tok, fin.json()["file"]
+
+
+def test_chunked_upload_then_analyze_mp3(client, tmp_path):
+    c, projects = client
+    p = _mp3(tmp_path / "src" / "01_Song.mp3")
+    _tag(p, n=1, title="Song", artist="TOP", album="Live", date="2024-01-01")
+    data = p.read_bytes()
+    tok, fname = _chunked_upload(c, "01_Song.mp3", data)
+    assert (projects / ".l2m-import" / tok / "files" / fname).exists()
+    a = c.post("/api/import/analyze-staged", headers=GEST, json={"token": tok}).json()
+    assert a["token"] == tok
+    assert len(a["tracks"]) == 1
+    assert a["has_video"] is False
+
+
+def test_chunked_upload_resume_after_interruption(client):
+    c, _ = client
+    data = b"A" * 500
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": "clip.mp4", "size": len(data)}).json()
+    tok, fid = init["token"], init["file_id"]
+    # Premier morceau, puis "coupure" : on interroge l'état pour reprendre.
+    c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "0"},
+          content=data[:200])
+    st = c.get(f"/api/import/upload/{tok}/{fid}", headers=GEST).json()
+    assert st["received"] == 200 and st["size"] == 500
+    # Reprise à l'octet reçu.
+    r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "200"},
+              content=data[200:])
+    assert r.json()["received"] == 500
+
+
+def test_chunked_upload_rejects_desynced_offset(client):
+    c, _ = client
+    init = c.post("/api/import/upload/init", headers=GEST,
+                  json={"filename": "clip.mp4", "size": 300}).json()
+    tok, fid = init["token"], init["file_id"]
+    c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "0"},
+          content=b"X" * 100)
+    # Offset erroné : refus 409 avec l'octet réellement reçu.
+    r = c.put(f"/api/import/upload/{tok}/{fid}", headers={**GEST, "X-Chunk-Offset": "999"},
+              content=b"Y" * 50)
+    assert r.status_code == 409
+    assert r.json()["detail"]["received"] == 100
+
+
+def test_chunked_upload_rejects_bad_extension(client):
+    c, _ = client
+    r = c.post("/api/import/upload/init", headers=GEST,
+               json={"filename": "notes.txt", "size": 10})
+    assert r.status_code == 400
+
+
+def test_chunked_upload_requires_gestionnaire(client):
+    c, _ = client
+    r = c.post("/api/import/upload/init", headers=USER,
+               json={"filename": "clip.mp4", "size": 10})
+    assert r.status_code == 403
+
+
+def test_chunked_second_file_same_staging(client, tmp_path):
+    c, projects = client
+    p = _mp3(tmp_path / "src" / "a.mp3")
+    _tag(p, n=1, title="A", artist="TOP", album="Live", date="2024-01-01")
+    tok, _ = _chunked_upload(c, "01_A.mp3", p.read_bytes())
+    q = _mp3(tmp_path / "src" / "b.mp3")
+    _tag(q, n=2, title="B", artist="TOP", album="Live", date="2024-01-01")
+    tok2, _ = _chunked_upload(c, "02_B.mp3", q.read_bytes(), token=tok)
+    assert tok2 == tok
+    a = c.post("/api/import/analyze-staged", headers=GEST, json={"token": tok}).json()
+    assert len(a["tracks"]) == 2
+
+
+# ── Import complet + découpe IA (prepare-ai) ────────────────────────────────
+
+def test_prepare_ai_with_setlistfm(client, tmp_path, monkeypatch):
+    """Fichier complet téléversé → projet créé, master prêt, setlist officielle
+    pré-remplie, pipeline IA lancé (neutralisé ici)."""
+    c, projects = client
+    from backend import setlistfm
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: {
+        "url": "https://www.setlist.fm/setlist/top/2024/x-abcdef12.html",
+        "venue": "Scottrade Center", "tour": "Clancy",
+        "tracks": [{"n": 1, "title": "Overcompensate", "artist": None},
+                   {"n": 2, "title": "Holding On to You", "artist": None}]})
+    p = _mp3(tmp_path / "src" / "concert.mp3", seconds=0.6)
+    tok, fname = _chunked_upload(c, "concert.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "Twenty One Pilots",
+        "date": "2024-08-15"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "setlistfm"
+    assert d["auto_setlist"] is False and d["tracks"] == 2
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert man["pipeline_state"]["download"] == "done"   # prêt pour /prepare
+    assert man["source"]["media"] == "audio"
+    assert man["source"]["duration"] > 0
+    assert man["meta"]["setlistfm_url"].endswith(".html")
+    assert len(man["tracks"]) == 2
+    assert (projects / d["slug"] / "source" / "master.wav").exists()
+    assert not (projects / ".l2m-import" / tok).exists()   # staging purgé
+
+
+def test_prepare_ai_auto_setlist_when_no_match(client, tmp_path, monkeypatch):
+    c, _ = client
+    from backend import main as bmain, setlistfm
+    monkeypatch.setattr(bmain, "_run_prepare_bg", lambda slug, user: None)
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: None)
+    p = _mp3(tmp_path / "src" / "c2.mp3", seconds=0.4)
+    tok, fname = _chunked_upload(c, "c2.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "Obscure Band", "date": "1999-01-01"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "ai" and d["auto_setlist"] is True
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert man["auto_setlist"] is True
+
+
+def test_prepare_ai_requires_artist(client, tmp_path):
+    c, _ = client
+    p = _mp3(tmp_path / "src" / "c3.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c3.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST,
+               json={"token": tok, "file": fname, "artist": "  "})
+    assert r.status_code == 400
+
+
+def test_prepare_ai_uses_setlistfm_url(client, tmp_path, monkeypatch):
+    """URL setlist.fm fournie à la main : branche lookup_by_url prioritaire."""
+    c, _ = client
+    from backend import main as bmain, setlistfm
+    monkeypatch.setattr(bmain, "_run_prepare_bg", lambda slug, user: None)
+    seen = {}
+    def fake_by_url(url):
+        seen["url"] = url
+        return {"url": url, "venue": "V", "tour": "T",
+                "tracks": [{"n": 1, "title": "Song", "artist": None}]}
+    monkeypatch.setattr(setlistfm, "lookup_by_url", fake_by_url)
+    p = _mp3(tmp_path / "src" / "c4.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c4.mp3", p.read_bytes())
+    url = "https://www.setlist.fm/setlist/top/2021/x-1a2b3c4d.html"
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "TOP", "setlistfm_url": url})
+    assert r.status_code == 200, r.text
+    assert seen["url"] == url
+    assert r.json()["setlist_source"] == "setlistfm"
+
+
+def test_prepare_ai_with_form_tracks(client, tmp_path, monkeypatch):
+    """Setlist vérifiée dans le formulaire : prioritaire, pas de recherche."""
+    c, _ = client
+    from backend import setlistfm
+    called = {"n": 0}
+    monkeypatch.setattr(setlistfm, "lookup",
+                        lambda *a: called.update(n=called["n"] + 1) or None)
+    p = _mp3(tmp_path / "src" / "c5.mp3", seconds=0.3)
+    tok, fname = _chunked_upload(c, "c5.mp3", p.read_bytes())
+    r = c.post("/api/import/prepare-ai", headers=GEST, json={
+        "token": tok, "file": fname, "artist": "TOP", "date": "2024-08-15",
+        "tracks": [{"n": 1, "title": "A"}, {"n": 2, "title": "B", "artist": "TOP with X"}]})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["setlist_source"] == "form" and d["auto_setlist"] is False and d["tracks"] == 2
+    assert called["n"] == 0            # aucune recherche setlist.fm
+    man = c.get(f"/api/jobs/{d['slug']}/manifest", headers=GEST).json()
+    assert [t["title"] for t in man["tracks"]] == ["A", "B"]
+
+
+def test_setlist_lookup(client, monkeypatch):
+    c, _ = client
+    from backend import setlistfm
+    monkeypatch.setattr(setlistfm, "lookup", lambda artist, date: {
+        "url": "https://setlist.fm/x-1a2b3c.html", "venue": "V", "tour": "T",
+        "tracks": [{"n": 1, "title": "S1", "artist": None}]})
+    r = c.post("/api/import/setlist-lookup", headers=GEST,
+               json={"artist": "TOP", "date": "2024-08-15"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["found"] is True and len(d["tracks"]) == 1 and d["url"].endswith(".html")
+
+
+def test_setlist_lookup_needs_artist_and_date(client):
+    c, _ = client
+    r = c.post("/api/import/setlist-lookup", headers=GEST, json={"artist": "TOP"})
+    assert r.status_code == 200 and r.json()["found"] is False

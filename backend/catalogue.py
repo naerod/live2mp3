@@ -83,6 +83,24 @@ def _traycard_slugs() -> set[str]:
         return set()
 
 
+def album_status(published: bool, has_mp3: bool, has_mp4: bool,
+                 has_video_full: bool) -> str:
+    """Statut de cycle de vie **unique et prioritaire** d'un album.
+
+    Un seul état dominant, du plus urgent au plus abouti — c'est le code rendu
+    en badge côté front (libellé + icône + couleur y sont mappés) :
+      - `draft`            : brouillon (aucun média rendu) — géré par list_drafts.
+      - `unpublished`      : média présent mais caché du public.
+      - `published_audio`  : public, audio seul (le MP4 manque).
+      - `published_av`     : public, audio + vidéo (concert complet ou clips).
+    """
+    if not published:
+        return "unpublished"
+    if has_mp4 or has_video_full:
+        return "published_av"
+    return "published_audio"
+
+
 def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> list[dict]:
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
@@ -105,7 +123,10 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         album = m.data.get("album", {})
         has_mp3 = _has_files(pdir / "build" / "audio", "mp3")
         has_mp4 = _has_files(pdir / "build" / "video", "mp4")
-        if not (has_mp3 or has_mp4):
+        # Concert complet (MP4 unique) : distinct des clips par piste (build/video).
+        # C'est lui qu'on met en avant (icône vidéo, miniature, download).
+        has_video_full = _has_files(pdir / "build" / "video-full", "mp4")
+        if not (has_mp3 or has_mp4 or has_video_full):
             continue
         cover_rel = album.get("cover")
         # Priorité à la DB sociale ; fallback sur le manifest pour les covers
@@ -141,10 +162,12 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "tracks": len(m.tracks),
             "has_mp3": has_mp3,
             "has_mp4": has_mp4,
+            "has_video_full": has_video_full,
             "has_cover": has_cover,
             "cover_v": cover_v,
             "has_traycard": has_traycard,
-            "labels": _labels(album, has_mp3, has_mp4),
+            "labels": _labels(album, has_mp3, has_mp4, has_video_full),
+            "status": album_status(published, has_mp3, has_mp4, has_video_full),
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
             "drive_added_at": meta.get("drive_added_at", ""),
@@ -228,16 +251,25 @@ def list_drafts() -> list[dict]:
             "imported_at": meta.get("imported_at", ""),
             "updated_at": updated_at,
             "stage": done[-1] if done else "",
+            "status": "draft",
         })
     drafts.sort(key=lambda d: d.get("updated_at", ""), reverse=True)
     return drafts
 
 
-def _labels(album: dict, has_mp3: bool, has_mp4: bool) -> list[str]:
+def _labels(album: dict, has_mp3: bool, has_mp4: bool,
+            has_video_full: bool = False) -> list[str]:
+    """Libellés d'un album, précédés du média réellement disponible.
+
+    `has_video_full` (concert complet en MP4 unique) compte comme de la vidéo
+    au même titre que les clips par piste : sans ça un album MP3 + concert
+    complet s'affichait « audio » juste sous un badge « Publié (MP3 + MP4) ».
+    """
     labels = list(album.get("labels", []) or [])
-    if has_mp3 and has_mp4:
+    video = has_mp4 or has_video_full
+    if has_mp3 and video:
         media = "audio + vidéo"
-    elif has_mp4:
+    elif video:
         media = "vidéo"
     elif has_mp3:
         media = "audio"

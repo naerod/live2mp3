@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
+<title>live2mp3 — changelog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="/static/shared/naerod-social.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<style>
+  main{max-width:820px;margin:0 auto;padding:0 16px 64px}
+  .cl-hero{padding:28px 0 8px}
+  .cl-hero h1{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+  .cl-hero p{margin:0;color:var(--muted)}
+  .cl-timeline{position:relative;margin-top:24px;padding-left:26px}
+  .cl-timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;
+    width:2px;background:var(--border)}
+  .cl-entry{position:relative;margin-bottom:30px}
+  .cl-entry::before{content:"";position:absolute;left:-26px;top:6px;width:14px;height:14px;
+    border-radius:50%;background:var(--bg);border:2px solid var(--accent,#1db954)}
+  .cl-entry.latest::before{background:var(--accent,#1db954)}
+  .cl-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .cl-v{font-weight:700;font-size:1.15rem}
+  .cl-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;
+    border:1px solid var(--border);font-size:.72rem;color:var(--muted);font-variant-numeric:tabular-nums}
+  .cl-badge.now{color:var(--accent,#1db954);border-color:var(--accent,#1db954)}
+  .cl-date{color:var(--muted);font-size:.85rem;margin-left:auto}
+  .cl-title{color:var(--muted);font-size:.95rem;margin:0 0 8px}
+  .cl-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:5px}
+  .cl-list li{line-height:1.45}
+  .foot{margin-top:36px;display:flex;justify-content:center}
+  .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
+    border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums;
+    text-decoration:none;color:inherit}
+  .foot .env-preprod{color:var(--run);border-color:var(--run)}
+</style>
+</head>
+<body>
+<header></header>
+
+<main>
+  <div class="cl-hero">
+    <h1><span class="material-symbols-outlined">history</span><span id="cl-h">Journal des versions</span></h1>
+    <p id="cl-sub">Toutes les évolutions du site, version par version.</p>
+  </div>
+
+  <div class="cl-timeline" id="cl-list"></div>
+
+  <div class="foot" id="foot"></div>
+</main>
+
+<script src="/static/i18n.js"></script>
+<script src="/static/social.js"></script>
+<script>
+const CL_T={
+  fr:{title:"Journal des versions",sub:"Toutes les évolutions du site, version par version.",
+      current:"actuelle",loaderr:"Impossible de charger le journal des versions."},
+  en:{title:"Changelog",sub:"Every change to the site, version by version.",
+      current:"current",loaderr:"Could not load the changelog."}
+};
+let CL_DATA=null, CUR_VERSION=null;
+
+function L(){return (window.L2M&&L2M.getLang&&L2M.getLang())||localStorage.getItem("l2m-lang")||"fr";}
+function esc(s){const d=document.createElement("div");d.textContent=s;return d.innerHTML;}
+
+function renderCL(){
+  const l=L(), t=CL_T[l];
+  document.documentElement.lang=l;
+  document.getElementById("cl-h").textContent=t.title;
+  document.getElementById("cl-sub").textContent=t.sub;
+  const box=document.getElementById("cl-list");
+  if(!CL_DATA){box.innerHTML=`<p style="color:var(--muted)">${t.loaderr}</p>`;return;}
+  box.innerHTML=CL_DATA.versions.map((e,i)=>{
+    const items=(e[l]||e.fr||[]).map(x=>`<li>${esc(x)}</li>`).join("");
+    const title=e.title?(e.title[l]||e.title.fr||""):"";
+    const isNow=CUR_VERSION&&CUR_VERSION.indexOf(e.v)===0;
+    const nowBadge=isNow?`<span class="cl-badge now">${esc(t.current)}</span>`:"";
+    return `<div class="cl-entry${i===0?" latest":""}">
+      <div class="cl-head">
+        <span class="cl-v">v${esc(e.v)}</span>${nowBadge}
+        <span class="cl-date">${esc(e.date||"")}</span>
+      </div>
+      ${title?`<p class="cl-title">${esc(title)}</p>`:""}
+      <ul class="cl-list">${items}</ul>
+    </div>`;
+  }).join("");
+}
+
+async function loadVersion(){
+  try{
+    const v=await(await fetch("/api/version")).json();
+    CUR_VERSION=v.version;
+    const cls=v.env==="prod"?"":"env-preprod";
+    const commit=v.commit?` · ${v.commit}`:"";
+    document.getElementById("foot").innerHTML=
+      `<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
+  }catch(e){}
+}
+
+(async function(){
+  if(window.L2M&&L2M.initHeader) await L2M.initHeader({onLangChange:()=>renderCL()});
+  try{ CL_DATA=await(await fetch("/static/changelog.json")).json(); }catch(e){ CL_DATA=null; }
+  await loadVersion();
+  renderCL();
+})();
+</script>
+</body>
+</html>

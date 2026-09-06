@@ -32,7 +32,7 @@ from pydantic import BaseModel
 import re
 from uuid import uuid4
 from . import catalogue, entities, jellyfin, linktool, llm
-from . import progress, renderqueue
+from . import progress, renderqueue, setlistfm
 from .albumfiles import (
     _rename_audio_files,
     _write_album_cover,
@@ -50,6 +50,7 @@ from .auth import (
 from .db import get_conn, init_db
 from . import addtrack
 from .addtrack import router as addtrack_router
+from .recut import router as recut_router
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
@@ -118,6 +119,8 @@ app.include_router(covers_router)
 # Import d'un album prêt (dépôt de MP3 ou ZIP) — routes /api/import/*.
 app.include_router(import_router)
 app.include_router(addtrack_router)
+# Re-couper une piste à la waveform avec ses 2 voisines + cadenas de liaison.
+app.include_router(recut_router)
 
 # Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
 app.include_router(linktool.router)
@@ -226,6 +229,8 @@ class AlbumMetaIn(BaseModel):
     venue: str | None = None
     city: str | None = None        # ville (optionnelle) — ≠ venue (lieu précis)
     city_id: str = ""              # id canonique OSM (dérivé de la liste)
+    tour: str | None = None        # tournée (ex. « The Clancy World Tour »)
+    subtitle: str | None = None    # texte bonus optionnel (nom d'album live, etc.)
     festival: str | None = None
     festival_id: str = ""          # slug canonique (dérivé si absent)
     guests: list[GuestIn] = []     # artistes invités canoniques (id Deezer)
@@ -413,17 +418,12 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
     meta = m.data.get("meta", {})
     src = m.data.get("source", {})
     # Pochette « automatique » = miniature récupérée par l'import auto (outil de
-    # lien). Distinguée des pochettes faites main : celles-ci sont soit des
-    # `legacy_cover` (import historique), soit un téléversement `artwork/cover.ext`,
-    # et leur album n'a pas `import_source == "url"`. On exige donc l'import auto
-    # ET une pochette issue du dossier covers/ qui ne soit pas la legacy.
-    _cover_rel = str(m.data.get("album", {}).get("cover", "") or "")
-    _cover_name = _cover_rel.rsplit("/", 1)[-1]
-    cover_auto = (
-        meta.get("import_source") == "url"
-        and _cover_rel.startswith("artwork/covers/")
-        and not _cover_name.startswith("legacy_cover")
-    )
+    # lien), marquée `auto=1` en base. Le crédit se lit donc sur la pochette
+    # RÉELLEMENT gagnante : dès qu'une pochette manuelle passe devant (elles ont
+    # la priorité au classement), le badge « automatique » disparaît de lui-même.
+    with get_conn() as conn:
+        _top = top_cover(conn, slug)
+    cover_auto = bool(_top and _top["auto"])
     return {
         "slug": slug,
         "album": m.data.get("album", {}),
@@ -436,6 +436,10 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         "has_traycard": cat.get("has_traycard", False),
         "has_mp3": cat.get("has_mp3", False),
         "has_mp4": cat.get("has_mp4", False),
+        "has_video_full": cat.get("has_video_full", False),
+        "status": cat.get("status") or catalogue.album_status(
+            m.data.get("published", True), cat.get("has_mp3", False),
+            cat.get("has_mp4", False), cat.get("has_video_full", False)),
         "tracks": tracks,
         "imported_by": meta.get("imported_by", ""),
         "imported_at": meta.get("imported_at", ""),
@@ -570,6 +574,18 @@ def download_track(slug: str, n: int,
     from .manifest import numbered_title, sanitize_filename
     dl_name = f"{sanitize_filename(numbered_title(n, title))}.mp3" if title else f.name
     return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
+
+
+@app.get("/download/{slug}/video")
+def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
+    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
+    m = _ensure_album_visible(slug, identity)
+    vfdir = PROJECTS_DIR / slug / "build" / "video-full"
+    mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
+    if not mp4s:
+        raise HTTPException(404, "pas de concert complet")
+    return FileResponse(mp4s[0], filename=mp4s[0].name, media_type="video/mp4")
 
 
 @app.get("/download/{slug}/cover")
@@ -793,6 +809,13 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     alb["date"] = payload.date or ""
     alb["venue"] = payload.venue or ""
     alb["festival"] = payload.festival or ""
+    # Tournée + sous-titre bonus (facultatifs) — nettoyés si vides.
+    for _f in ("tour", "subtitle"):
+        _v = (getattr(payload, _f) or "").strip()
+        if _v:
+            alb[_f] = _v
+        else:
+            alb.pop(_f, None)
     # Ville (optionnelle). Nettoyée si vide pour garder le manifest lisible.
     if payload.city and payload.city.strip():
         alb["city"] = payload.city.strip()
@@ -827,6 +850,18 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     m.save()
     tagged = _write_album_tags(slug, m)
     return {"ok": True, "mp3_tagged": tagged}
+
+
+@app.get("/api/albums/{slug}/suggested-title")
+def album_suggested_title(slug: str,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Titre suggéré au formalisme maison, pour pré-remplir le champ titre."""
+    path = PROJECTS_DIR / slug / "manifest.yaml"
+    if not path.exists():
+        raise HTTPException(404, "album introuvable")
+    from .titles import suggest_concert_title
+    m = Manifest.load(path)
+    return {"suggested_title": suggest_concert_title(m.data.get("album", {}))}
 
 
 @app.get("/api/albums/{slug}/url-preview")
@@ -1125,6 +1160,14 @@ def tool() -> HTMLResponse:
     return HTMLResponse("<h1>live2mp3 — outil</h1>")
 
 
+@app.get("/changelog", response_class=HTMLResponse)
+def changelog() -> HTMLResponse:
+    page = FRONTEND / "changelog.html"
+    if page.exists():
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>live2mp3 — changelog</h1>")
+
+
 @app.get("/app/album/{slug}", response_class=HTMLResponse)
 def album_admin_page(slug: str,
                      identity: dict = Depends(require_gestionnaire)):
@@ -1404,6 +1447,171 @@ def start_prepare(slug: str,
                      args=(slug, identity.get("username") or ""),
                      daemon=True).start()
     return {"ok": True, "slug": slug}
+
+
+class AITrackIn(BaseModel):
+    n: int = 0
+    title: str
+    artist: str | None = None
+
+
+class PrepareAIIn(BaseModel):
+    token: str            # staging de l'upload chunké
+    file: str             # nom du fichier complet déposé
+    artist: str
+    title: str = ""
+    date: str = ""
+    venue: str = ""
+    festival: str = ""
+    setlistfm_url: str = ""
+    target: str = "data_disc"
+    # Setlist vérifiée dans le formulaire (prioritaire) ; vide → recherche
+    # serveur (URL/date) puis, à défaut, découpe auto par l'IA.
+    tracks: list[AITrackIn] | None = None
+
+
+class SetlistLookupIn(BaseModel):
+    artist: str = ""
+    date: str = ""
+    url: str = ""
+
+
+@app.post("/api/import/setlist-lookup")
+def import_setlist_lookup(payload: SetlistLookupIn,
+                          identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Propose la setlist officielle (setlist.fm) pour pré-remplir le formulaire
+    d'un import fichier : URL explicite prioritaire, sinon (artiste, date)."""
+    try:
+        if payload.url.strip():
+            sl = setlistfm.lookup_by_url(payload.url.strip())
+        elif payload.artist.strip() and payload.date.strip():
+            sl = setlistfm.lookup(payload.artist.strip(), payload.date.strip())
+        else:
+            return {"found": False, "reason": "artiste et date requis (ou une URL)"}
+    except setlistfm.SetlistUnavailable as e:
+        return {"found": False, "reason": str(e)}
+    if not sl:
+        return {"found": False}
+    return {"found": True, "url": sl.get("url", ""), "venue": sl.get("venue", ""),
+            "tour": sl.get("tour", ""), "name": setlistfm.ATTRIBUTION,
+            "tracks": [{"n": t["n"], "title": t["title"], "artist": t.get("artist")}
+                       for t in sl["tracks"]]}
+
+
+@app.post("/api/import/prepare-ai")
+def prepare_ai(payload: PrepareAIIn,
+               identity: dict = Depends(require_gestionnaire)) -> dict:
+    """Crée un projet depuis un fichier complet déjà téléversé et lance la
+    découpe IA. Réutilise le pipeline de l'import par lien (silences → Whisper →
+    setlist.fm → DeepSeek) en sautant le téléchargement : le master est déjà là.
+
+    La setlist officielle vient de l'URL setlist.fm fournie (prioritaire) ou
+    d'une recherche (artiste, date) ; à défaut, l'IA devine les titres depuis la
+    transcription (`auto_setlist`)."""
+    from . import import_album as imp
+
+    if not payload.artist.strip():
+        raise HTTPException(400, "artiste requis")
+    staging = imp._staging(payload.token)
+    src_file = staging / "files" / Path(payload.file).name
+    if not src_file.is_file():
+        raise HTTPException(400, "fichier absent du dépôt")
+    ext = src_file.suffix.lower()
+    if ext not in imp.MEDIA_EXT:
+        raise HTTPException(400, "format non pris en charge (audio ou vidéo)")
+    is_video = ext in imp.VIDEO_EXT
+
+    album = {"artist": payload.artist.strip(), "title": payload.title.strip(),
+             "date": payload.date.strip(), "venue": payload.venue.strip(),
+             "festival": payload.festival.strip()}
+
+    setlist_url = payload.setlistfm_url.strip()
+    setlist_source = "ai"
+    if payload.tracks:
+        # Pistes vérifiées dans le formulaire : prioritaires, aucune recherche.
+        tracks = [{"n": t.n or i, "title": t.title.strip(),
+                   "artist": (t.artist or None), "locked": False}
+                  for i, t in enumerate(payload.tracks, start=1) if t.title.strip()]
+        auto_setlist = not tracks
+        if not tracks:
+            tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
+        else:
+            setlist_source = "form"
+    else:
+        # Setlist officielle : URL explicite prioritaire, sinon (artiste, date).
+        setlist = None
+        try:
+            if setlist_url:
+                setlist = setlistfm.lookup_by_url(setlist_url)
+            elif album["date"]:
+                setlist = setlistfm.lookup(album["artist"], album["date"])
+        except setlistfm.SetlistUnavailable:
+            setlist = None
+        if setlist:
+            setlist_source = "setlistfm"
+            setlist_url = setlist.get("url") or setlist_url
+            tracks = [{"n": t["n"], "title": t["title"],
+                       "artist": t.get("artist"), "locked": False}
+                      for t in setlist["tracks"]]
+            auto_setlist = False
+            if not album["venue"] and setlist.get("venue"):
+                album["venue"] = setlist["venue"]
+            if not album["title"] and setlist.get("tour"):
+                album["title"] = setlist["tour"]
+        else:
+            # Setlist inconnue : piste unique provisoire, l'IA la remplacera.
+            tracks = [{"n": 1, "title": album["title"] or "Piste 1"}]
+            auto_setlist = True
+    if not album["title"]:
+        album["title"] = f"{album['artist']} — Live"
+
+    target = payload.target if payload.target in ("audio_cd", "data_disc") else "data_disc"
+    m = new_manifest(album, tracks, target=target)
+    project_dir = PROJECTS_DIR / m.slug
+    if (project_dir / "manifest.yaml").exists():
+        raise HTTPException(409, f"un album existe déjà sous ce slug ({m.slug}) — "
+                                 "modifier l'artiste ou la date")
+    m.data["auto_setlist"] = auto_setlist
+    m.data["source"]["media"] = "video" if is_video else "audio"
+    m.data["published"] = False
+    if APP_ENV != "prod":
+        m.data["origin_env"] = APP_ENV
+    m.data["meta"] = {
+        "imported_by": identity.get("username") or "",
+        "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "import_source": "upload",
+    }
+    if setlist_url:
+        m.data["meta"]["setlistfm_url"] = setlist_url
+
+    source_dir = project_dir / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # Le fichier téléversé devient le master (déplacement sur le même volume).
+        if is_video:
+            master = project_dir / m.data["source"]["master_mkv"]
+        else:
+            master = source_dir / f"master_audio{ext}"
+            m.data["source"]["master_audio"] = f"source/master_audio{ext}"
+        shutil.move(str(src_file), str(master))
+        # Extraction WAV lossless : étape commune, remplace ce que ferait download.
+        wav = project_dir / m.data["source"]["master_wav"]
+        download.extract_wav(master, wav)
+        m.set_state("download", "done")
+        m.data["source"]["duration"] = download._wav_seconds(wav)
+        m.save(project_dir / "manifest.yaml")
+    except Exception:
+        shutil.rmtree(project_dir, ignore_errors=True)
+        raise
+
+    shutil.rmtree(staging, ignore_errors=True)
+
+    # Comme create_job : on ne lance PAS la préparation ici. Le front enchaîne
+    # sur POST /api/jobs/{slug}/prepare (même parcours que l'import par lien),
+    # ce qui évite toute course sur le flux d'événements SSE.
+    return {"ok": True, "slug": m.slug, "media": m.data["source"]["media"],
+            "setlist_source": setlist_source,
+            "auto_setlist": auto_setlist, "tracks": len(tracks)}
 
 
 class ReorderIn(BaseModel):

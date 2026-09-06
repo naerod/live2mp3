@@ -88,6 +88,16 @@
   .date-field #e-date.date-invalid{border-color:#e5484d}
   .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
   .date-hint.show{display:block}
+  .title-row{display:flex;gap:8px;align-items:stretch}
+  .title-row input{flex:1}
+  .suggest-btn{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:1px solid var(--border);
+    border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap;font-size:13px}
+  .suggest-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .suggest-btn .material-symbols-outlined{font-size:18px}
+  .naming-hint{margin-top:8px;display:flex;gap:8px;padding:9px 11px;border-radius:8px;
+    background:var(--card);border:1px solid var(--border);font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .naming-hint::before{content:"info";font-family:"Material Symbols Outlined";font-size:18px;flex-shrink:0;line-height:1.4}
+  .naming-hint code{background:var(--border);padding:1px 5px;border-radius:4px;font-size:11.5px}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
@@ -191,8 +201,39 @@
   .tc-slot-hint{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;border-radius:7px;pointer-events:none}
   .tc-slot-hint .material-symbols-outlined{font-size:18px;color:#fff}
   .track-gear{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
-  .track-gear:hover{background:var(--border);color:var(--text)}
+  .track-gear:hover{background:var(--border);color:var(--fg)}
   .track-gear .material-symbols-outlined{font-size:18px}
+  /* « Re-couper cette piste » : même patron visuel que .track-gear. */
+  .track-recut{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
+  .track-recut:hover{background:var(--border);color:var(--accent)}
+  .track-recut .material-symbols-outlined{font-size:18px}
+  /* Modale de re-coupe multi-pistes (waveform + voisines + cadenas de liaison).
+     Plus large que tcv/tm car MultiTrimmer a besoin d'horizontal (3 pistes). */
+  .rc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;overflow:auto}
+  .rc-overlay.open{display:flex}
+  .rc-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 22px 22px 46px;max-width:960px;width:100%;max-height:calc(100vh - 40px);overflow-y:auto;display:flex;flex-direction:column;gap:14px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+  /* Sort le close du flux flex (sinon il s'étire à toute la largeur et
+     affiche son fond gris comme un long ovale au-dessus du titre). */
+  .rc-box>.tcv-close{position:absolute;top:12px;left:12px;width:24px;height:24px;padding:2px;background:transparent}
+  .rc-box>.tcv-close:hover{background:var(--border)}
+  .rc-box h3{margin:0;font-size:15px;font-weight:600;color:var(--fg)}
+  .rc-sub{margin:0;color:var(--muted);font-size:12.5px}
+  .rc-hint{margin:0;font-size:12.5px;color:var(--muted);line-height:1.4}
+  .rc-status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);min-height:22px}
+  .rc-status.err{color:var(--danger,#e57373)}
+  .rc-status .spin{animation:fu-spin 1s linear infinite;font-size:17px}
+  .rc-trimmer{min-height:150px}
+  .rc-trimmer.hidden{display:none}
+  .rc-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:4px;flex-wrap:wrap}
+  .rc-footer button{margin:0}
+  /* Le bouton d'application s'ouvre TOUJOURS désactivé (rien n'a encore bougé) :
+     sans état visuel il se lisait comme cliquable. Même convention que les
+     autres boutons désactivés du site (.icon-btn.mini:disabled, etc.). */
+  .rc-footer button:disabled{opacity:.45;cursor:not-allowed}
+  .rc-footer button:disabled:hover{filter:none}
+  .rc-footer .rc-spacer{flex:1}
+  .rc-changed{color:var(--muted);font-size:12px;align-self:center}
+  .rc-changed b{color:var(--accent)}
   /* Cover viewer modal */
   .tcv-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center}
   .tcv-overlay.open{display:flex}
@@ -285,7 +326,9 @@
         <h2 id="t-meta">Informations</h2>
         <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-meta-legend"></span></p>
         <div class="field-grid">
-          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span><input id="e-title" type="text"></div>
+          <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span>
+            <div class="title-row"><input id="e-title" type="text"><button type="button" class="suggest-btn" id="btn-suggest-title"><span class="material-symbols-outlined">auto_fix_high</span><span id="t-suggest">Suggérer</span></button></div>
+            <div class="naming-hint" id="naming-hint"></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
             <div class="date-field">
@@ -319,6 +362,8 @@
           <div class="fg"><label id="t-f-venue">Lieu</label><input id="e-venue" type="text"></div>
           <div class="fg"><label id="t-f-city">Ville</label><div id="e-city"></div></div>
           <div class="fg full"><label id="t-f-festival">Festival</label><div id="e-festival"></div></div>
+          <div class="fg"><label id="t-f-tour">Tournée</label><input id="e-tour" type="text"></div>
+          <div class="fg"><label id="t-f-subtitle">Sous-titre (bonus)</label><input id="e-subtitle" type="text"></div>
           <div class="fg full"><label id="t-f-src-label">Source (texte)</label><input id="e-src-label" type="text" placeholder="Diffusion TF1 du 05/06/2026…"></div>
           <div class="fg full"><label id="t-f-src-url">Source (URL)</label><input id="e-src-url" type="url" placeholder="https://…"></div>
         </div>
@@ -402,13 +447,16 @@
 <div class="toast" id="toast"></div>
 
 <script src="/static/shared/clip-trimmer.js"></script>
+<script src="/static/shared/multi-trimmer.js"></script>
 <script src="/static/social.js"></script>
 <script>
 L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();}});
 
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
-      f_venue:"Lieu",f_city:"Ville",f_festival:"Tournée/festival",f_src_label:"Source (texte)",f_src_url:"Source (URL)",
+      f_venue:"Lieu",f_city:"Ville",f_festival:"Festival",f_tour:"Tournée",f_subtitle:"Sous-titre (bonus)",suggest:"Suggérer",
+      naming_hint:'Format conseillé pour un concert : <code>Artiste - Live in Ville AAAA (Tournée - bonus)</code>. Ex. : <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Renseigne Ville, Tournée et le sous-titre, puis « Suggérer ». Les plateaux TV / compilations gardent un titre libre.',
+      f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
       fix_url:"Corriger l'URL",
@@ -461,9 +509,32 @@ const TT={
       fx_hint:"Des MP3 déjà découpés sont ajoutés à la suite de la tracklist. Le titre est lu dans les tags ID3, à défaut dans le nom du fichier — vous pourrez le corriger ensuite.",
       fx_pick:"Choisir des fichiers MP3",
       fx_uploading:n=>`Envoi de ${n} fichier${n>1?"s":""}…`,
-      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`},
+      fx_done:n=>`${n} piste${n>1?"s":""} ajoutée${n>1?"s":""}`,
+      rc_toggle:"Re-couper cette piste à la waveform",
+      rc_title:(n,title)=>`Re-couper la piste ${String(n).padStart(2,"0")}${title?" — "+title:""}`,
+      rc_sub_mono:"Concert · lecture directe du master, aucun re-téléchargement. Les pistes voisines sont affichées pour caler la jonction.",
+      rc_sub_external:"Piste externe · la source d'origine sera re-téléchargée pour vous permettre d'ajuster.",
+      rc_hint_mono:"Faites glisser les poignées pour caler les frontières. Un cadenas fermé entre deux pistes fait suivre les deux bornes ensemble (une frontière = un seul curseur) ; ouvrez-le pour introduire un gap ou un chevauchement volontaire.",
+      rc_hint_external:"Faites glisser les poignées pour ré-ajuster le rognage dans la source d'origine.",
+      rc_preparing:"Préparation de la forme d'onde…",
+      rc_downloading:"Téléchargement de la source…",
+      rc_applying:"Application de la nouvelle coupe…",
+      rc_apply:"Appliquer la nouvelle coupe",
+      rc_cancel:"Annuler",
+      rc_done:(n,names)=>`Coupe appliquée sur ${n} piste${n>1?"s":""} : ${names}`,
+      rc_changed:n=>n===0?"Aucune modification":`${n} piste${n>1?"s":""} modifiée${n>1?"s":""}`,
+      rc_err_prep:"Impossible de préparer cette piste — voir la console.",
+      rc_err_no_master:"Master indisponible : ouvrez « Ouvrir l'éditeur audio » pour le régénérer, puis relancez la re-coupe.",
+      rc_err_multi:"Fonctionnalité indisponible sur un album multi-liens — utilisez « Ouvrir l'éditeur audio ».",
+      rc_err_apply:"Application impossible.",
+      rc_lock:"Cliquez pour lier ces deux frontières",
+      rc_unlock:"Cliquez pour délier ces deux frontières",
+      rc_length:"durée",
+      rc_play:"Lire",rc_preview:"Écouter la piste"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
-      f_venue:"Venue",f_city:"City",f_festival:"Tournée/festival",f_src_label:"Source (text)",f_src_url:"Source (URL)",
+      f_venue:"Venue",f_city:"City",f_festival:"Festival",f_tour:"Tour",f_subtitle:"Subtitle (bonus)",suggest:"Suggest",
+      naming_hint:'Recommended format for a concert: <code>Artist - Live in City YYYY (Tour - bonus)</code>. E.g. <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Fill in City, Tour and the subtitle, then "Suggest". TV shows / compilations keep a free title.',
+      f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
       fix_url:"Fix the URL",
@@ -515,7 +586,28 @@ const TT={
       fx_hint:"Already-split MP3s are appended to the tracklist. The title is read from the ID3 tags, or from the filename — you can fix it afterwards.",
       fx_pick:"Choose MP3 files",
       fx_uploading:n=>`Uploading ${n} file${n>1?"s":""}…`,
-      fx_done:n=>`${n} track${n>1?"s":""} added`}
+      fx_done:n=>`${n} track${n>1?"s":""} added`,
+      rc_toggle:"Re-cut this track on the waveform",
+      rc_title:(n,title)=>`Re-cut track ${String(n).padStart(2,"0")}${title?" — "+title:""}`,
+      rc_sub_mono:"Concert · reading the master directly, no re-download. Neighbouring tracks are shown so you can line up the boundary.",
+      rc_sub_external:"External track · the original source will be re-downloaded so you can adjust.",
+      rc_hint_mono:"Drag the handles to adjust the boundaries. A closed lock between two tracks moves both sides together (a shared boundary = a single cursor); open it to introduce a deliberate gap or overlap.",
+      rc_hint_external:"Drag the handles to re-adjust the trim inside the original source.",
+      rc_preparing:"Preparing the waveform…",
+      rc_downloading:"Downloading the source…",
+      rc_applying:"Applying the new cut…",
+      rc_apply:"Apply the new cut",
+      rc_cancel:"Cancel",
+      rc_done:(n,names)=>`Cut applied on ${n} track${n>1?"s":""}: ${names}`,
+      rc_changed:n=>n===0?"No changes":`${n} track${n>1?"s":""} modified`,
+      rc_err_prep:"Could not prepare this track — see the console.",
+      rc_err_no_master:"Master unavailable: open “Open the audio editor” to regenerate it, then try again.",
+      rc_err_multi:"Not available on multi-link albums — use “Open the audio editor”.",
+      rc_err_apply:"Could not apply.",
+      rc_lock:"Click to link these two boundaries",
+      rc_unlock:"Click to unlink these two boundaries",
+      rc_length:"length",
+      rc_play:"Play",rc_preview:"Play the track"}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
@@ -543,6 +635,10 @@ function applyLang(){
   document.getElementById("t-f-venue").textContent=t.f_venue;
   document.getElementById("t-f-city").textContent=t.f_city;
   document.getElementById("t-f-festival").textContent=t.f_festival;
+  document.getElementById("t-f-tour").textContent=t.f_tour;
+  document.getElementById("t-f-subtitle").textContent=t.f_subtitle;
+  document.getElementById("t-suggest").textContent=t.suggest;
+  document.getElementById("naming-hint").innerHTML=t.naming_hint;
   // Placeholders des autocompletes (mis à jour au changement de langue).
   const acPh=(id,ph)=>{const i=document.querySelector(`#${id} input`);if(i)i.placeholder=ph;};
   acPh("e-artist",t.artist_ph);acPh("e-city",t.city_ph);acPh("e-festival",t.festival_ph);acPh("e-guest-add",t.guests_ph);
@@ -756,10 +852,19 @@ function renderTracks(){
     // sinon rien ne distingue une compilation d'un concert découpé.
     const src=tr.source&&tr.source.url
       ?`<span class="material-symbols-outlined track-src" title="${t.fu_track_src} — ${esc(tr.source.url)}">link</span>`:"";
+    // « Re-couper » : disponible quand une source ré-exploitable existe. Piste
+    // externe → source.url (fallback re-download) ; concert → master conservé,
+    // signalé par has_editor_source à l'album. Le backend renvoie 409 sur
+    // multi-liens (redirige vers l'éditeur complet), mais on cache le bouton
+    // pour les pistes externes d'un album multi-liens : trop bruyant.
+    const canRecut=(tr.source&&tr.source.url)||(!(tr.source)&&DATA&&DATA.has_editor_source);
+    const recut=canRecut
+      ?`<button class="track-recut" data-n="${tr.n}" data-i="${i}" title="${t.rc_toggle}"><span class="material-symbols-outlined">content_cut</span></button>`
+      :"";
     return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
     <input type="text" value="${esc(tr.title)}" data-i="${i}">
-    ${src}${gear}
+    ${src}${recut}${gear}
     <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
     </li>`;
   }).join("");
@@ -774,6 +879,9 @@ function renderTracks(){
       btn.addEventListener("click",()=>openTmModal(+btn.dataset.n,+btn.dataset.i));
     });
   }
+  ul.querySelectorAll(".track-recut").forEach(btn=>{
+    btn.addEventListener("click",()=>openRcModal(+btn.dataset.n,+btn.dataset.i));
+  });
   ul.querySelectorAll(".drag-handle").forEach(handle=>{
     const li=handle.closest("li");
     handle.addEventListener("dragstart",e=>{dragSrcIdx=+handle.dataset.i;e.dataTransfer.effectAllowed="move";li.style.opacity="0.4";});
@@ -1199,6 +1307,26 @@ function validateDate(){
   txt.addEventListener("input",()=>{ if(txt.classList.contains("date-invalid"))validateDate(); });
 })();
 
+// Bouton « Suggérer » : compose le titre au formalisme maison depuis les champs
+// courants (artiste, ville, année, tournée, sous-titre) — miroir de
+// backend/titles.suggest_concert_title. Le résultat n'est qu'une proposition,
+// éditable ensuite.
+function composeConcertTitle(){
+  const g=id=>(document.getElementById(id)?.value||"").trim();
+  const artist=(artistAC&&artistAC.get?artistAC.get().label:"")||g("e-artist")||"";
+  const city=(cityAC&&cityAC.get?cityAC.get().label:"")||"";
+  const year=(g("e-date").match(/(\d{4})/)||[])[1]||"";
+  const extra=[g("e-tour"),g("e-subtitle")].filter(Boolean).join(" - ");
+  let s=(artist?artist+" - ":"")+(city?("Live in "+city):"Live");
+  if(year) s+=" "+year;
+  if(extra) s+=" ("+extra+")";
+  return s.trim();
+}
+document.getElementById("btn-suggest-title").onclick=()=>{
+  document.getElementById("e-title").value=composeConcertTitle();
+  document.getElementById("e-title").focus();
+};
+
 // Save all
 document.getElementById("save-all").onclick=async()=>{
   const aPick=artistAC?artistAC.get():{id:"",label:""};
@@ -1208,6 +1336,8 @@ document.getElementById("save-all").onclick=async()=>{
     title:document.getElementById("e-title").value.trim(),
     date:document.getElementById("e-date").value.trim(),
     venue:document.getElementById("e-venue").value.trim(),
+    tour:document.getElementById("e-tour").value.trim(),
+    subtitle:document.getElementById("e-subtitle").value.trim(),
     city:(cPick.label||"").trim(),city_id:cPick.id||"",
     festival:(fPick.label||"").trim(),festival_id:fPick.id||"",
     guests:guests.map(g=>({id:String(g.id),name:g.name})),
@@ -1377,6 +1507,217 @@ async function saveTmModal(){
   }else toast("Erreur",true);
 }
 
+// ── Re-couper une piste avec ses voisines ─────────────────────────────────
+// Ouvre une modale MultiTrimmer (waveform 3 pistes + cadenas par frontière
+// partagée, cf. frontend/shared/multi-trimmer.js). L'endpoint prep renvoie :
+//   - mono : {tracks:[N-1?, N, N+1?], boundaries:[{linked}...],
+//             ext_start, duration}
+//   - external : {duration, cur_start, cur_end}
+// Multi-liens renvoie 409 avant même le sondage (traité comme erreur).
+let RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,tracks:null};
+function rcEl(id){return document.getElementById(id);}
+function rcStatus(msg,{err=false,spin=false}={}){
+  const el=rcEl("rc-status");
+  if(!msg){el.classList.remove("err");el.innerHTML="";return;}
+  el.classList.toggle("err",err);
+  const ico=err?"error":(spin?"progress_activity":"check_circle");
+  el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
+  el.lastChild.textContent=msg;
+}
+// Chaque ouverture de modale incrémente RC.gen : la réponse d'une préparation
+// lancée pour une ouverture précédente (onglet refermé avant la fin de l'appel)
+// est ignorée au lieu de repeupler une modale fermée et d'y lancer un sondage.
+let RC_GEN=0;
+function rcReset(){
+  if(RC.poll){clearInterval(RC.poll);RC.poll=null;}
+  if(RC._pollChanged){clearInterval(RC._pollChanged);RC._pollChanged=null;}
+  if(RC.inst){try{RC.inst.destroy();}catch(e){}RC.inst=null;}
+  RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,tracks:null,gen:++RC_GEN};
+  rcEl("rc-trimmer").classList.add("hidden");
+  rcEl("rc-trimmer").innerHTML="";
+  rcEl("rc-apply-btn").disabled=true;
+  rcEl("rc-changed").textContent="";
+  rcStatus("");
+}
+function closeRc(e){if(e&&e.target!==rcEl("rc-overlay"))return;closeRcModal();}
+function closeRcModal(){rcEl("rc-overlay").classList.remove("open");rcReset();}
+
+function openRcModal(n,i){
+  rcReset();
+  const t=TT[L()];
+  const gen=RC.gen;
+  RC.n=n;RC.i=i;
+  const tr=tracks[i];
+  rcEl("rc-title").textContent=t.rc_title(n,tr?tr.title:"");
+  rcEl("rc-sub").textContent="";
+  rcEl("rc-hint").textContent="";
+  rcEl("t-rc-cancel").textContent=t.rc_cancel;
+  rcEl("t-rc-apply").textContent=t.rc_apply;
+  rcEl("rc-apply-btn").disabled=true;
+  rcEl("rc-overlay").classList.add("open");
+  rcStatus(t.rc_preparing,{spin:true});
+
+  fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${n}/recut/prep`,{
+    method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
+  }).then(async r=>{
+    const d=await r.json().catch(()=>({}));
+    if(gen!==RC.gen)return;   // modale refermée entre-temps
+    if(!r.ok){
+      // Messages dédiés pour les 2 cas identifiables (master purgé, multi-liens),
+      // messages génériques sinon (403/500/…).
+      if(r.status===409){
+        const msg=(d.detail||"").indexOf("multi-lien")>=0?t.rc_err_multi:t.rc_err_no_master;
+        rcStatus(msg,{err:true});return;
+      }
+      throw new Error(d.detail||`HTTP ${r.status}`);
+    }
+    RC.token=d.token;RC.kind=d.kind;
+    rcEl("rc-sub").textContent=RC.kind==="external"?t.rc_sub_external:t.rc_sub_mono;
+    rcEl("rc-hint").textContent=RC.kind==="external"?t.rc_hint_external:t.rc_hint_mono;
+    if(RC.kind==="external"){rcStatus(t.rc_downloading,{spin:true});}
+    rcPollPrep();
+  }).catch(e=>{
+    if(gen!==RC.gen)return;
+    console.warn("recut prep:",e);
+    rcStatus(t.rc_err_prep,{err:true});
+  });
+}
+
+function rcPollPrep(){
+  const t=TT[L()];
+  RC.poll=setInterval(async()=>{
+    if(!RC.token)return;
+    let job;
+    try{
+      const r=await fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}`);
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      job=await r.json();
+    }catch(e){return;}
+    if(job.state==="error"){
+      clearInterval(RC.poll);RC.poll=null;
+      rcStatus(job.error||t.rc_err_prep,{err:true});
+      return;
+    }
+    if(job.state==="done"){
+      clearInterval(RC.poll);RC.poll=null;
+      rcStatus("");
+      rcMountTrimmer(job);
+      return;
+    }
+    if(RC.kind==="external"&&job.stage==="download"&&job.pct){
+      rcStatus(t.rc_downloading+" "+Math.round(job.pct)+" %",{spin:true});
+    }
+  },500);
+}
+
+function rcMountTrimmer(job){
+  const t=TT[L()];
+  const box=rcEl("rc-trimmer");
+  box.classList.remove("hidden");
+  const duration=+job.duration||0;
+  RC.tracks=job.tracks||null;
+
+  if(RC.kind==="external"){
+    // Une piste externe n'a pas de voisines : on retombe sur le ClipTrimmer
+    // classique (patron déjà éprouvé, pas de sur-ingénierie).
+    let s0=+job.cur_start||0,e0=+job.cur_end||duration;
+    RC.inst=new ClipTrimmer(box,{
+      waveformUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/waveform.dat`,
+      audioUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/audio`,
+      duration,start:s0,end:e0,
+      labels:{play:t.rc_play,preview:t.rc_preview,set_start:t.ct_set_start,
+              set_end:t.ct_set_end,length:t.rc_length},
+      onChange:()=>rcRefreshApply()
+    });
+    // getEdits absent sur ClipTrimmer : on émule via getStart/getEnd + delta origine.
+    RC._extOrigin={start:s0,end:e0};
+    rcRefreshApply();
+    return;
+  }
+  // Mono : composant MultiTrimmer avec les 3 pistes + cadenas.
+  RC.inst=new MultiTrimmer(box,{
+    waveformUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/waveform.dat`,
+    audioUrl:`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut/${RC.token}/audio`,
+    duration,
+    tracks:job.tracks||[],
+    boundaries:job.boundaries||[],
+    targetN:RC.n,
+    labels:{play:t.rc_play,preview:t.rc_preview,length:t.rc_length,
+            lock:t.rc_lock,unlock:t.rc_unlock}
+  });
+  // MultiTrimmer ne notifie pas de changement (les handles n'ont pas de
+  // callback à ce niveau ; on rafraîchit périodiquement le compteur).
+  RC._pollChanged=setInterval(rcRefreshApply,400);
+  rcRefreshApply();
+}
+
+function rcRefreshApply(){
+  if(!RC.inst){return;}
+  const t=TT[L()];
+  let edits=[];
+  if(RC.kind==="external"){
+    const s=RC.inst.getStart(),e=RC.inst.getEnd();
+    if(Math.abs(s-RC._extOrigin.start)>0.001||Math.abs(e-RC._extOrigin.end)>0.001){
+      edits=[{n:RC.n,start:s,end:e}];
+    }
+  }else{
+    edits=RC.inst.getEdits();
+  }
+  rcEl("rc-apply-btn").disabled=(edits.length===0)||(RC.kind!=="external"&&!edits.some(e=>e.n===RC.n));
+  rcEl("rc-changed").textContent=t.rc_changed(edits.length);
+  RC._pendingEdits=edits;
+}
+
+async function applyRc(){
+  if(!RC.token||!RC.inst)return;
+  const t=TT[L()];
+  const btn=rcEl("rc-apply-btn");
+  btn.disabled=true;
+  rcStatus(t.rc_applying,{spin:true});
+  try{
+    let body;
+    if(RC.kind==="external"){
+      body={token:RC.token,start:RC.inst.getStart(),end:RC.inst.getEnd()};
+    }else{
+      const edits=RC._pendingEdits||RC.inst.getEdits();
+      if(!edits.some(e=>e.n===RC.n)){
+        throw new Error("la piste ciblée n'a pas été modifiée");
+      }
+      body={token:RC.token,edits};
+    }
+    const r=await fetch(`/api/albums/${encodeURIComponent(SLUG)}/tracks/${RC.n}/recut`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
+    // Recharge le manifest pour refléter les timecodes sans perdre les saisies.
+    try{
+      const rm=await fetch(`/api/albums/${encodeURIComponent(SLUG)}`);
+      if(rm.ok){
+        const dm=await rm.json();
+        DATA=dm;
+        tracks=(dm.tracks||[]).map(x=>({...x}));
+        renderTracks();
+      }
+    }catch(e){}
+    // Message récap : noms des pistes modifiées (issu du manifest rechargé).
+    // External renvoie {file, duration} (1 seule piste), mono renvoie
+    // {edited:[{n,file,start,end}]} (1 à 3 pistes selon les cadenas).
+    const editedN=RC.kind==="external"?[RC.n]:(d.edited||[]).map(x=>x.n);
+    const names=editedN.map(n=>{
+      const tr=tracks.find(x=>x.n===n);
+      return tr?tr.title:("#"+n);
+    }).join(", ");
+    toast(t.rc_done(editedN.length,names));
+    if(RC._pollChanged){clearInterval(RC._pollChanged);RC._pollChanged=null;}
+    closeRcModal();
+  }catch(e){
+    console.warn("recut apply:",e);
+    rcStatus(e.message||t.rc_err_apply,{err:true});
+    btn.disabled=false;
+  }
+}
+
 async function load(){
   DATA=await(await fetch(`/api/albums/${SLUG}`)).json();
   refreshScopeRow();
@@ -1385,6 +1726,8 @@ async function load(){
   document.getElementById("e-title").value=a.title||"";
   document.getElementById("e-date").value=a.date||"";
   document.getElementById("e-venue").value=a.venue||"";
+  document.getElementById("e-tour").value=a.tour||"";
+  document.getElementById("e-subtitle").value=a.subtitle||"";
   const tt=TT[L()];
   // Artiste principal : autocomplete Deezer, texte libre autorisé (un artiste
   // absent de Deezer reste enregistrable, simplement non lié à une page).
@@ -1500,6 +1843,23 @@ applyLang();load();
       </div>
     </div>
   </div>
+  <!-- Recut modal : re-couper une piste avec ses 2 voisines + cadenas -->
+  <div class="rc-overlay" id="rc-overlay" onclick="closeRc(event)">
+    <div class="rc-box">
+      <button class="tcv-close" onclick="closeRcModal()"><span class="material-symbols-outlined">close</span></button>
+      <h3 id="rc-title"></h3>
+      <p class="rc-sub" id="rc-sub"></p>
+      <p class="rc-hint" id="rc-hint"></p>
+      <div class="rc-status" id="rc-status"></div>
+      <div class="rc-trimmer hidden" id="rc-trimmer"></div>
+      <div class="rc-footer">
+        <span class="rc-changed" id="rc-changed"></span>
+        <span class="rc-spacer"></span>
+        <button class="btn-secondary" onclick="closeRcModal()" id="t-rc-cancel"></button>
+        <button class="btn-primary" onclick="applyRc()" id="rc-apply-btn"><span id="t-rc-apply"></span></button>
+      </div>
+    </div>
+  </div>
   <!-- Track meta modal -->
   <div class="tm-overlay" id="tm-overlay" onclick="closeTmv(event)">
     <div class="tm-box">
@@ -1509,7 +1869,7 @@ applyLang();load();
         <label id="t-tm-title-lbl"></label>
         <input type="text" id="tm-title-inp">
         <label id="t-tm-artist-lbl"></label>
-        <input type="text" id="tm-artist-inp" id="t-tm-artist-ph">
+        <input type="text" id="tm-artist-inp">
       </div>
       <div class="tm-footer">
         <button class="btn-secondary" onclick="closeTmModal()" id="t-tm-cancel"></button>

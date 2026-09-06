@@ -32,6 +32,16 @@
     font-size:12px;font-weight:600;color:#e0736f;border:1.5px dashed #e0736f;
     border-radius:999px;padding:2px 10px;margin-left:8px}
   .unpub-chip .material-symbols-outlined{font-size:14px}
+  /* Badge de statut unique et prioritaire (gestionnaire) — pastille pleine,
+     couleur = sévérité décroissante, cohérent avec la liste. */
+  .status-chip{display:inline-flex;align-items:center;gap:4px;vertical-align:3px;
+    font-size:11.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+    color:#fff;border-radius:999px;padding:3px 11px;margin-left:8px}
+  .status-chip .material-symbols-outlined{font-size:14px}
+  .status-chip.st-draft{background:#c93c3c}
+  .status-chip.st-unpublished{background:#c78a1e}
+  .status-chip.st-published_audio{background:#2f8a5f}
+  .status-chip.st-published_av{background:#2e8496}
   .al-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--fg);font-size:13px;margin-top:2px}
   .al-meta-item{display:inline-flex;align-items:center;gap:5px}
   .al-meta-item .material-symbols-outlined{font-size:16px;color:var(--muted)}
@@ -147,6 +157,42 @@
   .cr:hover .cr-upload-overlay{opacity:1}
   .cr-upload-overlay .material-symbols-outlined{font-size:20px;color:#fff}
   .cr-upload-overlay span:last-child{font-size:12px;color:#fff;font-weight:600}
+  /* ── Vidéo du concert + pop-up visuels Jellyfin ── */
+  .sec-video h3{display:flex;align-items:center;gap:6px}
+  .vid-thumb{aspect-ratio:16/9;border-radius:12px;background:#000 center/cover no-repeat;
+    position:relative;cursor:pointer;overflow:hidden;border:1px solid var(--border);max-width:640px}
+  .vid-thumb .vid-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.25);transition:background .15s}
+  .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
+  .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+  .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
+  .vm-box{max-width:860px;width:94%}
+  .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 14px}
+  .vm-dl-row{margin-bottom:16px}
+  .vm-dl-mp4{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;
+    background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
+  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .vm-slot{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)}
+  .vm-slot-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+  .vm-auto{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
+  .vm-auto .material-symbols-outlined{font-size:13px}
+  .vm-count{margin-left:auto;color:var(--muted);font-size:11px}
+  .vm-slot-art{position:relative;border-radius:8px;overflow:hidden;background:var(--border);
+    display:flex;align-items:center;justify-content:center}
+  .vm-slot-art img{width:100%;height:100%;object-fit:cover;display:block}
+  .vm-slot-ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:11px;padding:12px;text-align:center}
+  .vm-slot-ph .material-symbols-outlined{font-size:28px}
+  .vm-slot-imp{position:absolute;inset:0;border:0;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:0;transition:opacity .15s;font-size:12px}
+  .vm-slot-art:hover .vm-slot-imp{opacity:1}
+  .vm-slot-imp .material-symbols-outlined{font-size:26px}
+  .vm-slot-actions{display:flex;gap:6px;margin-top:8px}
+  .vm-act{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none}
+  .vm-act:hover{border-color:var(--accent);color:var(--accent)}
+  .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
+  .vm-act .material-symbols-outlined{font-size:18px}
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
     color:var(--muted);cursor:pointer;font-family:inherit;
@@ -288,6 +334,16 @@
   </div>
 </div>
 
+<!-- Pop-up « Vidéo du concert » : download MP4 + visuels Jellyfin (bannière /
+     poster / miniature) — import, download, tri auto, épinglage, suppression. -->
+<div id="vm" class="cm hidden">
+  <div class="cm-box vm-box">
+    <button class="icon-btn icon-only cm-close" id="vm-close"><span class="material-symbols-outlined">close</span></button>
+    <div id="vm-body"></div>
+  </div>
+</div>
+<input type="file" id="vm-file" accept="image/jpeg,image/png,image/webp" style="display:none">
+
 <!-- Import d'une pochette (+ tray card optionnelle) -->
 <input type="file" id="tcv2-file" accept="image/jpeg,image/png,image/webp" style="display:none">
 <div id="up" class="up hidden">
@@ -330,6 +386,8 @@ const T={
       dltrack:"Télécharger cette piste",lockdl:"Connectez-vous pour télécharger",
       not_found:"Album introuvable.",
       unpublished:"Dépublié",
+      status_draft:"Brouillon",status_unpublished:"Non publié",
+      status_published_audio:"Publié (MP3)",status_published_av:"Publié (MP3 + MP4)",
       setlist_src:"Setlist :",
       date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
       festival:"Tournée/festival",
@@ -360,6 +418,8 @@ const T={
       dltrack:"Download this track",lockdl:"Log in to download",
       not_found:"Album not found.",
       unpublished:"Unpublished",
+      status_draft:"Draft",status_unpublished:"Unpublished",
+      status_published_audio:"Published (MP3)",status_published_av:"Published (MP3 + MP4)",
       setlist_src:"Setlist:",
       date_unknown:"Unknown date",venue_unknown:"Unknown venue",
       festival:"Tour/festival",
@@ -529,7 +589,13 @@ function renderAlbum(d){
       <div class="al-cover-col" id="cover-col"></div>
       <div class="al-info">
         ${a.artist?`<div class="al-artist">${entLink('artist',a.artist,a.artist)}</div>`:''}
-        <h1 class="al-title">${L2M.esc(a.title||slug)}${d.published===false?` <span class="unpub-chip"><span class="material-symbols-outlined">visibility_off</span>${t('unpublished')}</span>`:''}</h1>
+        <h1 class="al-title">${L2M.esc(a.title||slug)}${(()=>{
+          // Badge de statut unique et prioritaire — gestionnaire seulement.
+          if(!ME.is_gestionnaire||!d.status)return '';
+          const IC={draft:'draft',unpublished:'visibility_off',published_audio:'graphic_eq',published_av:'movie'};
+          if(!IC[d.status])return '';
+          return ` <span class="status-chip st-${d.status}"><span class="material-symbols-outlined">${IC[d.status]}</span>${t('status_'+d.status)}</span>`;
+        })()}</h1>
         <div class="al-meta">
           <span class="al-meta-item${a.date?'':' muted-placeholder'}"><span class="material-symbols-outlined">calendar_month</span>${L2M.esc(dateStr)}</span>
           <span class="al-meta-item${a.venue?'':' muted-placeholder'}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink('venue',a.venue,venueStr):L2M.esc(venueStr)}</span>
@@ -546,6 +612,9 @@ function renderAlbum(d){
       </div>
     </div>
     ${dlHtml?`<div class="sec sec-dl"><h3>${t('downloads')}</h3>${dlHtml}</div>`:''}
+    ${d.has_video_full?`<div class="sec sec-video"><h3><span class="material-symbols-outlined">movie</span> ${VT('video_h')}</h3>
+      <div class="vid-thumb" id="vid-thumb" title="${VT('video_open')}"><span class="vid-play"><span class="material-symbols-outlined">play_circle</span></span></div>
+      <p class="vid-sub">${VT('video_sub')}</p></div>`:''}
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
@@ -557,6 +626,7 @@ function renderAlbum(d){
   document.addEventListener('click',()=>document.querySelectorAll('.dl-menu.open').forEach(m=>m.classList.remove('open')));
   initSocialActions();
   renderCarousel();
+  if(d.has_video_full)initVideo(d);
   L2M.comments(document.getElementById('sec-comments'),slug);
   if(d.per_track_covers)initTrackCoverInteract(slug,d.track_covers||[]);
 }
@@ -670,13 +740,12 @@ const curCover=()=>{const s=curSlide();return s?coverById(s.id):null;};
 
 function footerHtml(c,kind){
   if(!c)return `<div class="cr-footer" style="color:var(--muted);font-size:12px">${t('cv_none')}</div>`;
-  // Pochette auto (miniature d'import) : pas d'entrée covers → créditée
-  // « Pochette automatique », au même emplacement que « Pochette par X ».
-  if(!c.id){
-    if(COVER_AUTO&&kind==='cover')
-      return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
-    return `<div class="cr-footer"></div>`;
-  }
+  // Pochette auto (miniature d'import) : créditée « Pochette automatique », au
+  // même emplacement que « Pochette par X ». Vaut pour la pseudo-cover manifest
+  // (id:0, COVER_AUTO) comme pour une vraie ligne marquée `auto`.
+  if(kind==='cover'&&((!c.id&&COVER_AUTO)||c.auto))
+    return `<div class="cr-footer"><span class="cr-auto"><span class="material-symbols-outlined">auto_awesome</span>${t('cover_auto_badge')}</span></div>`;
+  if(!c.id)return `<div class="cr-footer"></div>`;
   const poster=L2M.poster(
     {username:c.username,display_name:c.display_name,avatar:c.avatar}, t('cv_by'));
   return `<div class="cr-footer">${poster}</div>`;
@@ -717,8 +786,14 @@ function renderCarousel(){
     ${footerHtml(c,kind)}
   `;
 
-  if(c&&c.id&&!(kind==='traycard'&&c.traycard_kind==='pdf'))
-    document.getElementById('cr-art').onclick=()=>openCoverModal(c.id);
+  // Clic sur la pochette : vraie ligne sociale → fiche pochette (agrandir,
+  // épingler, commenter) ; pseudo-cover manifest (id:0, fréquente quand la base
+  // sociale de l'environnement n'a pas la ligne) → au moins l'agrandissement.
+  const art=document.getElementById('cr-art');
+  if(art&&c&&!(kind==='traycard'&&c.traycard_kind==='pdf')){
+    if(c.id)art.onclick=()=>openCoverModal(c.id);
+    else if(c.cover_url)art.onclick=()=>openLbx('image',c.cover_url);
+  }
   const prev=document.getElementById('cr-prev'), next=document.getElementById('cr-next');
   if(prev)prev.onclick=()=>go(-1);
   if(next)next.onclick=()=>go(1);
@@ -747,6 +822,77 @@ async function toggleCoverLike(id){
     if(!document.getElementById('cm').classList.contains('hidden'))paintModal(id);
   }catch(e){}
 }
+
+// ═══ Vidéo du concert : download MP4 + visuels Jellyfin ═══════════════════
+// Réutilise les endpoints /images/{kind} (mêmes tri auto / épinglage / suppression
+// que les covers). 3 types au niveau album : miniature, bannière, poster.
+const VLANG={
+  fr:{video_h:"Vidéo du concert",video_open:"Ouvrir la vidéo",
+      video_sub:"Concert complet + visuels Jellyfin (bannière, poster, miniature).",
+      dl_mp4:"Télécharger la vidéo (MP4)",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
+      imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",del:"Supprimer",
+      empty:"Aucune image — importez-en une",auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?"},
+  en:{video_h:"Concert video",video_open:"Open video",
+      video_sub:"Full concert + Jellyfin artwork (banner, poster, thumbnail).",
+      dl_mp4:"Download video (MP4)",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
+      imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",del:"Delete",
+      empty:"No image — import one",auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?"}
+};
+function VT(k){const l=(L2M.getLang?L2M.getLang():'fr');const d=VLANG[l]||VLANG.fr;return d[k]!==undefined?d[k]:VLANG.fr[k];}
+const VM_KINDS=['thumbnail','banner','poster'];
+const VM_ASPECT={thumbnail:'16/9',banner:'1000/185',poster:'2/3'};
+let VM_DATA={},VM_UP_KIND=null;
+
+async function initVideo(d){
+  const th=document.getElementById('vid-thumb');
+  if(!th)return;
+  th.onclick=()=>openVideoModal();
+  try{const r=await fetch(`/api/social/albums/${slug}/images/thumbnail`).then(r=>r.json());
+    const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_url})`;}catch(e){}
+}
+const vm=document.getElementById('vm');
+document.getElementById('vm-close').onclick=()=>closeVm();
+vm.onclick=e=>{if(e.target===vm)closeVm();};
+function closeVm(){vm.classList.remove('show');setTimeout(()=>vm.classList.add('hidden'),180);}
+async function openVideoModal(){await loadVmImages();paintVm();vm.classList.remove('hidden');requestAnimationFrame(()=>vm.classList.add('show'));}
+async function loadVmImages(){await Promise.all(VM_KINDS.map(async k=>{
+  try{VM_DATA[k]=(await fetch(`/api/social/albums/${slug}/images/${k}`).then(r=>r.json())).covers||[];}catch(e){VM_DATA[k]=[];}}));}
+function vmSlotHtml(kind){
+  const list=VM_DATA[kind]||[],win=list[0]||null,g=ME.is_gestionnaire;
+  const img=win?`<img src="${win.cover_url}" alt="">`:`<span class="vm-slot-ph"><span class="material-symbols-outlined">image</span><span>${VT('empty')}</span></span>`;
+  const imp=ME.authenticated?`<button class="vm-slot-imp" data-imp="${kind}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${VT('imp')}</span></button>`:'';
+  const dl=win?`<a class="vm-act" href="/download/cover/${win.id}" title="${VT('dl')}"><span class="material-symbols-outlined">download</span></a>`:'';
+  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined">push_pin</span></button>`:'';
+  const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" title="${VT('del')}"><span class="material-symbols-outlined">delete</span></button>`:'';
+  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined">auto_awesome</span>${VT('auto')}</span>`:'';
+  const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
+  return `<div class="vm-slot"><div class="vm-slot-head"><b>${VT('k_'+kind)}</b>${badge}${cnt}</div>
+    <div class="vm-slot-art" style="aspect-ratio:${VM_ASPECT[kind]}">${img}${imp}</div>
+    <div class="vm-slot-actions">${dl}${pin}${del}</div></div>`;
+}
+function paintVm(){
+  const dlBtn=ME.authenticated
+    ?`<a class="vm-dl-mp4" href="/download/${slug}/video"><span class="material-symbols-outlined">movie</span> ${VT('dl_mp4')}</a>`
+    :`<span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span>`;
+  document.getElementById('vm-body').innerHTML=`
+    <h3 class="vm-title"><span class="material-symbols-outlined">movie</span> ${VT('video_h')}</h3>
+    <div class="vm-dl-row">${dlBtn}</div>
+    <div class="vm-slots">${VM_KINDS.map(vmSlotHtml).join('')}</div>`;
+  document.querySelectorAll('#vm-body [data-imp]').forEach(b=>b.onclick=()=>{VM_UP_KIND=b.dataset.imp;document.getElementById('vm-file').click();});
+  document.querySelectorAll('#vm-body [data-pin]').forEach(b=>b.onclick=()=>vmPin(b.dataset.pin));
+  document.querySelectorAll('#vm-body [data-del]').forEach(b=>b.onclick=()=>vmDel(b.dataset.del));
+  document.querySelectorAll('#vm-body .vm-slot-art img').forEach(im=>{im.style.cursor='zoom-in';im.onclick=()=>openLbx('image',im.src);});
+}
+document.getElementById('vm-file').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f||!VM_UP_KIND)return;
+  const fd=new FormData();fd.append('cover',f);
+  try{const r=await fetch(`/api/social/albums/${slug}/images/${VM_UP_KIND}`,{method:'POST',body:fd});
+    if(r.ok){VM_DATA[VM_UP_KIND]=(await r.json()).covers||[];paintVm();vmSyncThumb();}
+    else alert('Erreur ('+r.status+')');}catch(e){alert('Erreur réseau');}
+};
+async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
+async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
+function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_url})`:'';}
 
 // ── Modale d'une pochette ────────────────────────────────────────────────
 const cm=document.getElementById('cm');
@@ -996,7 +1142,7 @@ async function loadVersion(){
     const cls=v.env==="prod"?"":"env-preprod";
     const commit=v.commit?` · ${v.commit}`:"";
     const el=document.getElementById("site-foot");
-    if(el)el.innerHTML=`<span class="badge ${cls}">v${v.version} · ${v.env}${commit}</span>`;
+    if(el)el.innerHTML=`<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
   }catch(e){}
 }
 loadPage();

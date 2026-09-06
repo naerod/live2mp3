@@ -435,7 +435,7 @@ def register_thumbnail_cover(slug: str, thumb_url: str, username: str) -> int | 
         _ensure_profile(conn, username)
         cur = conn.execute(
             "INSERT INTO covers(slug, username, file_key, cover_ext, traycard_ext, "
-            "caption, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?)",
+            "caption, auto, created_at, updated_at) VALUES(?,?,?,?,?,?,1,?,?)",
             (slug, username, key, ext, "", "", now, now),
         )
         cover_id = cur.lastrowid

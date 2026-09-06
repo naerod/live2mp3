@@ -82,6 +82,13 @@ const Naerod = (function () {
   };
   function init(cfg) { Object.assign(CFG, cfg || {}); _me = null; return Naerod; }
 
+  /* ── Registre des panels flottants (profil, notifs…) ───────────────── */
+  // Chaque panel s'enregistre ici à la création. Avant de s'ouvrir, il appelle
+  // _closeAll(self) pour fermer les autres — évite les superpositions.
+  const _panels = [];
+  function _registerPanel(closeFn) { _panels.push(closeFn); }
+  function _closeAll(except) { _panels.forEach((fn) => { if (fn !== except) fn(); }); }
+
   const t = (k) => (TXT[CFG.lang()] || TXT.fr)[k] || (TXT.fr[k] || k);
 
   /* ── Utilitaires ───────────────────────────────────────────────────── */
@@ -223,7 +230,14 @@ const Naerod = (function () {
     refresh();
     mountEl._refresh = refresh;
 
-    trigger.onclick = (e) => { e.stopPropagation(); mountEl.classList.toggle("open"); };
+    const _closeProfile = () => mountEl.classList.remove("open");
+    _registerPanel(_closeProfile);
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      const opening = !mountEl.classList.contains("open");
+      if (opening) _closeAll(_closeProfile);
+      mountEl.classList.toggle("open", opening);
+    };
     document.addEventListener("click", (e) => {
       if (!mountEl.contains(e.target)) mountEl.classList.remove("open");
     });
@@ -416,9 +430,12 @@ const Naerod = (function () {
       loaded = true;
     }
 
+    const _closeNotifs = () => { mountEl.classList.remove("open"); pop.hidden = true; };
+    _registerPanel(_closeNotifs);
     trigger.onclick = async (e) => {
       e.stopPropagation();
       const opening = !mountEl.classList.contains("open");
+      if (opening) _closeAll(_closeNotifs);
       mountEl.classList.toggle("open", opening);
       pop.hidden = !opening;
       if (opening && !loaded) await loadPop();

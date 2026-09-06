@@ -351,7 +351,7 @@ def _wait_prep(client, slug, token, timeout=60.0):
 
 def test_prep_clip_produces_waveform_and_preview(api):
     """La préparation télécharge la source une fois, en sort une waveform
-    (en-tête binaire audiowaveform v2) et un MP3 de lecture."""
+    (en-tête binaire audiowaveform v1) et un MP3 de lecture."""
     client, project = api
     slug = project.name
     r = client.post(f"/api/albums/{slug}/tracks/prep-clip", headers=GEST,
@@ -367,7 +367,7 @@ def test_prep_clip_produces_waveform_and_preview(api):
     assert wf.status_code == 200
     import struct
     version = struct.unpack("<i", wf.content[:4])[0]
-    assert version == 2, "en-tête waveform.dat inattendu"
+    assert version == 1, "en-tête waveform.dat inattendu"
 
     au = client.get(f"/api/albums/{slug}/tracks/prep-clip/{token}/audio",
                     headers=GEST)

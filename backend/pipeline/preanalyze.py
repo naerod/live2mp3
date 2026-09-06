@@ -1,7 +1,7 @@
 """Stage 2 — Pré-analyse.
 
-2a. waveform.dat via bbc/audiowaveform (-b 8, binaire) ; fallback Python au
-    même format si le binaire est absent (tests hors Docker).
+2a. waveform.dat via bbc/audiowaveform (-b 8, binaire, format v1) ; fallback
+    Python au même format v1 si le binaire est absent (tests hors Docker).
 2b. Détection IA des frontières :
     - transcription faster-whisper (GPU auto via nvidia-smi, fallback CPU medium)
     - silencedetect ffmpeg
@@ -41,9 +41,17 @@ def generate_waveform(master_wav: Path, out_dat: Path,
 
 def _waveform_fallback(master_wav: Path, out_dat: Path,
                        pixels_per_second: int, bits: int) -> Path:
-    """Reproduit le format binaire audiowaveform v2 en pur Python.
+    """Reproduit le format binaire audiowaveform **v1** en pur Python.
 
-    Header (little-endian) : int32 version=2, uint32 flags (bit0=1 -> 8 bits),
+    Le binaire BBC (`audiowaveform` 1.10.x) écrit un fichier de version 1 :
+    header de 20 octets, sans champ `channels`. Le fallback DOIT produire
+    exactement le même format, sinon le même `waveform.dat` se lit
+    différemment selon que le binaire était présent ou non — et le parseur
+    front (`clip-trimmer.js` / `multi-trimmer.js`) saute 24 octets pour une
+    v2, donc un en-tête v2 de 20 octets décalait toute la forme d'onde de
+    4 octets (bug 2026-09-06).
+
+    Header (little-endian) : int32 version=1, uint32 flags (bit0=1 -> 8 bits),
     int32 sample_rate, int32 samples_per_pixel, int32 length (nb paires).
     Données : paires min/max (int8 si 8 bits, sinon int16).
     """
@@ -72,7 +80,7 @@ def _waveform_fallback(master_wav: Path, out_dat: Path,
 
     with out_dat.open("wb") as f:
         flags = 1 if is8 else 0
-        f.write(struct.pack("<iIiii", 2, flags, sample_rate,
+        f.write(struct.pack("<iIiii", 1, flags, sample_rate,
                             samples_per_pixel, n_pairs))
         for p in range(n_pairs):
             chunk = samples[p * samples_per_pixel:(p + 1) * samples_per_pixel]
