@@ -212,9 +212,11 @@ def _propagate_images_to_jellyfin(slug: str, m) -> None:
             for kind in IMAGE_KINDS:
                 suffix = JELLYFIN_IMG_SUFFIX[kind]
                 # Purge des anciens sidecars de ce type (toutes extensions).
-                for old in vfdir.iterdir():
+                # `list(...)` : on supprime pendant le parcours, il faut donc
+                # matérialiser l'inventaire avant de toucher au répertoire.
+                for old in list(vfdir.iterdir()):
                     if old.name.startswith(f"{stem}{suffix}."):
-                        old.unlink()
+                        old.unlink(missing_ok=True)
                 win = top_cover(conn, slug, kind)
                 if win:
                     src = cover_file(slug, win["file_key"], win["cover_ext"], kind)
@@ -573,6 +575,11 @@ async def set_traycard(cover_id: int, traycard: UploadFile = File(...),
         row = _get_cover(conn, cover_id)
         if not _may_edit(row, identity):
             raise HTTPException(403, "pochette d'un autre utilisateur")
+        # Une tray card n'a de sens que sur une pochette d'album : sur une
+        # bannière/poster/miniature, elle serait invisible et le classement
+        # recalculé porterait sur la mauvaise collection.
+        if row["kind"] != "cover":
+            raise HTTPException(409, "tray card réservée aux pochettes d'album")
         data, ext = await _read_upload(
             traycard, TRAYCARD_EXTS, TRAYCARD_MAX_BYTES, "tray card"
         )
@@ -596,6 +603,8 @@ def delete_traycard(cover_id: int, identity: dict = Depends(require_user)) -> di
         row = _get_cover(conn, cover_id)
         if not _may_edit(row, identity):
             raise HTTPException(403, "pochette d'un autre utilisateur")
+        if row["kind"] != "cover":
+            raise HTTPException(409, "tray card réservée aux pochettes d'album")
         if row["traycard_ext"]:
             traycard_file(row["slug"], row["file_key"], row["traycard_ext"]).unlink(missing_ok=True)
         conn.execute(

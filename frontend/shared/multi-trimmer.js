@@ -194,7 +194,11 @@
     var map = { play: L.play || "Lire", preview: L.preview || "Écouter la piste",
                 legend: L.legend || "" };
     wrap.querySelectorAll("[data-t]").forEach(function (el) {
-      el.textContent = map[el.getAttribute("data-t")] || "";
+      var txt = map[el.getAttribute("data-t")] || "";
+      el.textContent = txt;
+      // Sans libellé fourni (la légende est facultative), on masque le nœud
+      // plutôt que de laisser un élément vide occuper une ligne de flux.
+      el.hidden = !txt;
     });
   };
 

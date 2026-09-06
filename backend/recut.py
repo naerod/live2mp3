@@ -365,18 +365,31 @@ def recut_prep(slug: str, n: int,
     return {"ok": True, "token": token, "kind": kind}
 
 
+def _job_for(slug: str, n: int, token: str) -> dict:
+    """Job de préparation, en vérifiant qu'il appartient bien à (slug, piste).
+
+    Le jeton seul suffisait à lire la préparation de n'importe quel album :
+    l'URL portait déjà `slug` et `n`, ils n'étaient simplement pas confrontés
+    au job. Sans ce contrôle, un gestionnaire pouvait servir la waveform et
+    l'aperçu d'un autre album en devinant/réutilisant un jeton.
+    """
+    job = _job_get(token)
+    if not job or job.get("slug") != slug or int(job.get("n", -1)) != n:
+        raise HTTPException(404, "préparation inconnue")
+    return job
+
+
 @router.get("/api/albums/{slug}/tracks/{n}/recut/{token}")
 def recut_prep_status(slug: str, n: int, token: str,
                       identity: dict = Depends(require_gestionnaire)) -> dict:
-    job = _job_get(token)
-    if not job:
-        raise HTTPException(404, "préparation inconnue")
+    job = _job_for(slug, n, token)
     return {k: v for k, v in job.items() if k != "created_at"}
 
 
 @router.get("/api/albums/{slug}/tracks/{n}/recut/{token}/waveform.dat")
 def recut_prep_waveform(slug: str, n: int, token: str,
                         identity: dict = Depends(require_gestionnaire)):
+    _job_for(slug, n, token)
     dat = _recut_dir(token) / "waveform.dat"
     if not dat.exists():
         raise HTTPException(404, "waveform indisponible")
@@ -386,6 +399,7 @@ def recut_prep_waveform(slug: str, n: int, token: str,
 @router.get("/api/albums/{slug}/tracks/{n}/recut/{token}/audio")
 def recut_prep_audio(slug: str, n: int, token: str,
                      identity: dict = Depends(require_gestionnaire)):
+    _job_for(slug, n, token)
     mp3 = _recut_dir(token) / "preview.mp3"
     if not mp3.exists():
         raise HTTPException(404, "aperçu indisponible")
@@ -572,7 +586,8 @@ def recut_apply(slug: str, n: int, payload: RecutApplyIn,
             409, "recut par piste indisponible sur un album multi-liens")
 
     job = _job_get(payload.token)
-    if not job or job.get("state") != "done" or int(job.get("n", -1)) != n:
+    if (not job or job.get("state") != "done"
+            or job.get("slug") != slug or int(job.get("n", -1)) != n):
         raise HTTPException(409, "préparation absente ou expirée")
 
     try:

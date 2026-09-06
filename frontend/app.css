@@ -2,6 +2,9 @@
   --bg:#0d0f13; --card:#161922; --fg:#f2f3f7; --muted:#9aa0b0;
   --accent:#8893f2; --border:#262a36; --ok:#4caf7d; --run:#e0b34a;
   --up:#8893f2; --down:#e0736f; --like:#e0736f;
+  /* Alias sémantique : plusieurs feuilles écrivaient `var(--danger,#e57373)`,
+     un repli codé en dur hors palette. La variable existe désormais. */
+  --danger:var(--down);
 }
 [data-theme="light"]{
   --bg:#f4f5fa; --card:#fff; --fg:#14161d; --muted:#5a6072;

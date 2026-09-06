@@ -91,8 +91,8 @@
   .title-row{display:flex;gap:8px;align-items:stretch}
   .title-row input{flex:1}
   .suggest-btn{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:1px solid var(--border);
-    border-radius:8px;background:var(--card);color:var(--text);cursor:pointer;white-space:nowrap;font-size:13px}
-  .suggest-btn:hover{border-color:var(--fg,#1db954);color:var(--fg,#1db954)}
+    border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap;font-size:13px}
+  .suggest-btn:hover{border-color:var(--accent);color:var(--accent)}
   .suggest-btn .material-symbols-outlined{font-size:18px}
   .naming-hint{margin-top:8px;display:flex;gap:8px;padding:9px 11px;border-radius:8px;
     background:var(--card);border:1px solid var(--border);font-size:12.5px;line-height:1.5;color:var(--muted)}
@@ -201,7 +201,7 @@
   .tc-slot-hint{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;border-radius:7px;pointer-events:none}
   .tc-slot-hint .material-symbols-outlined{font-size:18px;color:#fff}
   .track-gear{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
-  .track-gear:hover{background:var(--border);color:var(--text)}
+  .track-gear:hover{background:var(--border);color:var(--fg)}
   .track-gear .material-symbols-outlined{font-size:18px}
   /* « Re-couper cette piste » : même patron visuel que .track-gear. */
   .track-recut{all:unset;cursor:pointer;padding:4px;border-radius:6px;color:var(--muted);display:flex;align-items:center;flex-shrink:0}
@@ -209,14 +209,14 @@
   .track-recut .material-symbols-outlined{font-size:18px}
   /* Modale de re-coupe multi-pistes (waveform + voisines + cadenas de liaison).
      Plus large que tcv/tm car MultiTrimmer a besoin d'horizontal (3 pistes). */
-  .rc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+  .rc-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;overflow:auto}
   .rc-overlay.open{display:flex}
-  .rc-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 22px 22px 46px;max-width:960px;width:100%;display:flex;flex-direction:column;gap:14px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+  .rc-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 22px 22px 46px;max-width:960px;width:100%;max-height:calc(100vh - 40px);overflow-y:auto;display:flex;flex-direction:column;gap:14px;position:relative;box-shadow:0 12px 40px rgba(0,0,0,.4)}
   /* Sort le close du flux flex (sinon il s'étire à toute la largeur et
      affiche son fond gris comme un long ovale au-dessus du titre). */
   .rc-box>.tcv-close{position:absolute;top:12px;left:12px;width:24px;height:24px;padding:2px;background:transparent}
   .rc-box>.tcv-close:hover{background:var(--border)}
-  .rc-box h3{margin:0;font-size:15px;font-weight:600;color:var(--text)}
+  .rc-box h3{margin:0;font-size:15px;font-weight:600;color:var(--fg)}
   .rc-sub{margin:0;color:var(--muted);font-size:12.5px}
   .rc-hint{margin:0;font-size:12.5px;color:var(--muted);line-height:1.4}
   .rc-status{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);min-height:22px}
@@ -226,6 +226,11 @@
   .rc-trimmer.hidden{display:none}
   .rc-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:4px;flex-wrap:wrap}
   .rc-footer button{margin:0}
+  /* Le bouton d'application s'ouvre TOUJOURS désactivé (rien n'a encore bougé) :
+     sans état visuel il se lisait comme cliquable. Même convention que les
+     autres boutons désactivés du site (.icon-btn.mini:disabled, etc.). */
+  .rc-footer button:disabled{opacity:.45;cursor:not-allowed}
+  .rc-footer button:disabled:hover{filter:none}
   .rc-footer .rc-spacer{flex:1}
   .rc-changed{color:var(--muted);font-size:12px;align-self:center}
   .rc-changed b{color:var(--accent)}
@@ -1519,11 +1524,15 @@ function rcStatus(msg,{err=false,spin=false}={}){
   el.innerHTML=`<span class="material-symbols-outlined${spin?" spin":""}">${ico}</span><span></span>`;
   el.lastChild.textContent=msg;
 }
+// Chaque ouverture de modale incrémente RC.gen : la réponse d'une préparation
+// lancée pour une ouverture précédente (onglet refermé avant la fin de l'appel)
+// est ignorée au lieu de repeupler une modale fermée et d'y lancer un sondage.
+let RC_GEN=0;
 function rcReset(){
   if(RC.poll){clearInterval(RC.poll);RC.poll=null;}
   if(RC._pollChanged){clearInterval(RC._pollChanged);RC._pollChanged=null;}
   if(RC.inst){try{RC.inst.destroy();}catch(e){}RC.inst=null;}
-  RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,tracks:null};
+  RC={n:null,i:null,token:null,inst:null,poll:null,kind:null,tracks:null,gen:++RC_GEN};
   rcEl("rc-trimmer").classList.add("hidden");
   rcEl("rc-trimmer").innerHTML="";
   rcEl("rc-apply-btn").disabled=true;
@@ -1536,6 +1545,7 @@ function closeRcModal(){rcEl("rc-overlay").classList.remove("open");rcReset();}
 function openRcModal(n,i){
   rcReset();
   const t=TT[L()];
+  const gen=RC.gen;
   RC.n=n;RC.i=i;
   const tr=tracks[i];
   rcEl("rc-title").textContent=t.rc_title(n,tr?tr.title:"");
@@ -1551,6 +1561,7 @@ function openRcModal(n,i){
     method:"POST",headers:{"Content-Type":"application/json"},body:"{}"
   }).then(async r=>{
     const d=await r.json().catch(()=>({}));
+    if(gen!==RC.gen)return;   // modale refermée entre-temps
     if(!r.ok){
       // Messages dédiés pour les 2 cas identifiables (master purgé, multi-liens),
       // messages génériques sinon (403/500/…).
@@ -1566,6 +1577,7 @@ function openRcModal(n,i){
     if(RC.kind==="external"){rcStatus(t.rc_downloading,{spin:true});}
     rcPollPrep();
   }).catch(e=>{
+    if(gen!==RC.gen)return;
     console.warn("recut prep:",e);
     rcStatus(t.rc_err_prep,{err:true});
   });
@@ -1857,7 +1869,7 @@ applyLang();load();
         <label id="t-tm-title-lbl"></label>
         <input type="text" id="tm-title-inp">
         <label id="t-tm-artist-lbl"></label>
-        <input type="text" id="tm-artist-inp" id="t-tm-artist-ph">
+        <input type="text" id="tm-artist-inp">
       </div>
       <div class="tm-footer">
         <button class="btn-secondary" onclick="closeTmModal()" id="t-tm-cancel"></button>

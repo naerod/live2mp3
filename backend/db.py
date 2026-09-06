@@ -166,6 +166,10 @@ CREATE TABLE IF NOT EXISTS covers (
     traycard_ext TEXT NOT NULL DEFAULT '',
     caption      TEXT NOT NULL DEFAULT '',
     pinned       INTEGER NOT NULL DEFAULT 0,
+    -- 'cover' = pochette d'album (historique) ; 'banner'/'poster'/'thumbnail'
+    -- = visuels Jellyfin d'un concert vidéo. Déclaré ici ET en migration :
+    -- une base neuve doit avoir le même schéma qu'une base migrée.
+    kind         TEXT NOT NULL DEFAULT 'cover',
     -- 1 = pochette récupérée automatiquement (miniature de la vidéo à l'import
     -- par lien), 0 = proposée manuellement. Sert au crédit « Pochette
     -- automatique » et au classement : une pochette auto passe DERRIÈRE toute

@@ -166,7 +166,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "has_cover": has_cover,
             "cover_v": cover_v,
             "has_traycard": has_traycard,
-            "labels": _labels(album, has_mp3, has_mp4),
+            "labels": _labels(album, has_mp3, has_mp4, has_video_full),
             "status": album_status(published, has_mp3, has_mp4, has_video_full),
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
@@ -257,11 +257,19 @@ def list_drafts() -> list[dict]:
     return drafts
 
 
-def _labels(album: dict, has_mp3: bool, has_mp4: bool) -> list[str]:
+def _labels(album: dict, has_mp3: bool, has_mp4: bool,
+            has_video_full: bool = False) -> list[str]:
+    """Libellés d'un album, précédés du média réellement disponible.
+
+    `has_video_full` (concert complet en MP4 unique) compte comme de la vidéo
+    au même titre que les clips par piste : sans ça un album MP3 + concert
+    complet s'affichait « audio » juste sous un badge « Publié (MP3 + MP4) ».
+    """
     labels = list(album.get("labels", []) or [])
-    if has_mp3 and has_mp4:
+    video = has_mp4 or has_video_full
+    if has_mp3 and video:
         media = "audio + vidéo"
-    elif has_mp4:
+    elif video:
         media = "vidéo"
     elif has_mp3:
         media = "audio"

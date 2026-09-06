@@ -48,3 +48,20 @@ def test_album_status_priorite():
     assert S(published=True, has_mp3=True, has_mp4=False, has_video_full=True) == "published_av"
     # Publié, audio seul -> le MP4 manque.
     assert S(published=True, has_mp3=True, has_mp4=False, has_video_full=False) == "published_audio"
+
+
+def test_labels_concert_complet_compte_comme_video():
+    """Un concert complet (build/video-full) est de la vidéo comme les clips.
+
+    Régression 2026-09-06 : `_labels` ignorait `has_video_full`, donc un album
+    MP3 + concert complet affichait le libellé « audio » juste sous un badge
+    « Publié (MP3 + MP4) » — deux affirmations contradictoires sur la même page.
+    """
+    L = catalogue._labels
+    assert L({}, True, False, True)[0] == "audio + vidéo"
+    assert L({}, False, False, True)[0] == "vidéo"
+    # Sans concert complet, le comportement historique est inchangé.
+    assert L({}, True, False, False)[0] == "audio"
+    assert L({}, True, True, False)[0] == "audio + vidéo"
+    # Les libellés manuels restent, le média passe en tête.
+    assert L({"labels": ["concert"]}, True, False, True) == ["audio + vidéo", "concert"]
