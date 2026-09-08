@@ -1544,7 +1544,9 @@ def prepare_ai(payload: PrepareAIIn,
             if setlist_url:
                 setlist = setlistfm.lookup_by_url(setlist_url)
             elif album["date"]:
-                setlist = setlistfm.lookup(album["artist"], album["date"])
+                # Tolérant : l'artiste ou la date saisis peuvent être approximatifs.
+                setlist = setlistfm.lookup_flexible(
+                    [album["artist"]], album["date"], venue=album.get("venue", ""))
         except setlistfm.SetlistUnavailable:
             setlist = None
         if setlist:

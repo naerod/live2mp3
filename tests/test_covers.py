@@ -562,3 +562,35 @@ def test_reorder_tracks_renumbers_n(client, monkeypatch):
     tracks = c.get(f"/api/catalogue/{slug}", headers=GEST).json()["tracks"]
     assert [(t["n"], t["title"]) for t in tracks] == [
         (1, "Third"), (2, "First"), (3, "Second")]
+
+
+# --- Image « Disc » Jellyfin ----------------------------------------------
+def test_folder_cover_also_writes_disc_image(client, monkeypatch):
+    """La pochette carrée devient aussi l'image « Disc » de Jellyfin.
+
+    Jellyfin lit `cover.jpg` (Primary) et `disc.<ext>` (Disc) dans le dossier
+    de l'album ; c'est ce qui rend la pochette « disque » automatique.
+    """
+    from backend import albumfiles, jellyfin, manifest
+    c, root = client
+    slug = _album(c)
+    audio = root / slug / "build" / "audio"
+    audio.mkdir(parents=True)
+    monkeypatch.setattr(albumfiles, "_projects_dir", lambda: root)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: True)
+    art = root / slug / "artwork"
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "cover.png").write_bytes(_png())
+    m = manifest.Manifest.load(root / slug / "manifest.yaml")
+    m.data.setdefault("album", {})["cover"] = "artwork/cover.png"
+    m.save()
+
+    assert albumfiles._write_folder_cover(slug, m) is True
+    assert (audio / "cover.jpg").exists()
+    assert (audio / "disc.png").exists()
+
+    # Pochette retirée → l'image « Disc » disparaît (pas d'image fantôme).
+    m.data["album"].pop("cover")
+    m.save()
+    albumfiles._write_disc_cover(slug, m)
+    assert not list(audio.glob("disc.*"))

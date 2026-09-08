@@ -186,6 +186,7 @@ def _write_album_cover(slug: str, m: Manifest) -> int:
         # Plus de pochette d'album : retirer l'APIC de toutes les pistes pour
         # que Finamp/Jellyfin cessent d'afficher une pochette embarquée obsolète.
         cleared = 0
+        _write_disc_cover(slug, m)      # retire aussi le disc.* devenu orphelin
         for mp3_path in audio_dir.glob("*.mp3"):
             try:
                 tags = ID3(str(mp3_path))
@@ -214,7 +215,43 @@ def _write_album_cover(slug: str, m: Manifest) -> int:
             embedded += 1
         except Exception:
             pass
+    # Même pochette côté serveur média : image de dossier (Primary) + Disc.
+    try:
+        (audio_dir / "cover.jpg").write_bytes(data)
+    except OSError:
+        pass
+    _write_disc_cover(slug, m)
     return embedded
+
+
+def _write_disc_cover(slug: str, m: Manifest) -> bool:
+    """Dépose la pochette 1:1 comme image « Disc » Jellyfin (`disc.jpg`).
+
+    Jellyfin reconnaît, dans le dossier d'un album, `cover.jpg`/`folder.jpg`
+    comme image **Primary** et `disc.<ext>` comme image **Disc** (l'art du
+    disque, carré lui aussi). On y recopie donc la pochette gagnante : la
+    vignette carrée du site devient la pochette « disque » du serveur média,
+    sans intervention manuelle et **sans passer par l'API** — un fichier est
+    re-détecté à chaque scan, alors qu'une image téléversée par l'API est
+    effacée par un rafraîchissement `ReplaceAllImages`.
+
+    Sans pochette, les `disc.*` existants sont retirés (pas d'image fantôme).
+    """
+    audio_dir = _projects_dir() / slug / "build" / "audio"
+    if not audio_dir.exists():
+        return False
+    cover_rel = m.data.get("album", {}).get("cover")
+    cover_path = _projects_dir() / slug / cover_rel if cover_rel else None
+    try:
+        for old in audio_dir.glob("disc.*"):
+            old.unlink(missing_ok=True)
+        if not cover_path or not cover_path.exists():
+            return False
+        ext = cover_path.suffix.lower() if cover_path.suffix.lower() in COVER_MIME else ".jpg"
+        (audio_dir / f"disc{ext}").write_bytes(cover_path.read_bytes())
+        return True
+    except OSError:
+        return False
 
 
 def _write_folder_cover(slug: str, m: Manifest) -> bool:
@@ -234,9 +271,10 @@ def _write_folder_cover(slug: str, m: Manifest) -> bool:
         return False
     try:
         (audio_dir / "cover.jpg").write_bytes(cover_path.read_bytes())
-        return True
     except OSError:
         return False
+    _write_disc_cover(slug, m)
+    return True
 
 
 def _extract_embedded_cover(slug: str, m: Manifest) -> str | None:
