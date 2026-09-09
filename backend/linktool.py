@@ -424,7 +424,7 @@ def make_preview(project_dir: Path, manifest: Manifest) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run([
         "ffmpeg", "-y", "-i", str(wav),
-        "-c:a", "libmp3lame", "-b:a", "128k",
+        "-c:a", "libmp3lame", "-b:a", "64k", "-ac", "1",
         str(out),
     ], check=True, capture_output=True)
     return out
