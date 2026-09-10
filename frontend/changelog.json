@@ -9,6 +9,7 @@
         "en": "Covers & reliability"
       },
       "fr": [
+        "v1.24.3 — Page de gestion d'un album non publié : la pochette, la tray card et les fichiers MP3 / MP4 sont de nouveau détectés (elle affichait « Aucune pochette »).",
         "v1.24.1 — Proposer une pochette : le bouton « Envoyer » ne donnait aucun retour en cas d'échec. Les erreurs s'affichent désormais, avec un lien de reconnexion si la session a expiré.",
         "v1.24.1 — La session reste ouverte 12 h au lieu d'1 h : un onglet laissé ouvert ne fait plus échouer les envois.",
         "v1.24.1 — Boutons « Annuler » et « Envoyer » du formulaire de pochette réalignés.",
@@ -21,6 +22,7 @@
         "Couleurs harmonisées avec la palette du site (survols, états d'erreur)."
       ],
       "en": [
+        "v1.24.3 — Management page of an unpublished album: cover, tray card and MP3 / MP4 files are detected again (it showed “No cover”).",
         "v1.24.1 — Submit a cover: the “Send” button gave no feedback on failure. Errors are now shown, with a sign-in link when the session has expired.",
         "v1.24.1 — Sessions now last 12 h instead of 1 h: a tab left open no longer makes uploads fail.",
         "v1.24.1 — “Cancel” and “Send” buttons of the cover form realigned.",
