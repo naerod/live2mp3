@@ -594,3 +594,20 @@ def test_folder_cover_also_writes_disc_image(client, monkeypatch):
     m.save()
     albumfiles._write_disc_cover(slug, m)
     assert not list(audio.glob("disc.*"))
+
+
+def test_manage_page_sees_cover_of_unpublished_album(client):
+    """Régression 2026-09-10 (gazo-2025-09-07) : la page de gestion d'un album
+    dépublié affichait « Aucune pochette » alors qu'une pochette existait —
+    /api/albums/{slug} lisait le catalogue public, sans les brouillons."""
+    c, root = client
+    slug = _album(c)
+    mp3 = root / slug / "build" / "audio"
+    mp3.mkdir(parents=True, exist_ok=True)
+    (mp3 / "01.mp3").write_bytes(b"ID3")
+    assert _post_cover(c, slug, USER, traycard=True).status_code == 200
+    c.patch(f"/api/albums/{slug}/published", json={"published": False}, headers=GEST)
+    d = c.get(f"/api/albums/{slug}", headers=GEST).json()
+    assert d["has_cover"] is True
+    assert d["has_traycard"] is True
+    assert d["has_mp3"] is True

@@ -759,7 +759,10 @@ def album_detail(slug: str,
         raise HTTPException(404, "album introuvable")
     album = m.data.get("album", {})
     src = m.data.get("source", {}) or {}
-    cat = {a["slug"]: a for a in catalogue.list_albums()}.get(slug, {})
+    # include_drafts : la page de gestion ouvre aussi les albums dépubliés ;
+    # sans lui l'album est absent du catalogue et tous les indicateurs qui en
+    # dérivent (pochette, tray card, MP3/MP4…) retombent à False.
+    cat = {a["slug"]: a for a in catalogue.list_albums(include_drafts=True)}.get(slug, {})
     src_dir = PROJECTS_DIR / slug / "source"
     return {
         "slug": slug,
