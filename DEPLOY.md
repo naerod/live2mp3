@@ -66,6 +66,19 @@ cours de validation ».
 Le script `deploy-prod` retient déjà `max(VERSION prod, VERSION preprod)` avant
 de bumper : une preprod en avance ne casse donc jamais la numérotation prod.
 
+### 🔒 Changelog obligatoire — garde-fou technique (2026-09-10)
+Aucune mise en prod sans entrée dans `frontend/changelog.json` (FR **et** EN),
+**en tête**, couvrant la version publiée (`1.25` couvre `1.25.x`). Vérifié par
+`changelog-guard` (source : `workspace/infra/changelog-guard/`) à deux endroits :
+- **hook git `pre-push`** (CT102 `workspace/live2mp3`, CT110 `/opt/apps/live2mp3*`) :
+  tout push vers `main` sans modification du changelog est refusé ;
+- **`deploy-prod-live2mp3.sh`** : après le merge, refus si le changelog n'a pas
+  changé depuis la prod en place ou si l'entrée de tête ne couvre pas `v$NEW` →
+  `git reset --hard` sur la prod d'avant, rien n'est construit.
+→ Écrire l'entrée **en preprod avant la promotion** (promo minor : nouvelle entrée
+`vX.Y+1` ; hotfix patch : ligne ajoutée à l'entrée `vX.Y` en cours). Pas de contournement.
+Oublis à l'origine : v1.24.0 (06/09) et hotfix v1.24.1 (10/09).
+
 ## Système social (profils / favoris / commentaires)
 - Base **SQLite** dédiée : `projects/.l2m-social/<APP_ENV>/live2mp3.db` (+ `avatars/`).
   Stockée sous le volume `projects` déjà monté → **aucune modif de docker-compose**.
