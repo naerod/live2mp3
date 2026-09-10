@@ -2,6 +2,28 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.25",
+      "date": "à venir",
+      "title": {
+        "fr": "Setlists & import (en préparation)",
+        "en": "Setlists & import (upcoming)"
+      },
+      "fr": [
+        "Recherche de setlist plus tolérante : plusieurs noms d'artiste essayés et, sans date exacte, les concerts de l'année — un rattachement n'est retenu que sur preuve (date, salle ou ville).",
+        "Import par lien : un festival ou une salle n'est plus pris pour l'artiste ; l'artiste et la date sont corrigés par les données officielles.",
+        "Recherche de setlist : message clair en cas de session expirée ou d'erreur serveur, au lieu de « Aucune setlist trouvée ».",
+        "Jellyfin : la pochette carrée sert aussi d'image « Disc ».",
+        "Éditeur audio : aperçu de travail allégé (64 kb/s mono), chargement plus rapide."
+      ],
+      "en": [
+        "More tolerant setlist lookup: several artist names tried and, without an exact date, the year's shows — a match is kept only with evidence (date, venue or city).",
+        "Link import: a festival or venue is no longer mistaken for the artist; artist and date are corrected from official data.",
+        "Setlist lookup: clear message on expired session or server error, instead of “No setlist found”.",
+        "Jellyfin: the square cover is also used as the “Disc” image.",
+        "Audio editor: lighter working preview (64 kbps mono), faster loading."
+      ]
+    },
+    {
       "v": "1.24",
       "date": "2026-09-10",
       "title": {
