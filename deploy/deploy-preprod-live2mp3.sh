@@ -14,6 +14,7 @@ fi
 
 git fetch origin
 git checkout preprod
+PREV_REV=$(git rev-parse HEAD)   # ce qui tourne en preprod avant mise à jour
 git pull origin preprod
 
 # Bump patch version
@@ -21,6 +22,15 @@ CUR=$(cat VERSION)
 IFS=. read -r MA MI PA <<< "$CUR"
 PA=$((PA+1))
 NEW="$MA.$MI.$PA"
+# Garde-fou changelog (2026-09-10) : chaque déploiement preprod doit apporter
+# son entrée de changelog (FR+EN) ; l'entrée de tête peut viser la prochaine
+# version (contrôle souple). Pas de contournement.
+if ! changelog-guard check --repo . --base "$PREV_REV" --mode preprod --version "$NEW"; then
+  git reset -q --hard "$PREV_REV"
+  [ "$STASHED" = "1" ] && git stash pop
+  echo "[deploy-preprod] ✗ annulé, preprod inchangée"
+  exit 1
+fi
 echo "$NEW" > VERSION
 git add VERSION
 git commit -m "Release v$NEW"

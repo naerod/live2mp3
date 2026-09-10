@@ -75,6 +75,10 @@ Aucune mise en prod sans entrée dans `frontend/changelog.json` (FR **et** EN),
 - **`deploy-prod-live2mp3.sh`** : après le merge, refus si le changelog n'a pas
   changé depuis la prod en place ou si l'entrée de tête ne couvre pas `v$NEW` →
   `git reset --hard` sur la prod d'avant, rien n'est construit.
+- **Preprod aussi (depuis le 2026-09-10)** : hook sur les pushes vers `preprod` et
+  contrôle dans `deploy-preprod-live2mp3.sh`. Contrôle *souple* : l'entrée de tête
+  peut viser la prochaine version (ex. entrée `v1.25` « à venir » alors que la preprod
+  est en 1.24.x). Exemptés : `VERSION` seul, `*.md`, `claude/`, `deploy/`.
 → Écrire l'entrée **en preprod avant la promotion** (promo minor : nouvelle entrée
 `vX.Y+1` ; hotfix patch : ligne ajoutée à l'entrée `vX.Y` en cours). Pas de contournement.
 Oublis à l'origine : v1.24.0 (06/09) et hotfix v1.24.1 (10/09).
@@ -85,6 +89,12 @@ Oublis à l'origine : v1.24.0 (06/09) et hotfix v1.24.1 (10/09).
   Scoppée par environnement (prod ≠ preprod), ignorée par le scan du catalogue.
 - Routes : `/api/social/*` (API), `/u/{username}` (page profil), `/avatar/{username}`.
   Lectures publiques (identité optionnelle), écritures = `require_user` (401 si anonyme).
+
+### nginx prod : `/cover/` en soft-auth (2026-09-10)
+`location ^~ /cover/` (même mécanique que `/api/catalogue`) : sans lui, `/cover/{slug}`
+tombait dans `location /`, qui neutralise l'identité → la pochette d'un album
+**dépublié** renvoyait 404 même à un gestionnaire (vitrine, fiche). Anonyme : 404 inchangé.
+→ Toute nouvelle route publique qui dépend du rôle (brouillons) doit avoir son bloc soft-auth.
 
 ### ✅ Bloc nginx soft-auth `/api/social/` — DÉJÀ APPLIQUÉ (vérifié 2026-08-02)
 Le bloc est en place dans le `server { server_name live2mp3.naerod.com; }` de
