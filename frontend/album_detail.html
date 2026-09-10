@@ -284,8 +284,13 @@
   .up-field input[type=file],.up-field input[type=text]{width:100%;font-size:13px;
     padding:8px 10px;border-radius:9px;border:1px solid var(--border);
     background:var(--bg);color:var(--fg)}
-  .up-err{color:#e85d75;font-size:12.5px;margin-bottom:10px;display:none}
-  .up-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  .up-err{color:#e85d75;font-size:12.5px;margin-bottom:10px;display:none;line-height:1.45}
+  .up-err.show{display:block}
+  .up-err a{color:var(--accent);text-decoration:underline}
+  .up-btns{display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:18px}
+  /* app.css donne margin-top:16px à `button`/.primary : on neutralise pour
+     aligner « Annuler » (.icon-btn, 38px) et « Envoyer » sur la même ligne */
+  .up-btns>button{margin:0;height:38px;padding:0 16px;box-sizing:border-box}
 
   /* ── Mobile ─────────────────────────────────────────────────────────── */
   /* Tactile : flèches et overlay d'upload du carrousel n'ont pas de survol */
@@ -409,7 +414,8 @@ const T={
       up_hint:"La tray card est optionnelle et reste liée à cette pochette. JPEG, PNG ou WebP.",
       up_cover:"Pochette (obligatoire)",up_tray:"Tray card (optionnelle)",
       up_caption:"Légende (optionnelle)",up_send:"Envoyer",up_cancel:"Annuler",
-      up_need_cover:"Choisissez une image de pochette.",up_failed:"Échec de l'envoi.",
+      up_need_cover:"Choisissez une image de pochette.",up_need_tray:"Choisissez une image de tray card.",up_failed:"Échec de l'envoi.",
+      up_expired:"Votre session a expiré.",up_relogin:"Se reconnecter",up_forbidden:"Vous n'avez pas les droits pour envoyer une pochette.",
       tray_title:"Tray card",tray_send:"Envoyer la tray card",
       tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_view:"Pochette de la piste"},
   en:{back:"Back",manage:"Manage",login:"Log in",logout:"Log out",
@@ -441,7 +447,8 @@ const T={
       up_hint:"The tray card is optional and stays tied to this cover. JPEG, PNG or WebP.",
       up_cover:"Cover (required)",up_tray:"Tray card (optional)",
       up_caption:"Caption (optional)",up_send:"Send",up_cancel:"Cancel",
-      up_need_cover:"Pick a cover image.",up_failed:"Upload failed.",
+      up_need_cover:"Pick a cover image.",up_need_tray:"Pick a tray card image.",up_failed:"Upload failed.",
+      up_expired:"Your session has expired.",up_relogin:"Sign in again",up_forbidden:"You are not allowed to submit a cover.",
       tray_title:"Tray card",tray_send:"Send tray card",
       tc_change:"Change cover",tc_delete:"Remove",tc_view:"Track cover"}
 };
@@ -1008,7 +1015,7 @@ function openUpload(coverId){
   document.getElementById('up-cover-field').style.display=tray?'none':'';
   document.getElementById('up-caption-field').style.display=tray?'none':'';
   document.getElementById('up-tray-lbl').textContent=tray?t('cv_tray'):t('up_tray');
-  document.getElementById('up-err').style.display='none';
+  document.getElementById('up-err').classList.remove('show');
   document.getElementById('up-cover').value='';
   document.getElementById('up-tray').value='';
   document.getElementById('up-caption').value='';
@@ -1023,14 +1030,13 @@ document.getElementById('up-send').onclick=async()=>{
   const btn=document.getElementById('up-send');
   const coverF=document.getElementById('up-cover').files[0];
   const trayF=document.getElementById('up-tray').files[0];
-  err.style.display='none';
+  // .up-err est masqué en CSS : il faut une classe pour l'afficher
+  // (style.display='' retombait sur display:none => erreurs invisibles).
+  const showErr=msg=>{err.textContent=msg;err.classList.add('show');};
+  err.classList.remove('show');
 
-  if(UP_TARGET===null&&!coverF){
-    err.textContent=t('up_need_cover');err.style.display='';return;
-  }
-  if(UP_TARGET!==null&&!trayF){
-    err.textContent=t('up_need_cover');err.style.display='';return;
-  }
+  if(UP_TARGET===null&&!coverF){showErr(t('up_need_cover'));return;}
+  if(UP_TARGET!==null&&!trayF){showErr(t('up_need_tray'));return;}
   btn.disabled=true;
   try{
     const fd=new FormData();
@@ -1044,9 +1050,19 @@ document.getElementById('up-send').onclick=async()=>{
       fd.append('caption',document.getElementById('up-caption').value||'');
       r=await fetch(`/api/social/albums/${slug}/covers`,{method:'POST',body:fd});
     }
+    if(r.status===401){
+      // Jeton SSO expiré alors que la page était ouverte : nginx retombe en
+      // anonyme. Le SSO Authentik étant encore valide, le lien reconnecte
+      // aussitôt et ramène sur cette fiche.
+      showErr(t('up_expired')+' ');
+      const a=document.createElement('a');
+      a.href=L2M.loginUrl();a.textContent=t('up_relogin');
+      err.appendChild(a);return;
+    }
+    if(r.status===403){showErr(t('up_forbidden'));return;}
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
-      err.textContent=d.detail||t('up_failed');err.style.display='';return;
+      showErr(typeof d.detail==='string'?d.detail:t('up_failed'));return;
     }
     const d=await r.json();
     COVERS=d.covers||[];
@@ -1059,7 +1075,7 @@ document.getElementById('up-send').onclick=async()=>{
     renderCarousel();
     if(!cm.classList.contains('hidden'))paintModal(focus);
   }catch(e){
-    err.textContent=t('up_failed');err.style.display='';
+    showErr(t('up_failed'));
   }finally{btn.disabled=false;}
 };
 
