@@ -2,6 +2,38 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.24",
+      "date": "2026-09-10",
+      "title": {
+        "fr": "Pochettes & fiabilité",
+        "en": "Covers & reliability"
+      },
+      "fr": [
+        "v1.24.1 — Proposer une pochette : le bouton « Envoyer » ne donnait aucun retour en cas d'échec. Les erreurs s'affichent désormais, avec un lien de reconnexion si la session a expiré.",
+        "v1.24.1 — La session reste ouverte 12 h au lieu d'1 h : un onglet laissé ouvert ne fait plus échouer les envois.",
+        "v1.24.1 — Boutons « Annuler » et « Envoyer » du formulaire de pochette réalignés.",
+        "Vitrine : les badges MP3 / MP4 passent de la pochette au corps de la carte.",
+        "Menus profil et notifications : ouvrir l'un referme l'autre.",
+        "Forme d'onde : correction d'un décalage quand l'outil d'analyse audio n'est pas disponible.",
+        "Libellés : un album MP3 + concert complet n'est plus présenté comme « audio » seul.",
+        "Re-coupe de piste : accès mieux cloisonné, modale utilisable sur petit écran, bouton « Appliquer » visiblement désactivé tant qu'il n'est pas utilisable.",
+        "Tray card refusée sur une bannière, un poster ou une miniature, où elle n'a pas de sens.",
+        "Couleurs harmonisées avec la palette du site (survols, états d'erreur)."
+      ],
+      "en": [
+        "v1.24.1 — Submit a cover: the “Send” button gave no feedback on failure. Errors are now shown, with a sign-in link when the session has expired.",
+        "v1.24.1 — Sessions now last 12 h instead of 1 h: a tab left open no longer makes uploads fail.",
+        "v1.24.1 — “Cancel” and “Send” buttons of the cover form realigned.",
+        "Showcase: MP3 / MP4 badges move from the cover to the card body.",
+        "Profile and notifications menus: opening one closes the other.",
+        "Waveform: fixed an offset when the audio analysis tool is unavailable.",
+        "Labels: an album with MP3 + full concert is no longer shown as “audio” only.",
+        "Track re-cut: tighter access checks, dialog usable on small screens, “Apply” button visibly disabled until usable.",
+        "Tray cards rejected on banners, posters and thumbnails, where they make no sense.",
+        "Colours aligned with the site palette (hover and error states)."
+      ]
+    },
+    {
       "v": "1.23",
       "date": "2026-08-13",
       "title": {
