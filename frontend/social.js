@@ -261,7 +261,7 @@ const L2M = (function () {
         list.innerHTML = hits.map(a => `
           <button class="imp-pick-row" data-slug="${esc(a.slug)}">
             ${a.has_cover
-              ? `<img class="imp-pick-cov" src="/cover/${encodeURIComponent(a.slug)}?v=${a.cover_v || 0}" alt="" loading="lazy">`
+              ? `<img class="imp-pick-cov" src="/cover/${encodeURIComponent(a.slug)}?v=${a.cover_v || 0}&w=320" alt="" loading="lazy">`
               : `<span class="imp-pick-cov ph"><span class="material-symbols-outlined">album</span></span>`}
             <span class="imp-pick-meta">
               <span class="imp-pick-t">${esc(a.title || a.slug)}</span>

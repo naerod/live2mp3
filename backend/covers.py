@@ -32,6 +32,7 @@ from .auth import current_identity, require_gestionnaire, require_user
 from .db import get_conn
 from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
+from . import thumbs
 from .social import (
     _album_exists,
     _album_visible,
@@ -306,6 +307,10 @@ def _cover_dict(row: sqlite3.Row, rank: int, profiles: dict[str, dict],
         "traycard_kind": ("pdf" if row["traycard_ext"] == ".pdf" else "image")
                          if row["traycard_ext"] else None,
         "cover_url": f"/cover-img/{row['id']}",
+        # Dérivés légers pour les grilles et le carrousel — `cover_url` reste
+        # l'original (lightbox, impression, téléchargement).
+        "cover_thumb": f"/cover-img/{row['id']}?w=320",
+        "cover_medium": f"/cover-img/{row['id']}?w=640",
         "traycard_url": f"/traycard-img/{row['id']}" if row["traycard_ext"] else None,
         "download_basename": zip_basename(rank, u),
         "created_at": row["created_at"],
@@ -398,7 +403,8 @@ def list_covers(slug: str, identity: dict = Depends(current_identity)) -> dict:
         return _list_payload(conn, slug, identity.get("username"))
 
 
-def _serve(cover_id: int, what: str, download: bool) -> FileResponse:
+def _serve(cover_id: int, what: str, download: bool,
+           width: int = 0) -> FileResponse:
     """Sert l'image (`what="image"`, selon le type de la ligne : cover/banner/
     poster/thumbnail) ou sa tray card (`what="traycard"`, cover uniquement)."""
     with get_conn() as conn:
@@ -418,18 +424,25 @@ def _serve(cover_id: int, what: str, download: bool) -> FileResponse:
     name = None
     if download:
         name = f"{row['slug']}-{_slug_token(row['username'])}_{label}{ext}"
+    # Un téléchargement rend toujours l'original : la vignette n'est là que pour
+    # l'affichage en grille (cf. thumbs.py).
+    derived = thumbs.derive(path, width) if (width and not download) else None
+    if derived:
+        return FileResponse(derived, media_type="image/webp", headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+        })
     return FileResponse(path, media_type=MEDIA_TYPES.get(ext, "application/octet-stream"),
                         filename=name)
 
 
 @router.get("/cover-img/{cover_id}")
-def get_cover_img(cover_id: int) -> FileResponse:
-    return _serve(cover_id, "image", download=False)
+def get_cover_img(cover_id: int, w: int = 0) -> FileResponse:
+    return _serve(cover_id, "image", download=False, width=w)
 
 
 @router.get("/traycard-img/{cover_id}")
-def get_traycard_img(cover_id: int) -> FileResponse:
-    return _serve(cover_id, "traycard", download=False)
+def get_traycard_img(cover_id: int, w: int = 0) -> FileResponse:
+    return _serve(cover_id, "traycard", download=False, width=w)
 
 
 @router.get("/download/cover/{cover_id}")

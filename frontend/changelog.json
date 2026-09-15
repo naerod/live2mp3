@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Pochettes beaucoup plus rapides à afficher : les grilles et les carrousels reçoivent une vignette WebP allégée au lieu de l'image d'origine (jusqu'à 5 Mo), mise en cache par le navigateur. Un motif animé remplace le carré noir pendant le chargement.",
         "Recherche de setlist plus tolérante : plusieurs noms d'artiste essayés et, sans date exacte, les concerts de l'année — un rattachement n'est retenu que sur preuve (date, salle ou ville).",
         "Import par lien : un festival ou une salle n'est plus pris pour l'artiste ; l'artiste et la date sont corrigés par les données officielles.",
         "Recherche de setlist : message clair en cas de session expirée ou d'erreur serveur, au lieu de « Aucune setlist trouvée ».",
@@ -16,6 +17,7 @@
         "Éditeur audio : aperçu de travail allégé (64 kb/s mono), chargement plus rapide."
       ],
       "en": [
+        "Much faster cover loading: grids and carousels now receive a lightweight WebP thumbnail instead of the full-size original (up to 5 MB), cached by the browser. An animated placeholder replaces the black square while loading.",
         "More tolerant setlist lookup: several artist names tried and, without an exact date, the year's shows — a match is kept only with evidence (date, venue or city).",
         "Link import: a festival or venue is no longer mistaken for the artist; artist and date are corrected from official data.",
         "Setlist lookup: clear message on expired session or server error, instead of “No setlist found”.",

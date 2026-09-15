@@ -549,7 +549,7 @@ function renderAlbum(d){
       const tc=tcMap[tr.n];
       const canView=!!tc;
       const inner=tc
-        ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
+        ?`<img class="tc-thumb" src="${tc.cover_thumb||tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
         :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
       const hint=canView?`<div class="tc-view-hint"><span class="material-symbols-outlined">zoom_in</span></div>`:'';
       return `<li class="has-tc"><div class="tc-slot-wrap${canView?' can-view':''}" data-n="${tr.n}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
@@ -734,7 +734,9 @@ async function loadCovers(hasCoverFallback,coverV){
     // v=cover_v : refetch immédiat après remplacement de la pochette par un
     // gestionnaire (sinon on garde l'ancienne image en cache disque navigateur).
     const v=coverV||0;
-    COVERS=[{id:0,cover_url:`/cover/${slug}?v=${v}`,has_traycard:false,
+    COVERS=[{id:0,cover_url:`/cover/${slug}?v=${v}`,
+             cover_thumb:`/cover/${slug}?v=${v}&w=320`,
+             cover_medium:`/cover/${slug}?v=${v}&w=640`,has_traycard:false,
              username:null,display_name:null,avatar:null,pinned:false,liked:false,likes:0}];
   }
   buildSlides();
@@ -762,7 +764,7 @@ function footerHtml(c,kind){
 // entier (contain) au lieu de la rogner comme une pochette.
 function faceHtml(c,kind){
   if(!c)return GENERIC_COVER;
-  if(kind!=='traycard')return `<img src="${c.cover_url}" alt="">`;
+  if(kind!=='traycard')return `<img src="${c.cover_medium||c.cover_url}" alt="">`;
   return c.traycard_kind==='pdf'
     ? `<iframe class="cr-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
     : `<img class="cr-fit" src="${c.traycard_url}" alt="${t('cv_tray')}">`;
@@ -855,7 +857,7 @@ async function initVideo(d){
   if(!th)return;
   th.onclick=()=>openVideoModal();
   try{const r=await fetch(`/api/social/albums/${slug}/images/thumbnail`).then(r=>r.json());
-    const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_url})`;}catch(e){}
+    const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_thumb||w.cover_url})`;}catch(e){}
 }
 const vm=document.getElementById('vm');
 document.getElementById('vm-close').onclick=()=>closeVm();
@@ -866,7 +868,7 @@ async function loadVmImages(){await Promise.all(VM_KINDS.map(async k=>{
   try{VM_DATA[k]=(await fetch(`/api/social/albums/${slug}/images/${k}`).then(r=>r.json())).covers||[];}catch(e){VM_DATA[k]=[];}}));}
 function vmSlotHtml(kind){
   const list=VM_DATA[kind]||[],win=list[0]||null,g=ME.is_gestionnaire;
-  const img=win?`<img src="${win.cover_url}" alt="">`:`<span class="vm-slot-ph"><span class="material-symbols-outlined">image</span><span>${VT('empty')}</span></span>`;
+  const img=win?`<img src="${win.cover_medium||win.cover_url}" alt="">`:`<span class="vm-slot-ph"><span class="material-symbols-outlined">image</span><span>${VT('empty')}</span></span>`;
   const imp=ME.authenticated?`<button class="vm-slot-imp" data-imp="${kind}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${VT('imp')}</span></button>`:'';
   const dl=win?`<a class="vm-act" href="/download/cover/${win.id}" title="${VT('dl')}"><span class="material-symbols-outlined">download</span></a>`:'';
   const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined">push_pin</span></button>`:'';
@@ -899,7 +901,7 @@ document.getElementById('vm-file').onchange=async e=>{
 };
 async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
 async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
-function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_url})`:'';}
+function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_thumb||w.cover_url})`:'';}
 
 // ── Modale d'une pochette ────────────────────────────────────────────────
 const cm=document.getElementById('cm');
@@ -932,7 +934,7 @@ function paintModal(id){
   document.getElementById('cm-body').innerHTML=`
     <div class="cm-top">
       <div class="cm-art">
-        <img src="${c.cover_url}" alt="">
+        <img src="${c.cover_thumb||c.cover_url}" alt="" loading="lazy" decoding="async">
         ${tray}
       </div>
       <div>

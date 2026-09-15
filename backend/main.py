@@ -33,6 +33,7 @@ import re
 from uuid import uuid4
 from . import catalogue, entities, jellyfin, linktool, llm
 from . import progress, renderqueue, setlistfm
+from . import thumbs
 from .albumfiles import (
     _rename_audio_files,
     _write_album_cover,
@@ -474,7 +475,8 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 
 
 @app.get("/cover/{slug}")
-def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
+def get_cover(slug: str, identity: dict = Depends(roles),
+              w: int = 0, v: str = "") -> FileResponse:
     m = _ensure_album_visible(slug, identity)
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
@@ -482,11 +484,15 @@ def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    # Le front ajoute ?v=<mtime> pour invalider dès qu'un gestionnaire remplace
-    # la cover. On force la revalidation pour rattraper les vieux liens sans v=.
-    return FileResponse(cover, headers={
-        "Cache-Control": "no-cache, must-revalidate",
-    })
+    # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
+    # aucune largeur n'est demandée ou s'il est déjà plus petit que la cible.
+    served = (thumbs.derive(cover, w) if w else None) or cover
+    # Le front ajoute ?v=<mtime> : l'URL change dès qu'un gestionnaire remplace
+    # la pochette, donc la réponse est immuable et peut se cacher à vie. Sans
+    # `v=` (vieux liens), on force la revalidation.
+    cc = ("public, max-age=31536000, immutable" if v
+          else "no-cache, must-revalidate")
+    return FileResponse(served, headers={"Cache-Control": cc})
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
