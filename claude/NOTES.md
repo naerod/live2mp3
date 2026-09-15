@@ -1272,3 +1272,40 @@ avec mention `@auteur` ; « voir plus » pour dérouler. Votes ▲/▼, tri Top/
   de l'ordre chrono, timecodes contigus, master préservé, album original intact.
 - Tests : reorder_master (concat réelle + cas liste≠ordre temporel), refus
   mono-source. **262 passed.**
+
+## 2026-09-15 — Pochettes : vignettes dérivées (preprod v1.24.8)
+
+Symptôme (grille du profil `/u/naerod`) : carrés noirs pendant plusieurs
+secondes avant apparition des pochettes.
+
+Cause : `/cover/{slug}` servait **le fichier d'origine** — jusqu'à 4,9 Mo
+(PNG), moyenne 578 Ko sur 88 fichiers — pour un affichage en ~200 px, avec
+`Cache-Control: no-cache, must-revalidate` (revalidation à chaque affichage).
+
+Correctif :
+- `backend/thumbs.py` : dérivé WebP à largeur **whitelistée** (160/320/640/1024),
+  cache disque `artwork/.thumbs/`, nom = `<stem>_<sha1(nom+mtime+taille)>_<w>.webp`
+  → remplacer une pochette change le nom, aucune invalidation à gérer, et les
+  dérivés périmés du même fichier sont balayés à la génération suivante.
+  Écriture atomique (`os.replace`) : deux workers peuvent viser le même dérivé.
+- `/cover/{slug}` et `/cover-img/{id}` acceptent `?w=` ; `media_type="image/webp"`
+  **explicite** (FileResponse déduisait `application/octet-stream`, que des
+  navigateurs refusent d'afficher dans un `<img>`).
+- `Cache-Control: public, max-age=31536000, immutable` **dès qu'un `?v=` est
+  présent** (le front l'envoie déjà : `v=<mtime>`). Les vieux liens sans `v`
+  gardent la revalidation.
+- `_cover_dict` expose `cover_thumb` (320) et `cover_medium` (640) ; `cover_url`
+  reste l'original — lightbox, PDF imprimable et téléchargements inchangés.
+- Front : `srcset` 1x/2x sur les grilles (vitrine, profil, pages entité) +
+  squelette animé (`.is-load`) à la place du carré noir, retiré à l'`onload`,
+  avec fondu. `onerror` retire aussi le squelette (sinon shimmer infini sur 404).
+- `python -m backend.thumbs` : pré-génération de tout le cache (~6 s pour 130
+  vignettes) — à lancer après déploiement.
+
+Mesures (preprod, `coldplay-2009`) : 2 798 188 o → **9 374 o** en w=320
+(**×298**), 35 444 o en w=640. Moyenne des vignettes 320 : **14 Ko**.
+
+⚠️ **Piège de déploiement rencontré** : la preprod est déployée depuis
+`naerod/preprod-live2mp3` (remote local **`preprod-origin`**), pas depuis
+`origin` (= `naerod/live2mp3`). Pousser sur `origin/preprod` ne déploie rien et
+fait diverger les deux dépôts. Toujours `git push preprod-origin preprod`.
