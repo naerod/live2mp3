@@ -486,13 +486,19 @@ def get_cover(slug: str, identity: dict = Depends(roles),
         raise HTTPException(404, "pochette absente")
     # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
     # aucune largeur n'est demandée ou s'il est déjà plus petit que la cible.
-    served = (thumbs.derive(cover, w) if w else None) or cover
+    derived = thumbs.derive(cover, w) if w else None
     # Le front ajoute ?v=<mtime> : l'URL change dès qu'un gestionnaire remplace
     # la pochette, donc la réponse est immuable et peut se cacher à vie. Sans
     # `v=` (vieux liens), on force la revalidation.
     cc = ("public, max-age=31536000, immutable" if v
           else "no-cache, must-revalidate")
-    return FileResponse(served, headers={"Cache-Control": cc})
+    if derived:
+        # media_type explicite : FileResponse déduit le type du nom de fichier
+        # et rendait `application/octet-stream` pour le .webp, que certains
+        # navigateurs refusent d'afficher dans un <img>.
+        return FileResponse(derived, media_type="image/webp",
+                            headers={"Cache-Control": cc})
+    return FileResponse(cover, headers={"Cache-Control": cc})
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
