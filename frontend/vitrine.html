@@ -656,7 +656,11 @@ function coverHtml(a,size){
     // (jusqu'à 5 Mo). La pleine résolution reste servie sans `w` (fiche album,
     // lightbox, téléchargement).
     const w=size&&size>320?640:320;
-    return `<img class="cover-img" src="/cover/${a.slug}?v=${v}&w=${w}" alt="" loading="lazy" decoding="async" ${sz}
+    // srcset 1x/2x : un écran haute densité prend la version 640 sans imposer
+    // son poids aux autres.
+    const w2=w===320?640:1024;
+    const u=n=>`/cover/${a.slug}?v=${v}&w=${n}`;
+    return `<img class="cover-img" src="${u(w)}" srcset="${u(w)} 1x, ${u(w2)} 2x" alt="" loading="lazy" decoding="async" ${sz}
       onload="this.classList.add('rdy');this.parentNode.classList.remove('is-load')"
       onerror="this.classList.add('rdy');this.parentNode.classList.remove('is-load')">`;
   }

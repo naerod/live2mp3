@@ -26,6 +26,7 @@
     const cover = a.has_cover
       ? `<div class="cv is-load"><img class="cv-img" loading="lazy" decoding="async" alt=""
            src="/cover/${a.slug}?v=${a.cover_v||0}&w=320"
+           srcset="/cover/${a.slug}?v=${a.cover_v||0}&w=320 1x, /cover/${a.slug}?v=${a.cover_v||0}&w=640 2x"
            onload="this.parentNode.classList.remove('is-load');this.classList.add('rdy')"></div>`
       : `<div class="cv"><span class="material-symbols-outlined">album</span></div>`;
     return `<a class="prof-alb" href="/album/${encodeURIComponent(a.slug)}">
