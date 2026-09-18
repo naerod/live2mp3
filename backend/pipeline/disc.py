@@ -25,14 +25,20 @@ class DvdVideoNotSupported(NotImplementedError):
 # ---- data_disc -----------------------------------------------------------
 def build_data_disc(project_dir: Path, out_iso: Path, media: str = "audio",
                     volume_id: str = "LIVE2MP3") -> Path:
-    """ISO de données depuis build/audio (mp3) ou build/video (mp4)."""
-    src = project_dir / "build" / ("audio" if media == "audio" else "video")
-    if not src.exists() or not any(src.iterdir()):
+    """ISO de données depuis build/audio (mp3) ou build/video-full (mp4)."""
+    from .render import video_dir
+    audio = media == "audio"
+    src = (project_dir / "build" / "audio") if audio else video_dir(project_dir)
+    ext = "mp3" if audio else "mp4"
+    files = sorted(src.glob(f"*.{ext}")) if src.exists() else []
+    if not files:
         raise FileNotFoundError(f"Aucun média à graver dans {src}")
     out_iso.parent.mkdir(parents=True, exist_ok=True)
+    # Les fichiers sont listés un par un : `build/video-full` contient aussi les
+    # images sidecar Jellyfin, qui n'ont rien à faire sur le disque gravé.
     subprocess.run([
         "genisoimage", "-quiet", "-r", "-J", "-V", volume_id[:32],
-        "-o", str(out_iso), str(src),
+        "-o", str(out_iso), *[str(f) for f in files],
     ], check=True, capture_output=True)
     return out_iso
 

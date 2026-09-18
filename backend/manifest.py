@@ -120,6 +120,27 @@ def download_stem(manifest: dict[str, Any], fallback: str = "") -> str:
     return "_".join(parts) or slugify(fallback) or "album"
 
 
+def jellyfin_stem(manifest: dict[str, Any], fallback: str = "") -> str:
+    """Base du nom du MP4 concert complet, aux conventions Jellyfin :
+    ``Artiste - Titre (AAAA-MM-JJ)``.
+
+    Jellyfin prend le nom de fichier comme titre de l'item : contrairement aux
+    téléchargements (`download_stem`, slugifié), il faut ici un libellé lisible,
+    avec espaces et accents. Les champs absents sont omis plutôt que remplacés
+    par un marqueur — un album sans artiste donne « Titre (date) ».
+    """
+    album = manifest.get("album", {})
+    artist = str(album.get("artist", "") or "").strip()
+    title = str(album.get("title", "") or "").strip()
+    if title.lower() in ("", "untitled"):
+        title = "Concert Complet"
+    date = str(album.get("date", "") or "").strip()
+    stem = f"{artist} - {title}" if artist else title
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        stem = f"{stem} ({date})"
+    return sanitize_filename(stem) or slugify(fallback) or "album"
+
+
 @dataclass
 class Manifest:
     """Wrapper autour du dict manifest avec accès disque."""

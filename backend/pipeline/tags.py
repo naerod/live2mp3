@@ -27,7 +27,7 @@ from mutagen.id3 import (
 from mutagen.mp3 import MP3
 
 from ..manifest import Manifest, numbered_title
-from .render import video_filename
+from .render import video_dir, video_filename
 
 
 def _cover_bytes(project_dir: Path, manifest: Manifest) -> tuple[bytes | None, str]:
@@ -95,7 +95,6 @@ def run(project_dir: str | Path) -> dict:
     total = len(m.tracks)
     cover, cover_mime = _cover_bytes(project_dir, m)
     audio_dir = project_dir / "build" / "audio"
-    video_dir = project_dir / "build" / "video"
 
     tagged = {"audio": [], "video": []}
     for track in m.tracks:
@@ -106,7 +105,7 @@ def run(project_dir: str | Path) -> dict:
             tag_mp3(mp3, track, album, total, cover, cover_mime)
             tagged["audio"].append(str(mp3))
 
-    mp4 = video_dir / video_filename(m, project_dir.name)
+    mp4 = video_dir(project_dir) / video_filename(m, project_dir.name)
     if mp4.exists():
         tag_video_full(mp4, album)
         tagged["video"].append(str(mp4))

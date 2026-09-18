@@ -1,6 +1,6 @@
 """Stage 8 — Bundle.
 
-ZIP téléchargeable : build/audio, build/video, artwork/*.pdf, image disque,
+ZIP téléchargeable : build/audio, build/video-full, artwork/*.pdf, image disque,
 et manifest.yaml.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ def run(project_dir: str | Path, out_zip: str | Path | None = None) -> dict:
         z.write(mpath, "manifest.yaml")
         included.append("manifest.yaml")
 
-        for sub in ("build/audio", "build/video", "artwork", "build/disc"):
+        for sub in ("build/audio", "build/video-full", "artwork", "build/disc"):
             base = project_dir / sub
             if not base.exists():
                 continue

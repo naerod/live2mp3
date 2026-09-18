@@ -1,7 +1,7 @@
 """Rafraîchissement de la bibliothèque Jellyfin après un re-rendu.
 
 Sur CT110, `sync-media.sh` (cron) monte les albums publiés dans Jellyfin via
-des symlinks vers `build/audio`/`build/video` et ne déclenche un scan que
+des symlinks vers `build/audio`/`build/video-full` et ne déclenche un scan que
 lorsqu'un symlink apparaît ou disparaît (publication/dépublication). Un
 re-rendu de contenu à l'intérieur d'un dossier déjà monté (ré-édition d'un
 album déjà publié) n'est donc jamais détecté sans appel explicite.

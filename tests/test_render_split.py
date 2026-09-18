@@ -25,11 +25,11 @@ GEST = {"X-authentik-username": "g", "X-authentik-groups": "live2mp3-gestionnair
 
 def test_audio_only_render_preserves_existing_mp4(synth_project):
     """Piège central du découplage : `render.run` purge les orphelins de
-    `build/video`. La phase 1 tourne avec `video=False` — si cette purge s'y
+    `build/video-full`. La phase 1 tourne avec `video=False` — si cette purge s'y
     déclenchait, chaque rendu audio détruirait le MP4 déjà encodé (jusqu'à
     20 min de calcul, sur un stockage partagé avec la production)."""
     render.run(synth_project, video=True)
-    video_dir = synth_project / "build" / "video"
+    video_dir = synth_project / "build" / "video-full"
     mp4 = next(video_dir.glob("*.mp4"))
     mtime = mp4.stat().st_mtime
 
@@ -90,7 +90,7 @@ def test_killed_render_leaves_no_file_under_final_name(synth_project, monkeypatc
     with pytest.raises(KeyboardInterrupt):
         R.run(synth_project, video=True, audio=False)
 
-    video_dir = synth_project / "build" / "video"
+    video_dir = synth_project / "build" / "video-full"
     assert list(video_dir.glob("*.mp4")) == []
     assert list(video_dir.glob("*.part")) == []
 
@@ -98,7 +98,7 @@ def test_killed_render_leaves_no_file_under_final_name(synth_project, monkeypatc
 def test_leftover_part_file_is_purged_by_next_render(synth_project):
     """Un `.part` résiduel (worker tué sans pouvoir nettoyer) ne doit pas
     s'accumuler : la purge des orphelins le balaie au rendu suivant."""
-    video_dir = synth_project / "build" / "video"
+    video_dir = synth_project / "build" / "video-full"
     video_dir.mkdir(parents=True, exist_ok=True)
     (video_dir / "vieux-restant.mp4.part").write_bytes(b"\x00" * 512)
 

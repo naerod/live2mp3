@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Concerts complets : les vidéos des albums récemment importés réapparaissent dans Jellyfin. Le rendu les déposait dans un dossier que la bibliothèque n'explore pas — les fichiers étaient bien complets, mais invisibles. Ils sont remis à leur place, sans réencodage, et portent désormais un nom lisible (« Artiste - Titre (date) ») qui sert de titre dans Jellyfin. La miniature et le bouton de téléchargement MP4, qui dépendaient du même dossier, refonctionnent.",
         "Tri « Nouveauté » et badge « Nouveau » calés sur la date de mise en ligne et non plus sur la date d'import : un album importé il y a longtemps mais publié aujourd'hui remonte bien en tête. Dépublier puis republier ne redonne jamais le badge « Nouveau ».",
         "Nouveau badge « Mis à jour » sur les albums réellement modifiés dans les 30 derniers jours (affiché seulement une fois la période « Nouveau » passée ; une simple publication ou dépublication ne le déclenche pas).",
         "Pochettes beaucoup plus rapides à afficher : les grilles et les carrousels reçoivent une vignette WebP allégée au lieu de l'image d'origine (jusqu'à 5 Mo), mise en cache par le navigateur pour les visites suivantes ; les écrans haute définition reçoivent automatiquement une version plus fine. Un motif animé remplace le carré noir pendant le chargement.",
@@ -21,6 +22,7 @@
         "Créateur d'album : « Ajouter une piste » passe au-dessus de la liste des pistes, et « Valider et créer l'album » est aligné à droite (retour à gauche, action suivante à droite)."
       ],
       "en": [
+        "Full concerts: videos from recently imported albums show up in Jellyfin again. The renderer was writing them to a folder the library never scans — the files were complete, just invisible. They have been moved back, without re-encoding, and now carry a readable name (\"Artist - Title (date)\") used as the Jellyfin title. The thumbnail and the MP4 download button, which relied on the same folder, work again.",
         "The “Latest” sort and “New” badge now follow the publication date instead of the import date: an album imported long ago but published today correctly shows up first. Unpublishing then republishing never brings the “New” badge back.",
         "New “Updated” badge on albums actually changed within the last 30 days (shown only once the “New” period is over; publishing or unpublishing alone does not trigger it).",
         "Much faster cover loading: grids and carousels now receive a lightweight WebP thumbnail instead of the full-size original (up to 5 MB), cached by the browser for later visits; high-density screens automatically get a sharper version. An animated placeholder replaces the black square while loading.",

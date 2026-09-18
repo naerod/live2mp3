@@ -40,7 +40,7 @@ def test_mp4_metadata(synth_project):
     piste au niveau du fichier vidéo depuis le 2026-08-02."""
     render.run(synth_project, video=True)
     tags.run(synth_project)
-    mp4s = sorted((synth_project / "build" / "video").glob("*.mp4"))
+    mp4s = sorted((synth_project / "build" / "video-full").glob("*.mp4"))
     assert len(mp4s) == 1
     meta = MP4(str(mp4s[0]))
     assert meta.tags["\xa9nam"][0].startswith("The Clancy Tour")

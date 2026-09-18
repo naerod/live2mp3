@@ -537,7 +537,7 @@ def _album_extras(project_dir: Path) -> list[tuple[Path, str]]:
 
 def _zip_media(project_dir: Path, kind: str) -> Path:
     """Construit (et met en cache) un zip des MP3/MP4 + toutes les pochettes."""
-    sub = "audio" if kind == "mp3" else "video"
+    sub = "audio" if kind == "mp3" else "video-full"
     src = project_dir / "build" / sub
     if not src.exists() or not any(src.glob(f"*.{kind}")):
         raise HTTPException(404, f"aucun {kind} pour cet album")
