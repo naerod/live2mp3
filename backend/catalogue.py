@@ -17,6 +17,15 @@ from .manifest import Manifest, PROJECTS_DIR
 APP_ENV = os.environ.get("APP_ENV", "prod")
 
 
+def _mtime_iso(path: Path) -> str:
+    """Date de dernière écriture du manifest, en ISO UTC (chaîne vide si KO)."""
+    try:
+        return datetime.fromtimestamp(
+            path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
+    except OSError:
+        return ""
+
+
 def hidden_by_env(data: dict) -> bool:
     """Album créé en preprod : invisible depuis la prod tant qu'il n'est pas poussé.
 
@@ -101,6 +110,61 @@ def album_status(published: bool, has_mp3: bool, has_mp4: bool,
     return "published_audio"
 
 
+def stamp_first_published(m) -> bool:
+    """Horodate la **première** publication d'un album, et une seule fois.
+
+    `meta.first_published_at` est la date de mise en ligne originelle : c'est
+    elle qui pilote le tri « Nouveauté » et le badge « Nouveau », pas la date
+    d'import (un album importé il y a longtemps puis publié aujourd'hui est une
+    nouveauté pour le public). Une dépublication suivie d'une republication ne
+    la réécrit pas : l'album ne redevient jamais « nouveau ».
+
+    Renvoie True si le manifest a été modifié (appelant responsable du save).
+    """
+    meta = m.data.setdefault("meta", {})
+    if meta.get("first_published_at"):
+        return False
+    meta["first_published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return True
+
+
+def backfill_first_published() -> int:
+    """Renseigne `first_published_at` sur les albums publiés avant la mesure.
+
+    Aucune trace de la date de publication n'existe pour eux : on retient le
+    mtime du manifest (dernière écriture — la publication en est une), borné à
+    au minimum la date d'import. Idempotent, appelé au démarrage.
+    """
+    if not PROJECTS_DIR.exists():
+        return 0
+    done = 0
+    for pdir in sorted(PROJECTS_DIR.iterdir()):
+        path = pdir / "manifest.yaml"
+        if not path.is_file():
+            continue
+        try:
+            m = Manifest.load(path)
+        except Exception:
+            continue
+        if not m.data.get("published", True):
+            continue
+        meta = m.data.setdefault("meta", {})
+        if meta.get("first_published_at"):
+            continue
+        try:
+            mtime = datetime.fromtimestamp(
+                path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
+        except OSError:
+            continue
+        meta["first_published_at"] = max(mtime, meta.get("imported_at") or "")
+        try:
+            m.save(path)
+            done += 1
+        except Exception:
+            continue
+    return done
+
+
 def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> list[dict]:
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
@@ -171,6 +235,8 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
             "drive_added_at": meta.get("drive_added_at", ""),
+            "first_published_at": meta.get("first_published_at", ""),
+            "updated_at": _mtime_iso(manifest),
             "published": published,
         })
 
@@ -186,15 +252,17 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
                         parts[2].zfill(2) if len(parts) > 2 else "00")
             except Exception:
                 return ("0000", "00", "00")
-        elif sort == "date_import":
-            return a.get("imported_at", "") or ""
+        elif sort in ("date_publication", "date_import"):
+            # « Nouveauté » = date de mise en ligne, pas date d'import.
+            # Repli sur l'import pour les brouillons / non publiés.
+            return (a.get("first_published_at") or a.get("imported_at") or "")
         elif sort == "artist":
             return (a.get("artist", "") or "").lower()
         elif sort == "title":
             return (a.get("title", "") or "").lower()
         return ""
 
-    reverse = sort in ("date_concert", "date_import")  # plus récent en premier
+    reverse = sort in ("date_concert", "date_import", "date_publication")  # plus récent en premier
     albums.sort(key=_sort_key, reverse=reverse)
     return albums
 

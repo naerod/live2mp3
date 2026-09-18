@@ -135,6 +135,13 @@ def _startup() -> None:
         notifications.ensure_seeded()
     except Exception as exc:
         log.warning("amorçage des notifications impossible : %s", exc)
+    # Date de publication originelle des albums antérieurs à la mesure.
+    try:
+        n = catalogue.backfill_first_published()
+        if n:
+            log.info("first_published_at renseigné sur %d album(s)", n)
+    except Exception as exc:
+        log.warning("backfill first_published_at impossible : %s", exc)
 
 # --- État de progression (Redis, partagé API <-> worker) ------------------
 # Le rendu s'exécute dans le worker RQ : l'émetteur et le lecteur du flux SSE
@@ -1052,6 +1059,8 @@ def set_published(slug: str, payload: PublishIn,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     m.data["published"] = payload.published
+    if payload.published:
+        catalogue.stamp_first_published(m)
     m.save(path)
     # Symlink Jellyfin (apparition/retrait dans Finamp) dès maintenant, plutôt
     # que d'attendre le prochain passage du cron sync-media.sh (jusqu'à 10 min).
@@ -1085,6 +1094,8 @@ def set_published_bulk(payload: BulkPublishIn,
         if m.data.get("published", True) == payload.published:
             continue  # déjà dans l'état visé
         m.data["published"] = payload.published
+        if payload.published:
+            catalogue.stamp_first_published(m)
         m.save(path)
         updated.append(slug)
         if payload.published:

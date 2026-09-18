@@ -615,6 +615,9 @@ def commit(payload: CommitIn,
             "imported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "import_source": "upload",
         }
+        if payload.published:
+            # Publié dès l'import : c'est sa date de mise en ligne originelle.
+            m.data["meta"]["first_published_at"] = m.data["meta"]["imported_at"]
         m.save(project_dir / "manifest.yaml")
 
         tagged = _write_album_tags(slug, m)

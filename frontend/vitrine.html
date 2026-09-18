@@ -60,6 +60,10 @@
     background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
   .new-badge .material-symbols-outlined{font-size:12px}
+  /* Mise à jour récente : même gabarit que « Nouveau », teinte neutre pour ne
+     pas concurrencer la nouveauté (et contraste AA sur fond clair et sombre). */
+  .new-badge.upd-badge{background:var(--card);color:var(--fg);
+    border:1px solid var(--border)}
   .draft-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
     gap:3px;padding:3px 8px 3px 5px;border-radius:7px;
     background:rgba(220,60,60,.85);color:#fff;font-size:10.5px;font-weight:700;
@@ -499,6 +503,7 @@ const T={
       dltrack:"Télécharger cette piste",lockdl:"Se connecter pour télécharger",login:"Connexion",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
+      badge_new:"Nouveau",badge_updated:"Mis à jour",
       sort_artist:"Artiste",sort_title:"Titre",
       logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
@@ -550,6 +555,7 @@ const T={
       dltrack:"Download this track",lockdl:"Log in to download",login:"Log in",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
+      badge_new:"New",badge_updated:"Updated",
       sort_artist:"Artist",sort_title:"Title",
       logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
@@ -702,10 +708,23 @@ function matches(a){
 }
 
 const NEW_DAYS=21;
+const UPDATED_DAYS=30;
+function daysSince(ref){
+  if(!ref) return Infinity;
+  const t=new Date(ref).getTime();
+  if(isNaN(t)) return Infinity;
+  return (Date.now()-t)/864e5;
+}
+// « Nouveau » = mise en ligne récente, pas import récent : un album importé il y
+// a des mois mais publié aujourd'hui est une nouveauté. Repli sur l'import pour
+// les albums sans date de publication (brouillons, vue gestionnaire).
 function isNew(a){
-  const ref=a.drive_added_at||a.imported_at;
-  if(!ref) return false;
-  return (Date.now()-new Date(ref).getTime())/(864e5)<=NEW_DAYS;
+  return daysSince(a.first_published_at||a.imported_at)<=NEW_DAYS;
+}
+// « Mis à jour » = manifest réécrit récemment (pistes, titres, pochette…) sur un
+// album qui n'est plus une nouveauté — les deux badges ne coexistent jamais.
+function isUpdated(a){
+  return !isNew(a)&&daysSince(a.updated_at)<=UPDATED_DAYS;
 }
 
 // Nom d'entité cliquable vers sa page auto (artiste/lieu/festival), comme sur la
@@ -731,7 +750,9 @@ function albumCard(a){
   const gear=md.is_gestionnaire
     ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
-    ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
+    ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
+    :(isUpdated(a)
+      ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
   // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
   const ST_IC={draft:"draft",unpublished:"visibility_off"};
   const statusBadge=md.is_gestionnaire&&a.status&&ST_IC[a.status]
