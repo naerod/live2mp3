@@ -99,7 +99,9 @@
     bits.push(`<span class="dr-meta-i"><span class="material-symbols-outlined">event</span>${esc(d.date || t("no_date"))}</span>`);
     if (d.tracks) bits.push(`<span class="dr-meta-i"><span class="material-symbols-outlined">queue_music</span>${d.tracks} ${esc(t("tracks"))}</span>`);
     bits.push(`<span class="dr-meta-i"><span class="material-symbols-outlined">timeline</span>${esc(stage)}</span>`);
+    const href = `/app#${encodeURIComponent(d.slug)}`;
     return `<div class="dr-row" data-slug="${esc(d.slug)}" role="button" tabindex="0">
+      <a class="dr-open" href="${href}" tabindex="-1" aria-hidden="true"></a>
       <span class="dr-main">
         <span class="dr-title">${esc(d.title || d.slug)}</span>
         <span class="dr-artist">${esc(d.artist)}</span>
@@ -159,14 +161,14 @@
       </div>` : "";
     return `<div class="q-row q-${it.state}" data-slug="${esc(it.slug)}" data-kind="${esc(it.kind || "render")}" draggable="${!active}">
       <span class="material-symbols-outlined q-ico">${active ? (video ? "movie" : "sync") : "schedule"}</span>
-      <span class="q-body q-open" role="button" tabindex="0" title="${esc(t("q_open"))}">
+      <a class="q-body q-open" draggable="false" href="/app#${encodeURIComponent(it.slug)}" title="${esc(t("q_open"))}">
         <span class="q-title">${esc(it.artist || "")}${it.artist ? " — " : ""}${esc(it.title || it.slug)}</span>
         <span class="q-meta"><span class="q-state">${esc(st)}</span>
           <span class="q-kind">${esc(kindLbl)}</span>${tags}
           ${stageTxt ? `<span class="q-stage">${esc(stageTxt)}</span>` : ""}
           ${active && p != null ? `<span class="q-pct">${Math.round(p)} %</span>` : ""}</span>
         ${bar}
-      </span>
+      </a>
       ${active ? `<button class="icon-btn icon-only q-pause" data-slug="${esc(it.slug)}" title="${esc(pauseLbl)}"><span class="material-symbols-outlined">${pauseIco}</span></button>` : ""}
       <button class="icon-btn icon-only q-cancel" data-slug="${esc(it.slug)}" title="${esc(t("q_cancel"))}"><span class="material-symbols-outlined">stop_circle</span></button>
     </div>`;
@@ -208,7 +210,8 @@
     document.querySelectorAll(".q-open").forEach(body => {
       const slug = body.closest(".q-row").dataset.slug;
       const open = () => { location.href = `/app#${encodeURIComponent(slug)}`; };
-      body.addEventListener("click", open);
+      // Le lien natif fait déjà la navigation au clic gauche (et permet
+      // clic-molette / Ctrl+clic) : on ne garde que le clavier.
       body.addEventListener("keydown", e => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
       });
@@ -300,7 +303,9 @@
     document.querySelectorAll(".dr-row").forEach(row => {
       const slug = row.dataset.slug;
       const open = () => { location.href = `/app#${encodeURIComponent(slug)}`; };
-      row.addEventListener("click", open);
+      // L'ancre .dr-open couvre la ligne : clic gauche, molette et Ctrl+clic
+      // passent par le navigateur. Le handler ne sert plus qu'au clavier.
+      row.addEventListener("click", e => { if (!e.target.closest("a,button")) open(); });
       row.addEventListener("keydown", e => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
       });

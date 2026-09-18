@@ -14,7 +14,8 @@
         "Import par lien : un festival ou une salle n'est plus pris pour l'artiste ; l'artiste et la date sont corrigés par les données officielles.",
         "Recherche de setlist : message clair en cas de session expirée ou d'erreur serveur, au lieu de « Aucune setlist trouvée ».",
         "Jellyfin : la pochette carrée sert aussi d'image « Disc ».",
-        "Éditeur audio : aperçu de travail allégé (64 kb/s mono), chargement plus rapide."
+        "Éditeur audio : aperçu de travail allégé (64 kb/s mono), chargement plus rapide.",
+        "Les cartes d'album et les lignes de brouillon/file d'attente sont de vrais liens : le clic molette et le Ctrl+clic ouvrent désormais la fiche dans un nouvel onglet."
       ],
       "en": [
         "Much faster cover loading: grids and carousels now receive a lightweight WebP thumbnail instead of the full-size original (up to 5 MB), cached by the browser for later visits; high-density screens automatically get a sharper version. An animated placeholder replaces the black square while loading.",
@@ -22,7 +23,8 @@
         "Link import: a festival or venue is no longer mistaken for the artist; artist and date are corrected from official data.",
         "Setlist lookup: clear message on expired session or server error, instead of “No setlist found”.",
         "Jellyfin: the square cover is also used as the “Disc” image.",
-        "Audio editor: lighter working preview (64 kbps mono), faster loading."
+        "Audio editor: lighter working preview (64 kbps mono), faster loading.",
+        "Album cards and draft/queue rows are now real links: middle-click and Ctrl+click open the page in a new tab."
       ]
     },
     {

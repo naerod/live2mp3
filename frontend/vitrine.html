@@ -46,6 +46,11 @@
   .album{position:relative;background:var(--card);border:1px solid var(--border);
     border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
     transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  /* Lien réel couvrant la carte : rend possible clic-molette / Ctrl+clic
+     (ouverture dans un nouvel onglet), impossible avec un simple handler JS. */
+  .album .album-open{position:absolute;inset:0;z-index:1;border-radius:16px}
+  .album .body a,.album .al-social,.album .btns,.album .al-poster{position:relative;z-index:2}
+  body.select-mode .album .album-open{pointer-events:none}
   .album:hover{transform:translateY(-6px);border-color:var(--accent);
     box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
   .album:hover .cover-img{transform:scale(1.03)}
@@ -744,6 +749,7 @@ function albumCard(a){
   const posterHtml=posterFor(a.imported_by);
   const pick=`<div class="pick" aria-hidden="true"><span class="material-symbols-outlined">check</span></div>`;
   return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}">
+    <a class="album-open" draggable="false" href="/album/${a.slug}" tabindex="-1" aria-hidden="true"></a>
     ${pick}
     ${gear}
     ${statusBadge}
@@ -1010,9 +1016,12 @@ document.getElementById("albums").addEventListener("click",e=>{
   if(!card) return;
   // Mode sélection : toute la carte coche/décoche, pas de navigation.
   if(selectMode){e.preventDefault();togglePick(card.dataset.slug);return;}
-  if(e.target.closest("a,button")) return;
+  const link=e.target.closest("a,button");
+  if(link&&!link.classList.contains("album-open")) return;
   const slugs=[...document.querySelectorAll('#albums .album')].map(c=>c.dataset.slug);
   sessionStorage.setItem('l2m-album-nav',JSON.stringify({slugs}));
+  // Clic sur l'ancre : on laisse le navigateur suivre le lien (onglet, historique).
+  if(link) return;
   location.href=`/album/${card.dataset.slug}`;
 });
 document.getElementById("select-btn").onclick=toggleSelectMode;
