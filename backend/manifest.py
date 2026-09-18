@@ -12,6 +12,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
 import yaml
@@ -136,10 +137,21 @@ class Manifest:
         m.validate()
         return m
 
-    def save(self, path: str | Path | None = None) -> Path:
+    def save(self, path: str | Path | None = None, touch: bool = True) -> Path:
+        """Écrit le manifest. `touch` horodate `meta.updated_at`.
+
+        `meta.updated_at` est la date de dernière modification réelle de
+        l'album : elle pilote le badge « Mis à jour » de la vitrine. Le mtime du
+        fichier ne convient pas — toute migration ou réécriture technique le
+        remettrait à zéro et rendrait tout le catalogue « modifié ». Passer
+        `touch=False` pour ces écritures-là.
+        """
         target = Path(path) if path else self.path
         if target is None:
             raise ManifestError("Aucun chemin de sauvegarde fourni.")
+        if touch:
+            self.data.setdefault("meta", {})["updated_at"] = datetime.now(
+                timezone.utc).isoformat(timespec="seconds")
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(

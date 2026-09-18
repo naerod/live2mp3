@@ -17,15 +17,6 @@ from .manifest import Manifest, PROJECTS_DIR
 APP_ENV = os.environ.get("APP_ENV", "prod")
 
 
-def _mtime_iso(path: Path) -> str:
-    """Date de dernière écriture du manifest, en ISO UTC (chaîne vide si KO)."""
-    try:
-        return datetime.fromtimestamp(
-            path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
-    except OSError:
-        return ""
-
-
 def hidden_by_env(data: dict) -> bool:
     """Album créé en preprod : invisible depuis la prod tant qu'il n'est pas poussé.
 
@@ -129,11 +120,14 @@ def stamp_first_published(m) -> bool:
 
 
 def backfill_first_published() -> int:
-    """Renseigne `first_published_at` sur les albums publiés avant la mesure.
+    """Renseigne `first_published_at` / `updated_at` sur les albums antérieurs.
 
     Aucune trace de la date de publication n'existe pour eux : on retient le
     mtime du manifest (dernière écriture — la publication en est une), borné à
-    au minimum la date d'import. Idempotent, appelé au démarrage.
+    au minimum la date d'import. `updated_at` est aligné sur cette date plutôt
+    que sur le mtime, sans quoi cette migration elle-même ferait passer tout le
+    catalogue en « Mis à jour ». Écriture sans `touch`, idempotente, au
+    démarrage.
     """
     if not PROJECTS_DIR.exists():
         return 0
@@ -146,19 +140,21 @@ def backfill_first_published() -> int:
             m = Manifest.load(path)
         except Exception:
             continue
-        if not m.data.get("published", True):
-            continue
         meta = m.data.setdefault("meta", {})
-        if meta.get("first_published_at"):
+        if meta.get("first_published_at") and meta.get("updated_at"):
             continue
         try:
             mtime = datetime.fromtimestamp(
                 path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
         except OSError:
             continue
-        meta["first_published_at"] = max(mtime, meta.get("imported_at") or "")
+        if m.data.get("published", True) and not meta.get("first_published_at"):
+            meta["first_published_at"] = max(mtime, meta.get("imported_at") or "")
+        if not meta.get("updated_at"):
+            meta["updated_at"] = (meta.get("first_published_at")
+                                  or meta.get("imported_at") or mtime)
         try:
-            m.save(path)
+            m.save(path, touch=False)
             done += 1
         except Exception:
             continue
@@ -236,7 +232,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "imported_at": meta.get("imported_at", ""),
             "drive_added_at": meta.get("drive_added_at", ""),
             "first_published_at": meta.get("first_published_at", ""),
-            "updated_at": _mtime_iso(manifest),
+            "updated_at": meta.get("updated_at", ""),
             "published": published,
         })
 

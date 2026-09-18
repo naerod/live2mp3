@@ -1061,7 +1061,9 @@ def set_published(slug: str, payload: PublishIn,
     m.data["published"] = payload.published
     if payload.published:
         catalogue.stamp_first_published(m)
-    m.save(path)
+    # Publier/dépublier n'est pas une modification de contenu : pas de `touch`,
+    # sinon un vieil album republié afficherait « Mis à jour ».
+    m.save(path, touch=False)
     # Symlink Jellyfin (apparition/retrait dans Finamp) dès maintenant, plutôt
     # que d'attendre le prochain passage du cron sync-media.sh (jusqu'à 10 min).
     jellyfin.trigger_sync()
@@ -1096,7 +1098,7 @@ def set_published_bulk(payload: BulkPublishIn,
         m.data["published"] = payload.published
         if payload.published:
             catalogue.stamp_first_published(m)
-        m.save(path)
+        m.save(path, touch=False)
         updated.append(slug)
         if payload.published:
             try:
