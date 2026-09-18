@@ -118,6 +118,9 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* « Ajouter une piste » est placé au-dessus de la liste : l'action reste
+   visible sans dérouler toute la setlist. */
+.add-track-top{margin-top:0;margin-bottom:10px}
 /* dans une barre d'actions, le margin-top hérité de `button,.primary`
    désaligne verticalement les boutons -> neutralisé, l'espacement vient
    du margin-top du conteneur .actions */

@@ -106,8 +106,8 @@
     <h2 class="sub-h"><span class="material-symbols-outlined">queue_music</span> <span data-i18n="setlist_title">Setlist</span></h2>
     <p class="note"><span class="material-symbols-outlined">info</span><span id="setlist-hint" data-i18n="setlist_hint">Vérifiez les titres. Laissez vide : l'IA identifiera les chansons à l'écoute (plus long). Artiste par piste uniquement s'il diffère de l'album (invité, duo).</span></p>
     <p id="setlist-src" class="setlist-src hidden"></p>
+    <button id="btn-add-track" class="icon-btn add-track-top"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
     <div id="track-rows" class="track-rows"></div>
-    <button id="btn-add-track" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
     <label class="opt-check"><input type="checkbox" id="f-video" checked> <span data-i18n="video_opt">Télécharger aussi la vidéo (MP4 complet) (Conseillé)</span></label>
     <div class="actions" style="margin-top:18px;justify-content:space-between">
       <button id="btn-back-link" class="btn-secondary"><span class="material-symbols-outlined">arrow_back</span> <span data-i18n="back">Retour</span></button>
@@ -168,6 +168,7 @@
       <span class="material-symbols-outlined">album</span>
       <span class="disc-warn-txt"></span>
     </div>
+    <button id="btn-add-track2" class="icon-btn add-track-top"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
     <div id="edit-rows" class="track-rows"></div>
     <div id="reorder-bar" class="reorder-bar hidden">
       <span class="reorder-msg"><span class="material-symbols-outlined">swap_vert</span> <span data-i18n="reorder_pending">Ordre modifié — appliquez pour ré-assembler l'audio.</span></span>
@@ -176,8 +177,7 @@
         <button id="btn-reorder-apply" class="primary"><span class="material-symbols-outlined">done</span> <span data-i18n="reorder_apply">Appliquer l'ordre</span></button>
       </span>
     </div>
-    <button id="btn-add-track2" class="icon-btn"><span class="material-symbols-outlined">add</span> <span data-i18n="add_track">Ajouter une piste</span></button>
-    <div class="actions" style="margin-top:18px">
+    <div class="actions" style="margin-top:18px;justify-content:flex-end">
       <button id="btn-render" class="primary"><span class="material-symbols-outlined">check_circle</span> <span data-i18n="validate_render">Valider et créer l'album</span></button>
     </div>
   </section>
