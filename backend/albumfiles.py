@@ -165,9 +165,10 @@ def _write_track_tags(slug: str, m: Manifest) -> int:
                 tags = EasyID3()
                 tags.save(str(mp3_path))
                 tags = EasyID3(str(mp3_path))
-            # Tag titre préfixé du numéro (« 01. Titre ») pour l'ordre sur les
-            # lecteurs ; le titre affiché dans l'app reste nu (lu du manifeste).
-            tags["title"] = [_manifest.numbered_title(pos, t.get("title", ""))]
+            # Titre NU dans le tag : c'est ce qu'affiche Finamp, qui numérote
+            # déjà ses lignes (cf. manifest.numbered_title). L'ordre est porté
+            # par TRCK juste en dessous, et par le nom de fichier numéroté.
+            tags["title"] = [t.get("title", "")]
             tags["tracknumber"] = [f"{pos}/{total}"]
             tags.save()
             tagged += 1

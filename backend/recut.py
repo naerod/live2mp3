@@ -458,7 +458,8 @@ def _tag_one(mp3: Path, m: Manifest, track: dict) -> None:
     date = alb.get("date") or ""
     if date:
         tags["date"] = [date[:4] if len(date) >= 4 else date]
-    tags["title"] = [_manifest_mod.numbered_title(pos, track.get("title", ""))]
+    # Titre nu (cf. manifest.numbered_title) : le numéro reste au fichier.
+    tags["title"] = [track.get("title", "")]
     tags["tracknumber"] = [f"{pos}/{total}"]
     tags.save()
 

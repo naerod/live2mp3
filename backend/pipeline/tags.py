@@ -26,7 +26,7 @@ from mutagen.id3 import (
 )
 from mutagen.mp3 import MP3
 
-from ..manifest import Manifest, numbered_title
+from ..manifest import Manifest
 from .render import video_dir, video_filename
 
 
@@ -52,7 +52,8 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
         audio.add_tags()
     tags = audio.tags
     tags.delall("APIC")
-    tags["TIT2"] = TIT2(encoding=3, text=numbered_title(track["n"], track["title"]))
+    # Titre nu (cf. manifest.numbered_title) : le numéro reste au fichier.
+    tags["TIT2"] = TIT2(encoding=3, text=track["title"])
     tags["TRCK"] = TRCK(encoding=3, text=f"{track['n']}/{total}")
     tags["TALB"] = TALB(encoding=3, text=album.get("title", ""))
     # Artiste de la piste (invité/duo) s'il diffère ; TPE2 reste l'artiste album.

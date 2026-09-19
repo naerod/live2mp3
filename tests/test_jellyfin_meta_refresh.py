@@ -90,3 +90,29 @@ def test_refresh_album_sends_replace_all_metadata(monkeypatch):
     assert sent["ReplaceAllMetadata"] == "true"
     assert jellyfin.refresh_album("s") is True
     assert sent["ReplaceAllMetadata"] == "false"
+
+
+def test_track_tag_is_bare_title_file_stays_numbered(client, refresh_calls, tmp_path):
+    """Convention 2026-09-19 : tag nu, fichier numéroté.
+
+    Le préfixe « 01. » faisait doublon dans Finamp, qui numérote déjà ses
+    lignes ; il reste utile dans le nom de fichier (ZIP trié par nom).
+    """
+    from backend.albumfiles import _write_track_tags
+    from backend.manifest import Manifest, numbered_title
+    from mutagen.easyid3 import EasyID3
+
+    c, root = client
+    slug = _seed(root)
+    audio = root / slug / "build" / "audio"
+    audio.mkdir(parents=True)
+    mp3 = audio / "01. Un.mp3"
+    # En-tête MP3 minimal : mutagen doit pouvoir poser un tag ID3 dessus.
+    mp3.write_bytes(b"\xff\xfb\x90\x00" + b"\x00" * 2048)
+
+    m = Manifest.load(root / slug / "manifest.yaml")
+    assert _write_track_tags(slug, m) == 1
+    assert EasyID3(str(mp3))["title"] == ["Un"]
+    assert EasyID3(str(mp3))["tracknumber"] == ["1/1"]
+    # La fonction de numérotation reste celle des noms de fichiers.
+    assert numbered_title(1, "Un") == "01. Un"

@@ -86,10 +86,14 @@ def project_slug(manifest: dict[str, Any]) -> str:
 def numbered_title(n: Any, title: str) -> str:
     """Titre préfixé du numéro de piste sur 2 chiffres : ``01. Overcompensate``.
 
-    Utilisé **uniquement** pour le tag ID3/metadata (TIT2) — le titre affiché
-    dans l'app reste nu (lu depuis le manifeste). Le numéro dans le titre force
-    l'ordre des pistes sur les lecteurs qui trient alphabétiquement (Spotify
-    local, etc.).
+    Utilisé **uniquement pour les noms de fichiers** — fichiers rendus et nom
+    du téléchargement — où le numéro garde l'ordre du concert dans un dossier
+    ou un ZIP trié alphabétiquement.
+
+    **Pas pour le tag ID3 TIT2** : décision du 2026-09-19. En streaming, le
+    lecteur (Finamp, Jellyfin) trie déjà sur TRCK et affiche son propre numéro
+    de ligne — le préfixe faisait donc doublon à l'écran (« 1  01. Intro »).
+    Le tag porte le titre nu ; c'est le fichier qui reste numéroté.
     """
     title = title or ""
     try:
