@@ -141,6 +141,9 @@ def _write_album_tags(slug: str, m: Manifest) -> int:
                 tags["albumartist"] = [artist]
             if year:
                 tags["date"] = [year]
+            # Pas de notion de disque dans live2mp3 : un TPOS hétérogène hérité
+            # des fichiers source scinde l'album en « Disc 1 / Disc 2 ».
+            tags.pop("discnumber", None)
             tags.save()
             tagged += 1
         except Exception:

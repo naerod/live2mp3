@@ -52,6 +52,10 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
         audio.add_tags()
     tags = audio.tags
     tags.delall("APIC")
+    # TPOS (numéro de disque) hérité du fichier source : live2mp3 n'a aucune
+    # notion de disque, et un TPOS hétérogène fait éclater l'album en
+    # « Disc 1 / Disc 2 » chez les clients (constaté sur Finamp, 2026-09-19).
+    tags.delall("TPOS")
     # Titre nu (cf. manifest.numbered_title) : le numéro reste au fichier.
     tags["TIT2"] = TIT2(encoding=3, text=track["title"])
     tags["TRCK"] = TRCK(encoding=3, text=f"{track['n']}/{total}")

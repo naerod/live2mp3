@@ -13,6 +13,11 @@ Compare, pour chaque album monté dans /media/musique/<slug>, le `Name` indexé
 par Jellyfin au `album.title` du manifeste, et force un refresh ciblé en cas
 d'écart. Idempotent, silencieux quand tout est cohérent (cas courant).
 
+Surveille aussi les albums dont l'**artiste** a disparu côté Jellyfin. Ce champ
+n'existe dans aucun fichier : Jellyfin le dérive des pistes, et un refresh
+`ReplaceAllMetadata=true` l'efface — l'album repasse alors « Unknown Artist »
+dans Finamp. Un refresh non destructif le reconstruit.
+
 Déployé sur CT110 : /opt/apps/jellyfin/reconcile-names.py, cron horaire.
 Incident fondateur : 2026-09-19 (album TIF resté « Olympia 2024 » dans Finamp).
 """
@@ -83,14 +88,27 @@ def retag(slug):
 
 def main():
     items = _call("GET", "/Items", {
-        "Recursive": "true", "IncludeItemTypes": "MusicAlbum", "Fields": "Path",
+        "Recursive": "true", "IncludeItemTypes": "MusicAlbum",
+        "Fields": "Path,AlbumArtist",
     })["Items"]
     fixed = []
+    rederived = []
     for item in items:
         path = (item.get("Path") or "").rstrip("/")
         if "/musique/" not in path:
             continue
         slug = path.rsplit("/", 1)[-1]
+
+        # Artiste dérivé perdu : un simple refresh non destructif le rétablit.
+        if not item.get("AlbumArtist"):
+            _call("POST", f"/Items/{item['Id']}/Refresh", {
+                "MetadataRefreshMode": "FullRefresh",
+                "ImageRefreshMode": "None",
+                "ReplaceAllMetadata": "false",
+                "Recursive": "true",
+            })
+            rederived.append(slug)
+
         expected = manifest_title(slug)
         if not expected or item.get("Name") == expected:
             continue
@@ -102,7 +120,18 @@ def main():
             "ReplaceAllMetadata": "true",
             "Recursive": "true",
         })
+        # Le passage ci-dessus efface artiste et année (champs dérivés) :
+        # on les reconstruit aussitôt, sans toucher au nom corrigé.
+        _call("POST", f"/Items/{item['Id']}/Refresh", {
+            "MetadataRefreshMode": "FullRefresh",
+            "ImageRefreshMode": "None",
+            "ReplaceAllMetadata": "false",
+            "Recursive": "true",
+        })
         fixed.append(f"{slug}: {item.get('Name')!r} -> {expected!r}")
+    if rederived:
+        print(f"{len(rederived)} album(s) sans artiste, métadonnées "
+              f"reconstruites : {', '.join(rederived)}")
     if fixed:
         print(f"{len(fixed)} album(s) réconcilié(s) :")
         for line in fixed:

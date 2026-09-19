@@ -71,25 +71,46 @@ def test_rename_track_refreshes_jellyfin_with_replace(client, refresh_calls):
     assert refresh_calls == [(slug, True)], refresh_calls
 
 
-def test_refresh_album_sends_replace_all_metadata(monkeypatch):
-    """Sans `ReplaceAllMetadata=true`, Jellyfin garde l'ancien nom en base."""
+def _capture_posts(monkeypatch):
     from backend import jellyfin
     monkeypatch.setattr(jellyfin, "JELLYFIN_API_KEY", "k")
     monkeypatch.setattr(jellyfin, "_find_album_id", lambda slug: "ID")
-    sent = {}
+    sent = []
 
     class _R:
         status_code = 204
 
     def _post(url, params=None, headers=None, timeout=None):
-        sent.update(params or {})
+        sent.append(params or {})
         return _R()
 
     monkeypatch.setattr(jellyfin.requests, "post", _post)
+    return jellyfin, sent
+
+
+def test_refresh_album_sends_replace_all_metadata(monkeypatch):
+    """Sans `ReplaceAllMetadata=true`, Jellyfin garde l'ancien nom en base."""
+    jellyfin, sent = _capture_posts(monkeypatch)
     assert jellyfin.refresh_album("s", replace_metadata=True) is True
-    assert sent["ReplaceAllMetadata"] == "true"
+    assert sent[0]["ReplaceAllMetadata"] == "true"
+
+    sent.clear()
     assert jellyfin.refresh_album("s") is True
-    assert sent["ReplaceAllMetadata"] == "false"
+    assert [p["ReplaceAllMetadata"] for p in sent] == ["false"]
+
+
+def test_replace_metadata_is_followed_by_a_rederive_pass(monkeypatch):
+    """`ReplaceAllMetadata=true` efface l'artiste et l'année de l'album.
+
+    Ces deux champs ne viennent d'aucun fichier : Jellyfin les dérive des
+    pistes. Sans second passage non destructif, l'album repasse « Unknown
+    Artist » dans Finamp (constaté sur 9 albums le 2026-09-19).
+    """
+    jellyfin, sent = _capture_posts(monkeypatch)
+    assert jellyfin.refresh_album("s", replace_metadata=True) is True
+    assert [p["ReplaceAllMetadata"] for p in sent] == ["true", "false"]
+    # Le second passage ne doit pas re-télécharger les images pour rien.
+    assert sent[1]["ImageRefreshMode"] == "None"
 
 
 def test_track_tag_is_bare_title_file_stays_numbered(client, refresh_calls, tmp_path):

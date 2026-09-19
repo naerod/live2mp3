@@ -102,6 +102,12 @@ def refresh_album(slug: str, replace_metadata: bool = False) -> bool:
     (favoris, écoutes) ne sont pas touchées : elles ne font pas partie des
     métadonnées d'item.
 
+    **Mais `ReplaceAllMetadata=true` efface au passage l'artiste et l'année de
+    l'item album**, qui ne viennent d'aucun fichier : Jellyfin les *dérive* des
+    pistes. L'album repassait donc « Unknown Artist » dans Finamp. On enchaîne
+    pour cette raison un second refresh non destructif, qui reconstruit ces
+    champs dérivés sans toucher au nom déjà corrigé par le premier.
+
     Best-effort : ne lève jamais. Retourne False si pas de clé, album
     introuvable ou erreur réseau.
     """
@@ -111,6 +117,7 @@ def refresh_album(slug: str, replace_metadata: bool = False) -> bool:
         item_id = _find_album_id(slug)
         if not item_id:
             return False
+        headers = {"X-Emby-Token": JELLYFIN_API_KEY}
         r = requests.post(
             f"{JELLYFIN_URL}/Items/{item_id}/Refresh",
             params={
@@ -120,9 +127,24 @@ def refresh_album(slug: str, replace_metadata: bool = False) -> bool:
                 "ReplaceAllMetadata": "true" if replace_metadata else "false",
                 "Recursive": "true",
             },
-            headers={"X-Emby-Token": JELLYFIN_API_KEY},
+            headers=headers,
             timeout=_TIMEOUT,
         )
-        return r.status_code < 400
+        if not replace_metadata or r.status_code >= 400:
+            return r.status_code < 400
+        # Second passage : restaure artiste/année dérivés des pistes, effacés
+        # par le `ReplaceAllMetadata` ci-dessus. Le nom, lui, reste corrigé.
+        r2 = requests.post(
+            f"{JELLYFIN_URL}/Items/{item_id}/Refresh",
+            params={
+                "MetadataRefreshMode": "FullRefresh",
+                "ImageRefreshMode": "None",
+                "ReplaceAllMetadata": "false",
+                "Recursive": "true",
+            },
+            headers=headers,
+            timeout=_TIMEOUT,
+        )
+        return r2.status_code < 400
     except requests.RequestException:
         return False
