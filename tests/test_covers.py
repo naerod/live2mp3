@@ -479,7 +479,7 @@ def test_cover_change_propagates_to_media_and_jellyfin(client, monkeypatch):
     monkeypatch.setattr(albumfiles, "_write_album_cover",
                         lambda s, m: embedded.append(s) or 1)
     monkeypatch.setattr(jellyfin, "refresh_album",
-                        lambda s: refreshed.append(s) or True)
+                        lambda s, **kw: refreshed.append(s) or True)
 
     _post_cover(c, slug, USER)  # 1re gagnante -> changement réel
 
@@ -502,7 +502,7 @@ def test_per_track_album_propagates_folder_cover_only(client, monkeypatch):
                         lambda s, m: called.__setitem__("album", called["album"] + 1))
     monkeypatch.setattr(albumfiles, "_write_folder_cover",
                         lambda s, m: called.__setitem__("folder", called["folder"] + 1))
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: True)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: True)
 
     _post_cover(c, slug, USER)
 
@@ -523,7 +523,7 @@ def test_unpublished_album_does_not_touch_media(client, monkeypatch):
 
     hits = []
     monkeypatch.setattr(albumfiles, "_write_album_cover", lambda s, m: hits.append(s))
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: hits.append(s))
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: hits.append(s))
 
     _post_cover(c, slug, USER)
     assert hits == []
@@ -538,7 +538,7 @@ def test_reorder_tracks_renumbers_n(client, monkeypatch):
     (02,03,…,01). Le `n` doit refléter la position finale.
     """
     from backend import jellyfin
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: None)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: None)
     c, root = client
     payload = {"album": {"artist": "Coldplay", "title": "Live", "date": "2026-01-01"},
                "tracks": [
@@ -577,7 +577,7 @@ def test_folder_cover_also_writes_disc_image(client, monkeypatch):
     audio = root / slug / "build" / "audio"
     audio.mkdir(parents=True)
     monkeypatch.setattr(albumfiles, "_projects_dir", lambda: root)
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: True)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: True)
     art = root / slug / "artwork"
     art.mkdir(parents=True, exist_ok=True)
     (art / "cover.png").write_bytes(_png())

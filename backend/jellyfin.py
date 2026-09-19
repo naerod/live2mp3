@@ -85,7 +85,7 @@ def _find_album_id(slug: str) -> str | None:
     return None
 
 
-def refresh_album(slug: str) -> bool:
+def refresh_album(slug: str, replace_metadata: bool = False) -> bool:
     """Force Jellyfin à re-scanner un album ET à ré-extraire ses images.
 
     Un `Library/Refresh` ordinaire ne ré-extrait pas l'art déjà en cache : sur
@@ -93,6 +93,14 @@ def refresh_album(slug: str) -> bool:
     reste figée côté serveur, donc côté Finamp. On cible l'album par son
     chemin et on impose `ReplaceAllImages` + `FullRefresh` (récursif pour
     couvrir les pistes, utile aux albums à pochette par piste).
+
+    `replace_metadata=True` est INDISPENSABLE quand ce sont les métadonnées
+    *textuelles* qui changent (titre d'album, artiste, titres de pistes) :
+    avec `ReplaceAllMetadata=false`, Jellyfin re-scanne les fichiers mais
+    conserve le nom déjà en base — l'album gardait son ancien titre dans
+    Finamp indéfiniment (incident 2026-09-19). Les données utilisateur
+    (favoris, écoutes) ne sont pas touchées : elles ne font pas partie des
+    métadonnées d'item.
 
     Best-effort : ne lève jamais. Retourne False si pas de clé, album
     introuvable ou erreur réseau.
@@ -109,7 +117,7 @@ def refresh_album(slug: str) -> bool:
                 "MetadataRefreshMode": "FullRefresh",
                 "ImageRefreshMode": "FullRefresh",
                 "ReplaceAllImages": "true",
-                "ReplaceAllMetadata": "false",
+                "ReplaceAllMetadata": "true" if replace_metadata else "false",
                 "Recursive": "true",
             },
             headers={"X-Emby-Token": JELLYFIN_API_KEY},

@@ -871,6 +871,11 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     src["label"] = payload.source_label
     m.save()
     tagged = _write_album_tags(slug, m)
+    # Les tags ID3 sont réécrits, mais Jellyfin garde en base le nom d'album
+    # qu'il a indexé la première fois : sans ce rafraîchissement ciblé en
+    # `ReplaceAllMetadata`, le renommage n'arrivait jamais jusqu'à Finamp
+    # (incident 2026-09-19). Best-effort, comme partout ailleurs.
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "mp3_tagged": tagged}
 
 
@@ -949,7 +954,7 @@ def update_tracks(slug: str, payload: TracksEditIn,
     # avec l'ancien chemin/nom en cache : la lecture du fichier disparu
     # échoue côté client (« an error has occurred »). Best-effort, comme
     # à l'ajout de piste (cf. jellyfin.py).
-    jellyfin.refresh_album(slug)
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "tracks": len(new_tracks), "mp3_tagged": tagged, "renamed": renamed}
 
 
@@ -1164,6 +1169,11 @@ def patch_track_meta(
         else:
             track.pop("artist", None)
     m.save()
+    # Même règle que l'édition en masse : le manifeste seul ne suffit pas, il
+    # faut réécrire les tags du MP3 puis forcer Jellyfin à les relire, sinon
+    # le titre reste l'ancien dans Finamp.
+    _write_track_tags(slug, m)
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "track": track}
 
 @app.get("/album/{slug}", response_class=HTMLResponse)

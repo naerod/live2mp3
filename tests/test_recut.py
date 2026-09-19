@@ -61,8 +61,8 @@ def api(tmp_path, monkeypatch, synth_audio_only):
         monkeypatch.setattr(mod, "PROJECTS_DIR", synth_audio_only.parent)
     db.init_db()
     render.run(synth_audio_only, video=False)
-    monkeypatch.setattr(addtrack.jellyfin, "refresh_album", lambda slug: True)
-    monkeypatch.setattr(recut.jellyfin, "refresh_album", lambda slug: True)
+    monkeypatch.setattr(addtrack.jellyfin, "refresh_album", lambda slug, **kw: True)
+    monkeypatch.setattr(recut.jellyfin, "refresh_album", lambda slug, **kw: True)
     monkeypatch.setattr(addtrack, "probe_url", lambda url: dict(VIDEO))
 
     def fake_download(url, source_dir, cookies=None, progress=None):
