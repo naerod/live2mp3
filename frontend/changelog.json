@@ -2,6 +2,20 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.24.4",
+      "date": "2026-09-19",
+      "title": {
+        "fr": "Pochettes & fiabilité",
+        "en": "Covers & reliability"
+      },
+      "fr": [
+        "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
+      ],
+      "en": [
+        "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."
+      ]
+    },
+    {
       "v": "1.24",
       "date": "2026-09-10",
       "title": {
