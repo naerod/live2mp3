@@ -3,6 +3,20 @@
   "versions": [
     {
       "v": "1.25",
+      "date": "2026-09-19",
+      "title": {
+        "fr": "Setlists & import (en préparation)",
+        "en": "Setlists & import (upcoming)"
+      },
+      "fr": [
+        "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
+      ],
+      "en": [
+        "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."
+      ]
+    },
+    {
+      "v": "1.25",
       "date": "à venir",
       "title": {
         "fr": "Setlists & import (en préparation)",
