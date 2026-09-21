@@ -122,12 +122,17 @@ def stamp_first_published(m) -> bool:
 def backfill_first_published() -> int:
     """Renseigne `first_published_at` / `updated_at` sur les albums antérieurs.
 
-    Aucune trace de la date de publication n'existe pour eux : on retient le
-    mtime du manifest (dernière écriture — la publication en est une), borné à
-    au minimum la date d'import. `updated_at` est aligné sur cette date plutôt
-    que sur le mtime, sans quoi cette migration elle-même ferait passer tout le
-    catalogue en « Mis à jour ». Écriture sans `touch`, idempotente, au
-    démarrage.
+    **Ne jamais dériver ces dates du mtime du manifest** (bug 2026-09-21) : le
+    mtime est réécrit par n'importe quelle écriture technique — y compris par
+    ce backfill lui-même, qui tournait à chaque démarrage. Des albums importés
+    depuis des mois héritaient ainsi d'une « première publication » égale à la
+    date d'un redémarrage récent, et s'affichaient « Nouveau » puis
+    « Mis à jour » par lots entiers (horodatages identiques à la seconde).
+
+    Repli retenu : `imported_at`, la seule date réelle dont on dispose. Sans
+    `imported_at`, on n'écrit rien — mieux vaut pas de badge qu'un faux badge.
+    Le passage est marqué (`meta.backfilled`) pour être définitivement unique :
+    plus aucune réécriture au démarrage, donc plus de churn de mtime.
     """
     if not PROJECTS_DIR.exists():
         return 0
@@ -141,18 +146,19 @@ def backfill_first_published() -> int:
         except Exception:
             continue
         meta = m.data.setdefault("meta", {})
+        if meta.get("backfilled"):
+            continue
         if meta.get("first_published_at") and meta.get("updated_at"):
-            continue
-        try:
-            mtime = datetime.fromtimestamp(
-                path.stat().st_mtime, tz=timezone.utc).isoformat(timespec="seconds")
-        except OSError:
-            continue
-        if m.data.get("published", True) and not meta.get("first_published_at"):
-            meta["first_published_at"] = max(mtime, meta.get("imported_at") or "")
-        if not meta.get("updated_at"):
-            meta["updated_at"] = (meta.get("first_published_at")
-                                  or meta.get("imported_at") or mtime)
+            meta["backfilled"] = True
+        else:
+            imported = str(meta.get("imported_at") or "")
+            if not imported:
+                continue  # aucune date fiable : on n'invente pas
+            if m.data.get("published", True) and not meta.get("first_published_at"):
+                meta["first_published_at"] = imported
+            if not meta.get("updated_at"):
+                meta["updated_at"] = meta.get("first_published_at") or imported
+            meta["backfilled"] = True
         try:
             m.save(path, touch=False)
             done += 1

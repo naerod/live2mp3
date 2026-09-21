@@ -9,9 +9,11 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Badges « Nouveau » et « Mis à jour » fiabilisés : ils ne se déclenchent plus sur une écriture technique (redémarrage du service, like de pochette) mais uniquement sur une vraie mise en ligne ou modification.",
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Reliable “New” and “Updated” badges: they no longer trigger on technical writes (service restart, cover like) but only on an actual release or edit.",
         "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."
       ]
     },

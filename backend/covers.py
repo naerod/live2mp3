@@ -153,7 +153,10 @@ def _on_covers_changed(slug: str, *, kind: str = "cover",
             album[kind] = rel
         else:
             album.pop(kind, None)
-        m.save()
+        # Repointage technique (un like de pochette suffit à changer la
+        # gagnante) : ce n'est pas une modification de contenu de l'album.
+        # Avec `touch`, un simple like faisait apparaitre « Mis a jour ».
+        m.save(touch=False)
     if changed or force:
         if kind == "cover":
             _propagate_cover_to_media(slug, m)
