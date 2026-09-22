@@ -364,6 +364,12 @@
     display:none;align-items:center;justify-content:center;color:transparent;
     backdrop-filter:blur(2px);transition:.12s}
   body.select-mode .album .pick{display:flex}
+  /* La case à cocher occupe le coin haut-gauche de la carte, exactement là où
+     se posent « Nouveau » / « Mis à jour » : en mode sélection on décale les
+     badges de la largeur de la case (8 + 26 + 8). Aucun recouvrement toléré,
+     dans aucun état. */
+  .new-badge{transition:left .12s}
+  body.select-mode .album .new-badge{left:42px}
   .album .pick .material-symbols-outlined{font-size:18px;line-height:1}
   .album.picked{outline:2px solid var(--accent);outline-offset:2px}
   .album.picked .pick{background:var(--accent);border-color:var(--accent);color:#fff}
