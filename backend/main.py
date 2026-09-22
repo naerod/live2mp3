@@ -1844,7 +1844,9 @@ def promote_album(slug: str,
     if not m.data.get("origin_env"):
         raise HTTPException(400, "cet album est déjà visible en production")
     m.data.pop("origin_env", None)
-    m.save()
+    # Changement de visibilite, pas de contenu : meme regle que
+    # `set_published` (cf. incident 2026-09-21).
+    m.save(touch=False)
     return {"ok": True, "slug": slug, "origin_env": "prod"}
 
 
@@ -1863,7 +1865,8 @@ def demote_album(slug: str,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     m.data["origin_env"] = APP_ENV
-    m.save()
+    # Changement de visibilite, pas de contenu (cf. incident 2026-09-21).
+    m.save(touch=False)
     return {"ok": True, "slug": slug, "origin_env": APP_ENV}
 
 

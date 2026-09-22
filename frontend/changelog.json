@@ -10,10 +10,12 @@
       },
       "fr": [
         "Badges « Nouveau » et « Mis à jour » fiabilisés : ils ne se déclenchent plus sur une écriture technique (redémarrage du service, like de pochette) mais uniquement sur une vraie mise en ligne ou modification.",
+        "Publier un album ou le promouvoir en production ne le fait plus apparaître comme « Mis à jour » : seule une vraie modification compte.",
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
         "Reliable “New” and “Updated” badges: they no longer trigger on technical writes (service restart, cover like) but only on an actual release or edit.",
+        "Publishing or promoting an album to production no longer marks it as “Updated”: only a genuine edit counts.",
         "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."
       ]
     },

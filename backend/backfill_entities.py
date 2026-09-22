@@ -76,7 +76,9 @@ def run(apply: bool = False, artists: bool = False) -> dict:
                 stats["artist_skipped"] += 1
 
         if changed and apply:
-            m.save()
+            # Migration : jamais de `touch`, sinon tout le catalogue
+            # repasserait en « Mis a jour » (cf. incident 2026-09-21).
+            m.save(touch=False)
     return stats
 
 

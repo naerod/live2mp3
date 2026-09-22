@@ -307,6 +307,8 @@ def _extract_embedded_cover(slug: str, m: Manifest) -> str | None:
         cover_path = art_dir / f"cover{ext}"
         cover_path.write_bytes(apic.data)
         m.data.setdefault("album", {})["cover"] = f"artwork/cover{ext}"
-        m.save()
+        # Rattrapage automatique : repointage technique, pas une modification
+        # editoriale de l'album (cf. incident 2026-09-21).
+        m.save(touch=False)
         return f"artwork/cover{ext}"
     return None
