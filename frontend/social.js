@@ -461,6 +461,14 @@ const L2M = (function () {
   }
 
   /* ---------------- Menu utilisateur (avatar déroulant) ---------------- */
+  /* ── Registre des panels flottants (profil, notifs…) ─────────────────
+     Chaque panel s'enregistre ici à sa création et appelle _closeAll(self)
+     avant de s'ouvrir : ouvrir l'un ferme l'autre, jamais de superposition.
+     Même mécanique que le bundle partagé shared/naerod/naerod-social.js. */
+  const _panels = [];
+  function _registerPanel(closeFn) { _panels.push(closeFn); }
+  function _closeAll(except) { _panels.forEach((fn) => { if (fn !== except) fn(); }); }
+
   // mountEl doit avoir la classe .usermenu. opts.onChange(kind) après thème/langue.
   function userMenu(mountEl, meData, opts) {
     opts = opts || {};
@@ -472,7 +480,6 @@ const L2M = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
-        <a class="um-item" href="/notifications"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
         <a class="um-item" href="/settings"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
@@ -485,12 +492,19 @@ const L2M = (function () {
     function refresh() {
       const dark = getTheme() === "dark";
       set("profile", t("view_profile")); set("lang", t("language")); set("langval", getLang().toUpperCase());
-      set("notifications", t("notifications")); set("settings", t("settings"));
+      set("settings", t("settings"));
       set("logout", t("logout")); set("themeic", dark ? "light_mode" : "dark_mode");
       set("theme", dark ? t("theme_light") : t("theme_dark"));
     }
     refresh();
-    trigger.onclick = (e) => { e.stopPropagation(); mountEl.classList.toggle("open"); };
+    const _closeProfile = () => mountEl.classList.remove("open");
+    _registerPanel(_closeProfile);
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      const opening = !mountEl.classList.contains("open");
+      if (opening) _closeAll(_closeProfile);
+      mountEl.classList.toggle("open", opening);
+    };
     document.addEventListener("click", (e) => { if (!mountEl.contains(e.target)) mountEl.classList.remove("open"); });
     mountEl.querySelector('[data-act="lang"]').onclick = () => {
       applyLang(getLang() === "fr" ? "en" : "fr"); refresh(); if (opts.onChange) opts.onChange("lang");
@@ -864,14 +878,19 @@ const L2M = (function () {
         });
       });
     }
+    const _closeNotifs = () => { open = false; mountEl.classList.remove("open"); pop.hidden = true; };
+    _registerPanel(_closeNotifs);
     trigger.onclick = (e) => {
       e.stopPropagation();
-      open = !open; mountEl.classList.toggle("open", open); pop.hidden = !open;
+      open = !open;
+      if (open) _closeAll(_closeNotifs);
+      mountEl.classList.toggle("open", open); pop.hidden = !open;
       if (open) loadPop();
     };
     document.addEventListener("click", (e) => {
       if (!mountEl.contains(e.target)) { open = false; mountEl.classList.remove("open"); pop.hidden = true; }
     });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") _closeNotifs(); });
     await refreshCount();
     return { refresh: refreshCount };
   }

@@ -203,7 +203,6 @@ const Naerod = (function () {
         ${(opts.extraItems || []).map((it, i) => it.href
           ? `<a class="um-item" href="${it.href}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></a>`
           : `<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></button>`).join("")}
-        <a class="um-item" href="${CFG.notificationsHref}"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
         <a class="um-item" href="${CFG.settingsHref}"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
@@ -218,7 +217,6 @@ const Naerod = (function () {
     function refresh() {
       const dark = CFG.theme() === "dark";
       set("profile", t("view_profile"));
-      set("notifications", t("notifications"));
       set("settings", t("settings"));
       set("lang", t("language"));
       set("langval", CFG.lang().toUpperCase());

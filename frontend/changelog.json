@@ -9,6 +9,8 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "En-tête : ouvrir les notifications ferme le menu de profil, et inversement — les deux panneaux ne se chevauchent plus.",
+        "Menu de profil : l'entrée « Notifications » a été retirée, la cloche de l'en-tête fait déjà le travail.",
         "Barre d'outils du catalogue : « Filtres » et « Sélectionner » étaient décalés vers le bas par rapport au nombre d'albums — les trois sont désormais alignés.",
         "Cartes du catalogue : l'engrenage de gestion et les étiquettes MP3/MP4 disparaissent. Tous les albums sont en MP3 — seule la vidéo méritait une information, signalée par la petite icône du coin, désormais visible aussi en vue gestionnaire. Les réglages d'un album s'ouvrent depuis sa page.",
         "Vue visiteur simulée : la cloche de notifications est désormais masquée (elle affichait les notifications du compte connecté), et son volet se referme au passage en vue visiteur.",
@@ -29,6 +31,8 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Header: opening notifications now closes the profile menu, and vice versa — the two panels no longer overlap.",
+        "Profile menu: the \"Notifications\" entry was removed, the header bell already does the job.",
         "Catalogue toolbar: \"Filters\" and \"Select\" sat lower than the album count — all three are now aligned.",
         "Catalogue cards: the management gear and the MP3/MP4 tags are gone. Every album is MP3 — only video is worth flagging, via the small corner icon, now visible in manager view too. Album settings are reached from its own page.",
         "Simulated visitor view: the notification bell is now hidden (it used to show the logged-in account's notifications), and its panel closes when switching to visitor view.",
