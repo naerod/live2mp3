@@ -807,6 +807,13 @@ async function initSocialActions(){
 // parcourent aussi bien les faces d'une pochette que les pochettes entre elles.
 let COVERS=[], SLIDES=[], IDX=0, COVER_AUTO=false;
 
+// Le badge « épinglée » n'a de sens qu'en concurrence : avec une seule
+// pochette, la gagnante est la seule candidate. L'afficher créait un écart
+// visuel arbitraire entre deux albums identiques, selon que la pochette était
+// venue de l'outil de gestion (pinned=1 d'office) ou du carrousel (pinned=0).
+// Le bouton Épingler/Désépingler, lui, reste toujours disponible.
+function showPinBadge(c){return !!(c&&c.pinned&&COVERS.length>1);}
+
 function buildSlides(){
   SLIDES=[];
   for(const c of COVERS){
@@ -881,7 +888,7 @@ function renderCarousel(){
   col.innerHTML=`
     <div class="cr">
       <div class="al-cover${kind==='traycard'?' is-tray':''}" id="cr-art">${faceHtml(c,kind)}</div>
-      ${c&&c.pinned&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
+      ${showPinBadge(c)&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
       ${multi?`<span class="cr-count">${IDX+1}/${SLIDES.length}</span>
         <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
         <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
@@ -1204,7 +1211,7 @@ function paintModal(id){
         <div class="cr-credit" style="margin-top:0">${c.auto
           ?`<span class="cr-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${t('cover_auto_badge')}</span>`
           :L2M.poster({username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
-          ${c.pinned?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
+          ${showPinBadge(c)?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
         </div>
         ${c.caption?`<p class="cm-caption">${L2M.esc(c.caption)}</p>`:''}
         <div class="social-actions" style="margin-top:12px">
