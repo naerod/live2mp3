@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Vue visiteur simulée : la cloche de notifications est désormais masquée (elle affichait les notifications du compte connecté), et son volet se referme au passage en vue visiteur.",
         "Prévisualisation « Voir en tant que » : le bouton « Quitter » du bandeau était désaligné vers le bas — recentré.",
         "Barre d'outils du catalogue : « Filtres » à gauche, « Sélectionner » à droite, et le nombre d'albums centré entre les deux, dans une taille plus lisible.",
         "Catalogue sur très petit écran (moins de 400 px) : une seule colonne au lieu de deux — les cartes n'étaient plus lisibles et le badge « Mis à jour » passait sous l'icône de gestion.",
@@ -26,6 +27,7 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Simulated visitor view: the notification bell is now hidden (it used to show the logged-in account's notifications), and its panel closes when switching to visitor view.",
         "\"View as\" preview: the \"Exit\" button in the banner was misaligned downwards — recentred.",
         "Catalogue toolbar: “Filters” on the left, “Select” on the right, and the album count centred between them, in a more readable size.",
         "Catalogue on very small screens (under 400px): a single column instead of two — cards were unreadable and the “Updated” badge ran under the manage icon.",

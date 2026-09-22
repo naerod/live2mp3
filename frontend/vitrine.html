@@ -637,6 +637,16 @@ function applyViewToHeader(){
   // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
   show("import-btn",md.authenticated);
   show("usermenu",md.authenticated);
+  // La cloche de notifications n'existe que pour un compte connecté : en vue
+  // visiteur simulée, elle doit disparaître (et se refermer si elle était ouverte).
+  const bell=document.getElementById("notif-bell");
+  if(bell&&ME.authenticated){
+    bell.style.display=md.authenticated?"":"none";
+    if(!md.authenticated){
+      bell.classList.remove("open");
+      const pop=bell.querySelector(".nb-pop");if(pop)pop.hidden=true;
+    }
+  }
   show("login",!md.authenticated);
   show("lang",!md.authenticated);
   show("theme",!md.authenticated);
