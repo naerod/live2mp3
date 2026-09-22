@@ -1,3 +1,50 @@
+2026-09-22 (suite 2) : **Pochettes manquantes, ZIP des visuels, fiche
+par visuel, emplacement tray card** (preprod v1.24.33).
+
+- **`_ensure_auto_cover()` (covers.py)** — correctif de fond, pas un
+  contournement. Symptôme : sur TIF/Gazo/PLK, cliquer la pochette
+  n'ouvrait qu'un agrandissement au lieu de la fiche pochette.
+  Cause : **les projets sont sur un volume partagé prod/preprod mais la
+  base sociale est scindée par environnement** (`.l2m-social/<APP_ENV>/`),
+  donc un album importé ailleurs n'a aucune ligne `covers` ici et la
+  fiche retombe sur la pseudo-pochette `id:0` (pas d'id → pas de likes,
+  commentaires, épinglage). La ligne est désormais créée à la première
+  lecture de `/api/social/albums/{slug}/covers`, `auto=1`.
+  - clé **réutilisée** si le manifest pointe déjà dans `artwork/covers/`,
+    sinon clé **déterministe** (sha1 du chemin) → aucun fichier dupliqué
+    entre environnements ;
+  - **ni le manifest ni les médias ne sont touchés** : repointer
+    `album.cover` ré-embarquerait les APIC de toutes les pistes sur le
+    volume partagé à la simple consultation d'une fiche ;
+  - pochette auto → créditée « Pochette automatique » et **non
+    supprimable** (elle serait recréée) ; un import manuel passe devant.
+  - Test de non-régression : `tests/test_covers.py`
+    `test_manifest_cover_materialisee_en_ligne_covers`.
+- **`GET /download/{slug}/artwork`** : ZIP des visuels gagnants
+  (`<slug>-cover/-thumbnail/-banner/-poster.<ext>`), construit sur
+  disque puis `FileResponse` + `BackgroundTask(os.remove)` — jamais
+  d'archive en RAM. Sous `/download/` donc déjà couvert par la règle
+  forward-auth nginx. Bouton « Tout télécharger » à droite du titre de
+  section, masqué s'il n'y a aucun visuel. Test : `test_zip_des_visuels`.
+- **Fiche d'un visuel** (`#vs`, z-index 70, au-dessus de la fenêtre
+  vidéo) : les cartes ne portent plus aucun bouton, un clic ouvre la
+  fiche qui regroupe télécharger / importer-remplacer / épingler /
+  supprimer, avec libellés. La carte est un `<button>` (clavier + focus
+  gratuits).
+  ⚠️ **Piège : la feuille du navigateur pose `align-items:center` sur
+  tout `button`.** Sans `align-items:stretch`, les enfants se réduisent
+  à leur contenu — les emplacements vides tombaient à 2 px de large.
+  (C'est le 3ᵉ piège `button` de la journée avec `margin-top:16px` et
+  `padding:11px` d'`app.css` : **toujours resetter avant de styler un
+  `button` dans ce projet.**)
+- **Fiche pochette** : la tray card a maintenant son emplacement dédié,
+  visible même vide et actionnable (c'est lui qui ajoute/remplace) ;
+  le bouton « Ajouter une tray card » a disparu de la barre d'actions.
+  Cadre vide au format d'un inlay de boîtier CD (150×118).
+- Vérifié en headless (CDP) : 1280 px clair + sombre, 390 px mobile,
+  rôles gestionnaire et visiteur, les 4 fiches de visuel, 0 erreur
+  console. `tests/test_covers.py` + `test_social.py` : 58 verts.
+
 2026-09-22 (suite) : **Visuels Jellyfin — deux pièges CSS résolus**
 (preprod v1.24.25).
 - **Barre d'actions désalignée** : `app.css` applique
