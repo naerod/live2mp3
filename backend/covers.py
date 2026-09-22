@@ -274,6 +274,85 @@ def _ensure_auto_thumbnail(slug: str) -> None:
     _on_covers_changed(slug, kind="thumbnail", force=True)
 
 
+_COVERS_REL = re.compile(r"^artwork/covers/([0-9a-f]{32})_cover(\.[a-z0-9]+)$")
+
+
+def _ensure_auto_cover(slug: str) -> None:
+    """Matérialise la pochette du manifest en vraie ligne `covers` « auto »
+    quand l'album n'en a aucune dans cet environnement.
+
+    Sans ça, la fiche retombait sur une pseudo-pochette `id:0` : sans id, pas
+    de likes, pas de commentaires, pas d'épinglage — et un clic n'ouvrait que
+    l'agrandissement au lieu de la fiche pochette. Le cas est structurel, pas
+    accidentel : **les projets sont sur un volume partagé prod/preprod mais la
+    base sociale est scindée par environnement** (`.l2m-social/<APP_ENV>/`),
+    donc tout album importé ailleurs (ou avant la table `covers`) arrive ici
+    sans ligne. Créer la ligne à la première lecture referme le trou pour tous
+    les albums, présents et futurs.
+
+    - Si le manifest pointe déjà dans `artwork/covers/` (pochette passée par le
+      pipeline dans un autre environnement), on **réutilise la clé existante** :
+      aucun fichier n'est dupliqué.
+    - Sinon la source est copiée sous une clé **déterministe** (dérivée du
+      chemin), pour que les deux environnements convergent sur le même fichier.
+    - `auto=1` : un import manuel passe aussitôt devant, comme pour la
+      miniature automatique.
+    - On ne touche NI au manifest NI aux médias : c'est une matérialisation de
+      ce qui est déjà affiché, pas un changement de pochette. Repointer le
+      manifest ré-embarquerait les APIC de toutes les pistes sur le volume
+      partagé, à la simple consultation d'une fiche.
+
+    Best-effort : ne lève jamais.
+    """
+    with get_conn() as conn:
+        if conn.execute(
+            "SELECT 1 FROM covers WHERE slug=? AND kind='cover' LIMIT 1", (slug,)
+        ).fetchone():
+            return
+    mpath = PROJECTS_DIR / slug / "manifest.yaml"
+    if not mpath.exists():
+        return
+    try:
+        rel = ((Manifest.load(mpath).data.get("album") or {}).get("cover") or "")
+    except Exception as exc:
+        log.warning("pochette auto de %s : manifest illisible (%s)", slug, exc)
+        return
+    if not rel:
+        return
+    src = PROJECTS_DIR / slug / rel
+    if not src.is_file():
+        return
+    ext = src.suffix.lower()
+    if ext not in set(COVER_EXTS.values()):
+        return
+
+    m = _COVERS_REL.match(rel)
+    if m:
+        key = m.group(1)                       # déjà dans le pipeline : on réutilise
+    else:
+        import hashlib
+        key = hashlib.sha1(f"{slug}/{rel}".encode()).hexdigest()[:32]
+        dst = cover_file(slug, key, ext)
+        if not dst.exists():
+            try:
+                covers_dir(slug).mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(src.read_bytes())
+            except Exception as exc:
+                log.warning("pochette auto de %s impossible : %s", slug, exc)
+                return
+    now = _now()
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO covers(slug, username, file_key, cover_ext, "
+                "traycard_ext, caption, kind, auto, created_at, updated_at) "
+                "VALUES(?,?,?,?,?,?,'cover',1,?,?)",
+                (slug, "auto", key, ext, "", "", now, now),
+            )
+    except Exception as exc:
+        log.warning("pochette auto de %s non enregistrée : %s", slug, exc)
+
+
 def zip_basename(rank: int, username: str) -> str:
     """Préfixe commun cover/tray card dans le ZIP : `01-nathan`.
 
@@ -402,6 +481,7 @@ async def _read_upload(file: UploadFile, allowed: dict[str, str],
 def list_covers(slug: str, identity: dict = Depends(current_identity)) -> dict:
     if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
+    _ensure_auto_cover(slug)   # pochette du manifest → vraie ligne (voir docstring)
     with get_conn() as conn:
         return _list_payload(conn, slug, identity.get("username"))
 

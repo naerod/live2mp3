@@ -611,3 +611,46 @@ def test_manage_page_sees_cover_of_unpublished_album(client):
     assert d["has_cover"] is True
     assert d["has_traycard"] is True
     assert d["has_mp3"] is True
+
+
+def test_manifest_cover_materialisee_en_ligne_covers(client):
+    """Un album dont la pochette ne vit que dans le manifest (cas des albums
+    importés dans un autre environnement : projets partagés, base sociale
+    scindée) doit exposer une VRAIE ligne `covers` à la première lecture.
+
+    Sans elle la fiche retombait sur une pseudo-pochette `id:0` : pas de
+    likes, pas de commentaires, pas d'épinglage, et le clic n'ouvrait que
+    l'agrandissement au lieu de la fiche pochette.
+    """
+    c, projects = client
+    slug = _album(c)
+    art = projects / slug / "artwork"
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "cover.png").write_bytes(_png())
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    m = Manifest.load(mpath)
+    m.data.setdefault("album", {})["cover"] = "artwork/cover.png"
+    m.save()
+
+    covers = c.get(f"/api/social/albums/{slug}/covers", headers=USER).json()["covers"]
+    assert len(covers) == 1
+    win = covers[0]
+    assert win["id"] > 0            # un vrai id → fiche pochette, likes, pin
+    assert win["auto"] is True      # un import manuel doit passer devant
+    # L'image est bien servie par le pipeline social.
+    assert c.get(f"/cover-img/{win['id']}").status_code == 200
+
+    # Idempotent : relire ne crée pas de doublon.
+    again = c.get(f"/api/social/albums/{slug}/covers", headers=USER).json()["covers"]
+    assert [x["id"] for x in again] == [win["id"]]
+
+    # Le manifest n'est PAS repointé : materialiser n'est pas changer de
+    # pochette (repointer ré-embarquerait les APIC sur le volume partagé).
+    assert Manifest.load(mpath).data["album"]["cover"] == "artwork/cover.png"
+
+    # Un import manuel passe devant la pochette auto.
+    r = c.post(f"/api/social/albums/{slug}/covers",
+               files={"cover": ("c.png", _png((0, 255, 0)), "image/png")}, headers=USER)
+    assert r.status_code == 200
+    assert r.json()["covers"][0]["auto"] is False

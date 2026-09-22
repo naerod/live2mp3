@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Toutes les pochettes ouvrent désormais leur fiche complète (likes, commentaires, épinglage, tray card) : les albums dont la pochette ne vivait que dans le manifest se contentaient d'un agrandissement. La fiche est créée automatiquement à la première consultation, pour les albums existants comme pour les futurs.",
         "Lecteur vidéo intégré : la vignette « Vidéo du concert » ouvre désormais un vrai lecteur dans le navigateur (lecture et navigation sans télécharger le fichier) ; les visiteurs non connectés y trouvent un lien de connexion.",
         "Fenêtre « Vidéo du concert » repensée : lecteur en haut, puis les quatre visuels Jellyfin (pochette 1:1, miniature 16:9, bannière, poster) avec aperçu cliquable pour ouvrir l'image en grand.",
         "Visuels Jellyfin : chaque aperçu a désormais la forme exacte du visuel attendu (pochette 1:1, miniature 16:9, bannière, poster 2:3) — plus de bandes noires autour des images, boutons d'action parfaitement alignés — et les barres de boutons sont alignées d'une carte à l'autre.",
@@ -18,6 +19,7 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Every cover now opens its full details (likes, comments, pinning, tray card): albums whose cover only lived in the manifest used to just zoom in. The entry is created automatically on first view, for existing and future albums alike.",
         "Built-in video player: the “Concert video” thumbnail now opens a real in-browser player (play and seek without downloading the file); logged-out visitors get a sign-in link instead.",
         "Redesigned “Concert video” dialog: player on top, then the four Jellyfin artworks (1:1 cover, 16:9 thumbnail, banner, poster) with a clickable preview to open the image full size.",
         "Jellyfin artwork: each preview now has the exact shape of the expected image (1:1 cover, 16:9 thumbnail, banner, 2:3 poster) — no more letterboxing, action buttons perfectly aligned — and button rows line up across cards.",
