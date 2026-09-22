@@ -1,3 +1,20 @@
+2026-09-22 (suite 3) : **Badge « Pochette épinglée » — affiché
+seulement en concurrence** (preprod v1.24.35).
+Incohérence signalée : kyo-untitled portait le badge, calogero-untitled
+non, avec une seule pochette des deux côtés. Cause réelle, pas un bug —
+**le chemin de dépôt décide du `pinned`** :
+- outil de gestion (`POST /api/albums/{slug}/cover`, main.py) → `pinned=1`
+  d'office (et dépingle l'ancienne ; index partiel unique en base) ;
+- carrousel public (`POST /api/social/albums/{slug}/covers`) → `pinned=0`,
+  la gagnante se décide alors aux likes ;
+- pochette auto (`_ensure_auto_cover`) → `pinned=0`, `auto=1`.
+Correctif retenu (option la moins invasive, aucune donnée modifiée) :
+helper `showPinBadge(c)` = `c.pinned && COVERS.length>1`. Le badge ne
+s'affiche plus sur un album à pochette unique — il n'y arbitrait rien.
+**Le bouton Épingler/Désépingler reste toujours disponible** et reflète
+l'état réel. Vérifié : kyo/calogero (1 pochette) → pas de badge des deux
+côtés ; shaka-ponk (3) et indochine (2) → badge conservé.
+
 2026-09-22 (suite 2) : **Pochettes manquantes, ZIP des visuels, fiche
 par visuel, emplacement tray card** (preprod v1.24.33).
 
