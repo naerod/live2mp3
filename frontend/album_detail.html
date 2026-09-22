@@ -1082,7 +1082,11 @@ function openCoverModal(id){
 function paintModal(id){
   const c=COVERS.find(x=>x.id===id);
   if(!c)return;
-  const mine=ME.authenticated&&(c.username===ME.username||ME.is_gestionnaire);
+  // Une pochette « auto » (reprise du manifest) n'a pas d'auteur : elle est
+  // créditée comme telle, et n'est pas supprimable — elle serait recréée à la
+  // lecture suivante. Pour s'en débarrasser on en propose une vraie, qui passe
+  // devant (auto=0 gagne toujours).
+  const mine=ME.authenticated&&!c.auto&&(c.username===ME.username||ME.is_gestionnaire);
   // La tray card a TOUJOURS son emplacement, même vide : c'est lui qui porte
   // l'ajout (plus de bouton « Ajouter une tray card » dans la barre d'actions).
   const trayInner=c.has_traycard
@@ -1113,8 +1117,9 @@ function paintModal(id){
         ${tray}
       </div>
       <div>
-        <div class="cr-credit" style="margin-top:0">${L2M.poster(
-          {username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
+        <div class="cr-credit" style="margin-top:0">${c.auto
+          ?`<span class="cr-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${t('cover_auto_badge')}</span>`
+          :L2M.poster({username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
           ${c.pinned?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
         </div>
         ${c.caption?`<p class="cm-caption">${L2M.esc(c.caption)}</p>`:''}
