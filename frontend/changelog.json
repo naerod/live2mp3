@@ -9,7 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
-        "Lecteur vidéo intégré : la vignette « Vidéo du concert » ouvre désormais un vrai lecteur dans le navigateur (lecture et navigation sans télécharger le fichier).",
+        "Lecteur vidéo intégré : la vignette « Vidéo du concert » ouvre désormais un vrai lecteur dans le navigateur (lecture et navigation sans télécharger le fichier) ; les visiteurs non connectés y trouvent un lien de connexion.",
         "Fenêtre « Vidéo du concert » repensée : lecteur en haut, puis les quatre visuels Jellyfin (pochette 1:1, miniature 16:9, bannière, poster) avec aperçu cliquable pour ouvrir l'image en grand.",
         "Visuels Jellyfin : aperçus tous à la même taille et barres de boutons alignées d'une carte à l'autre, emplacement vide directement cliquable pour importer, actions destructives séparées du téléchargement.",
         "Badges « Nouveau » et « Mis à jour » fiabilisés : ils ne se déclenchent plus sur une écriture technique (redémarrage du service, like de pochette) mais uniquement sur une vraie mise en ligne ou modification.",
@@ -17,7 +17,7 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
-        "Built-in video player: the “Concert video” thumbnail now opens a real in-browser player (play and seek without downloading the file).",
+        "Built-in video player: the “Concert video” thumbnail now opens a real in-browser player (play and seek without downloading the file); logged-out visitors get a sign-in link instead.",
         "Redesigned “Concert video” dialog: player on top, then the four Jellyfin artworks (1:1 cover, 16:9 thumbnail, banner, poster) with a clickable preview to open the image full size.",
         "Jellyfin artwork: previews all the same size with button rows aligned across cards, empty slots directly clickable to import, destructive actions kept apart from download.",
         "Reliable “New” and “Updated” badges: they no longer trigger on technical writes (service restart, cover like) but only on an actual release or edit.",
