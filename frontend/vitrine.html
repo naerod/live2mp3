@@ -24,6 +24,8 @@
     transform:translateY(-50%);color:var(--muted);font-size:20px;pointer-events:none}
   .search input{width:100%;height:38px;padding:0 14px 0 42px;font-size:14px}
   .toolbar-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tr-left,.tr-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 0;min-width:0}
+  .tr-right{justify-content:flex-end}
   .sort-label{color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap;
     display:flex;align-items:center;gap:5px}
   .sort-label .material-symbols-outlined{font-size:15px}
@@ -34,7 +36,7 @@
   .chip:hover{border-color:var(--accent);color:var(--fg)}
   .chip.active{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
-  .count{color:var(--muted);font-size:12.5px;flex:1;text-align:right;white-space:nowrap}
+  .count{color:var(--muted);font-size:14.5px;flex:0 0 auto;text-align:center;white-space:nowrap}
   #sort-select{height:38px;padding:0 10px;font-size:14px;cursor:pointer;border-radius:8px;min-width:160px}
   /* Vue par artiste */
   .artist-group{margin-bottom:28px}
@@ -325,11 +327,14 @@
     .sort-label{font-size:13px}
     .chip{height:42px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
     .chip .material-symbols-outlined{font-size:19px}
-    .count{font-size:13px}
+    .count{font-size:14px}
     .filter-group{flex:1 1 100%;min-width:0}
     .filter-group select{height:44px;font-size:15px}
     .filter-clear{margin-left:0;width:100%;justify-content:center}
     .albums{grid-template-columns:1fr 1fr;gap:12px}
+    /* Sous ~400 px, deux colonnes donnent des cartes de ~135 px : titre illisible
+       et le badge « Mis à jour » finit sous l'engrenage de gestion. Une colonne. */
+    @media(max-width:400px){.albums{grid-template-columns:1fr}}
     .album .body{padding:9px 10px 3px}
     .album .btns{padding:2px 10px 8px}
     .album .btns a{height:auto;min-height:34px;padding:6px 8px;font-size:11.5px;
@@ -429,10 +434,14 @@
       </div>
     </div>
     <div class="toolbar-row">
-      <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
-      <button class="chip" id="select-btn"><span class="material-symbols-outlined">check_box</span><span id="t-select">Sélectionner</span></button>
-      <div id="active-filters" style="display:contents"></div>
+      <div class="tr-left">
+        <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
+        <div id="active-filters" style="display:contents"></div>
+      </div>
       <span class="count" id="count"></span>
+      <div class="tr-right">
+        <button class="chip" id="select-btn"><span class="material-symbols-outlined">check_box</span><span id="t-select">Sélectionner</span></button>
+      </div>
     </div>
     <div id="filter-panel" class="filter-panel">
       <div class="filter-group">
