@@ -196,7 +196,11 @@
      importer, épingler, supprimer) sont dans la fiche du visuel. `button` pour
      avoir le clavier et le focus sans les réimplémenter — d'où le reset
      margin/padding/font (app.css style tous les `button`). */
-  .vm-slot{display:flex;flex-direction:column;width:100%;margin:0;padding:12px;
+  /* ⚠️ La feuille de style du navigateur pose `align-items:center` sur tout
+     `button` : sans `stretch`, les enfants se réduisent à leur contenu et un
+     emplacement vide s'effondrait à quelques pixels de large. */
+  .vm-slot{display:flex;flex-direction:column;align-items:stretch;
+    width:100%;margin:0;padding:12px;
     font:inherit;text-align:left;cursor:pointer;
     border:1px solid var(--border);border-radius:12px;background:var(--card);
     transition:border-color .15s,background .15s}
