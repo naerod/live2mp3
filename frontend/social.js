@@ -20,7 +20,8 @@ const L2M = (function () {
       follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
       login_follow: "Connectez-vous pour suivre",
       notify_on: "Notifications activées", notify_off: "Notifications coupées",
-      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_user: "Simple utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_supporter: "Soutien",
       followers: "abonnés", posts: "posts",
       notifications: "Notifications", settings: "Paramètres",
       notif_empty: "Aucune notification pour l'instant.",
@@ -65,7 +66,8 @@ const L2M = (function () {
       follow: "Follow", following: "Following", unfollow: "Unfollow",
       login_follow: "Log in to follow",
       notify_on: "Notifications on", notify_off: "Notifications off",
-      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_user: "User", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_supporter: "Supporter",
       followers: "followers", posts: "posts",
       notifications: "Notifications", settings: "Settings",
       notif_empty: "No notifications yet.",
@@ -634,9 +636,11 @@ const L2M = (function () {
 
   // Badge de rôle (utilisateur / gestionnaire / admin) — affiché sur les profils.
   function roleBadge(role) {
-    if (!role) return "";
+    // Tout le monde porte un badge : l'absence de rôle = simple utilisateur.
+    role = role || "user";
     const icon = role === "admin" ? "shield_person"
-      : role === "gestionnaire" ? "manage_accounts" : "person";
+      : role === "gestionnaire" ? "manage_accounts"
+      : role === "supporter" ? "crown" : "person";
     return `<span class="role-badge role-${role}"><span class="material-symbols-outlined">${icon}</span>${t("role_" + role)}</span>`;
   }
 

@@ -18,7 +18,8 @@ const Naerod = (function () {
       follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
       login_follow: "Connectez-vous pour suivre",
       notify_on: "Notifications activées", notify_off: "Notifications coupées",
-      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_user: "Simple utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_supporter: "Soutien",
       role_artiste: "Artiste", role_organisation: "Organisation",
       now: "à l'instant", min: "min", h: "h", d: "j",
       notif_empty: "Aucune notification pour l'instant.",
@@ -43,7 +44,8 @@ const Naerod = (function () {
       follow: "Follow", following: "Following", unfollow: "Unfollow",
       login_follow: "Log in to follow",
       notify_on: "Notifications on", notify_off: "Notifications off",
-      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_user: "User", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_supporter: "Supporter",
       role_artiste: "Artist", role_organisation: "Organisation",
       now: "just now", min: "min", h: "h", d: "d",
       notif_empty: "No notifications yet.",
@@ -175,9 +177,11 @@ const Naerod = (function () {
   }
 
   function roleBadge(role) {
-    if (!role) return "";
+    // Tout le monde porte un badge : l'absence de rôle = simple utilisateur.
+    role = role || "user";
     const icon = role === "admin" ? "shield_person"
       : role === "gestionnaire" ? "manage_accounts"
+      : role === "supporter" ? "crown"
       : role === "artiste" ? "artist"
       : role === "organisation" ? "festival" : "person";
     return `<span class="role-badge role-${esc(role)}">` +
