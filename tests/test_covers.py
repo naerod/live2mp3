@@ -671,7 +671,7 @@ def test_zip_des_visuels(client):
     assert names == [f"{slug}-banner.png", f"{slug}-cover.png"]
 
     # Sans aucun visuel : 404 plutôt qu'une archive vide.
-    other = _album(c, title="Vide")
+    other = _album(c, artist="B", title="Vide", date="2026-02-02")
     assert c.get(f"/download/{other}/artwork", headers=USER).status_code == 404
 
     # Anonyme : refusé comme les autres téléchargements.
