@@ -9,11 +9,17 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Lecteur vidéo intégré : la vignette « Vidéo du concert » ouvre désormais un vrai lecteur dans le navigateur (lecture et navigation sans télécharger le fichier).",
+        "Fenêtre « Vidéo du concert » repensée : lecteur en haut, puis les quatre visuels Jellyfin (pochette 1:1, miniature 16:9, bannière, poster) avec aperçu cliquable pour ouvrir l'image en grand.",
+        "Visuels Jellyfin : aperçus tous à la même taille et boutons alignés, emplacement vide directement cliquable pour importer, actions destructives séparées du téléchargement.",
         "Badges « Nouveau » et « Mis à jour » fiabilisés : ils ne se déclenchent plus sur une écriture technique (redémarrage du service, like de pochette) mais uniquement sur une vraie mise en ligne ou modification.",
         "Publier un album ou le promouvoir en production ne le fait plus apparaître comme « Mis à jour » : seule une vraie modification compte.",
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Built-in video player: the “Concert video” thumbnail now opens a real in-browser player (play and seek without downloading the file).",
+        "Redesigned “Concert video” dialog: player on top, then the four Jellyfin artworks (1:1 cover, 16:9 thumbnail, banner, poster) with a clickable preview to open the image full size.",
+        "Jellyfin artwork: previews all the same size with aligned buttons, empty slots are directly clickable to import, destructive actions kept apart from download.",
         "Reliable “New” and “Updated” badges: they no longer trigger on technical writes (service restart, cover like) but only on an actual release or edit.",
         "Publishing or promoting an album to production no longer marks it as “Updated”: only a genuine edit counts.",
         "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."

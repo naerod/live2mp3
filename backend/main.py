@@ -595,16 +595,37 @@ def download_track(slug: str, n: int,
     return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
 
 
-@app.get("/download/{slug}/video")
-def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
-    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
-    m = _ensure_album_visible(slug, identity)
+def _video_full_file(slug: str) -> Path:
+    """Le MP4 concert-complet d'un album (build/video-full), ou 404."""
     vfdir = PROJECTS_DIR / slug / "build" / "video-full"
     mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
     if not mp4s:
         raise HTTPException(404, "pas de concert complet")
-    return FileResponse(mp4s[0], filename=mp4s[0].name, media_type="video/mp4")
+    return mp4s[0]
+
+
+@app.get("/download/{slug}/video")
+def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
+    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
+    _ensure_album_visible(slug, identity)
+    f = _video_full_file(slug)
+    return FileResponse(f, filename=f.name, media_type="video/mp4")
+
+
+@app.get("/download/{slug}/video/stream")
+def stream_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Lecture en ligne du concert dans le navigateur (player de la fiche).
+
+    Même fichier que `/download/{slug}/video`, mais servi `inline` : Starlette
+    gère les requêtes Range, donc le navigateur peut démarrer et se déplacer
+    dans la vidéo sans télécharger les quelques Go du fichier. Le chemin reste
+    sous `/download/` pour rester couvert par la règle forward-auth nginx.
+    """
+    _ensure_album_visible(slug, identity)
+    f = _video_full_file(slug)
+    return FileResponse(f, media_type="video/mp4",
+                        headers={"Content-Disposition": "inline"})
 
 
 @app.get("/download/{slug}/cover")

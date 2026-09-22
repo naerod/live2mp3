@@ -166,33 +166,70 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-  .vm-box{max-width:860px;width:94%}
-  .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 14px}
-  .vm-dl-row{margin-bottom:16px}
+  .vm-box{max-width:920px;width:96%}
+  .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding-right:40px}
+  /* Lecteur : gros mais borné, jamais plein écran. */
+  .vm-player{max-width:720px;margin:0 auto;border-radius:12px;overflow:hidden;
+    background:#000;border:1px solid var(--border)}
+  .vm-player video{display:block;width:100%;aspect-ratio:16/9;background:#000}
+  .vm-player-err{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    aspect-ratio:16/9;color:var(--muted);font-size:13px;text-align:center;padding:16px}
+  .vm-dl-row{display:flex;justify-content:flex-end;margin:14px auto 22px;max-width:720px}
   .vm-dl-mp4{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;
     background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
-  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-  .vm-slot{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)}
-  .vm-slot-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+  .vm-sec-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
+    margin:0 0 4px;padding-top:16px;border-top:1px solid var(--border)}
+  .vm-sec-h .material-symbols-outlined{font-size:18px}
+  .vm-sec-sub{color:var(--muted);font-size:12px;margin:0 0 14px;max-width:70ch}
+  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  /* Carte en colonne : la barre d'actions est poussée en bas (margin-top:auto),
+     donc toutes les cartes ont leurs boutons sur la même ligne quelle que soit
+     la forme du visuel. */
+  .vm-slot{display:flex;flex-direction:column;border:1px solid var(--border);
+    border-radius:12px;padding:12px;background:var(--card)}
+  .vm-slot-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;min-height:22px}
+  .vm-ratio{font-family:"Google Sans Code",monospace;font-size:11px;color:var(--muted)}
   .vm-auto{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
   .vm-auto .material-symbols-outlined{font-size:13px}
   .vm-count{margin-left:auto;color:var(--muted);font-size:11px}
-  .vm-slot-art{position:relative;border-radius:8px;overflow:hidden;background:var(--border);
-    display:flex;align-items:center;justify-content:center}
-  .vm-slot-art img{width:100%;height:100%;object-fit:cover;display:block}
-  .vm-slot-ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:11px;padding:12px;text-align:center}
-  .vm-slot-ph .material-symbols-outlined{font-size:28px}
-  .vm-slot-imp{position:absolute;inset:0;border:0;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:0;transition:opacity .15s;font-size:12px}
-  .vm-slot-art:hover .vm-slot-imp{opacity:1}
-  .vm-slot-imp .material-symbols-outlined{font-size:26px}
-  .vm-slot-actions{display:flex;gap:6px;margin-top:8px}
+  /* Scène de hauteur FIXE et identique partout : le visuel est contenu dedans
+     (object-fit:contain), donc une bannière très large et un poster très haut
+     occupent le même encombrement et n'écartent plus les cartes. */
+  .vm-stage{position:relative;height:150px;display:flex;align-items:center;justify-content:center;
+    border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--border)}
+  .vm-stage.filled{border-style:solid}
+  .vm-stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  .vm-slot-ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);
+    font-size:11px;padding:12px;text-align:center}
+  .vm-slot-ph .material-symbols-outlined{font-size:26px}
+  /* Import sur un emplacement vide : visible en permanence, il remplit la scène. */
+  .vm-empty{position:absolute;inset:0;border:0;background:transparent;color:var(--muted);
+    cursor:pointer;font:inherit;font-size:11px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px;transition:color .15s,background .15s}
+  .vm-empty:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+  .vm-empty .material-symbols-outlined{font-size:26px}
+  /* Aperçu rempli : la scène entière agrandit l'image. */
+  .vm-zoom{position:absolute;inset:0;border:0;cursor:zoom-in;font:inherit;font-size:12px;color:#fff;
+    background:rgba(0,0,0,.5);opacity:0;transition:opacity .15s;
+    display:flex;align-items:center;justify-content:center;gap:6px}
+  .vm-stage:hover .vm-zoom,.vm-zoom:focus-visible{opacity:1}
+  .vm-zoom .material-symbols-outlined{font-size:22px}
+  .vm-slot-actions{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;min-height:44px}
+  /* Les actions destructives/secondaires sont repoussées à droite, jamais
+     collées au téléchargement (règle DA). */
+  .vm-act-right{margin-left:auto;display:flex;gap:6px}
   .vm-act{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;
-    border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none}
+    border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none;flex:none}
   .vm-act:hover{border-color:var(--accent);color:var(--accent)}
   .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
   .vm-act .material-symbols-outlined{font-size:18px}
+  .vm-note{color:var(--muted);font-size:11px;line-height:1.3}
+  @media(max-width:640px){
+    .vm-slots{grid-template-columns:1fr}
+    .vm-dl-row{justify-content:stretch}
+    .vm-dl-mp4{flex:1;justify-content:center}
+  }
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
     color:var(--muted);cursor:pointer;font-family:inherit;
@@ -838,71 +875,154 @@ async function toggleCoverLike(id){
 // Réutilise les endpoints /images/{kind} (mêmes tri auto / épinglage / suppression
 // que les covers). 3 types au niveau album : miniature, bannière, poster.
 const VLANG={
-  fr:{video_h:"Vidéo du concert",video_open:"Ouvrir la vidéo",
-      video_sub:"Concert complet + visuels Jellyfin (bannière, poster, miniature).",
-      dl_mp4:"Télécharger la vidéo (MP4)",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
-      imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",del:"Supprimer",
-      empty:"Aucune image — importez-en une",auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?"},
-  en:{video_h:"Concert video",video_open:"Open video",
-      video_sub:"Full concert + Jellyfin artwork (banner, poster, thumbnail).",
-      dl_mp4:"Download video (MP4)",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
-      imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",del:"Delete",
-      empty:"No image — import one",auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?"}
+  fr:{video_h:"Vidéo du concert",video_open:"Lire le concert",
+      video_sub:"Concert complet + visuels Jellyfin (pochette, miniature, bannière, poster).",
+      dl_mp4:"Télécharger la vidéo (MP4)",
+      k_cover:"Pochette",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
+      art_h:"Visuels Jellyfin",
+      art_sub:"Images utilisées par Jellyfin pour cet album. Cliquez un aperçu pour l'ouvrir en grand.",
+      imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
+      del:"Supprimer",zoom:"Agrandir",
+      empty:"Aucune image — importez-en une",empty_ro:"Aucune image",
+      cover_note:"Gérée dans le carrousel des pochettes.",
+      auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?",
+      noplay:"Lecture impossible dans ce navigateur. Téléchargez le fichier MP4."},
+  en:{video_h:"Concert video",video_open:"Play the concert",
+      video_sub:"Full concert + Jellyfin artwork (cover, thumbnail, banner, poster).",
+      dl_mp4:"Download video (MP4)",
+      k_cover:"Cover",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
+      art_h:"Jellyfin artwork",
+      art_sub:"Images Jellyfin uses for this album. Click a preview to open it full size.",
+      imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",
+      del:"Delete",zoom:"Enlarge",
+      empty:"No image — import one",empty_ro:"No image",
+      cover_note:"Managed in the cover carousel.",
+      auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?",
+      noplay:"Playback unsupported in this browser. Download the MP4 file instead."}
 };
 function VT(k){const l=(L2M.getLang?L2M.getLang():'fr');const d=VLANG[l]||VLANG.fr;return d[k]!==undefined?d[k]:VLANG.fr[k];}
-const VM_KINDS=['thumbnail','banner','poster'];
-const VM_ASPECT={thumbnail:'16/9',banner:'1000/185',poster:'2/3'};
+// `cover` (1:1) est en lecture seule ici : elle vit dans le carrousel de la fiche.
+// Les 3 autres sont les visuels Jellyfin gérés par /images/{kind}.
+const VM_KINDS=['cover','thumbnail','banner','poster'];
+const VM_IMG_KINDS=['thumbnail','banner','poster'];
+const VM_RATIO={cover:'1:1',thumbnail:'16:9',banner:'1000×185',poster:'2:3'};
 let VM_DATA={},VM_UP_KIND=null;
 
 async function initVideo(d){
   const th=document.getElementById('vid-thumb');
   if(!th)return;
-  th.onclick=()=>openVideoModal();
+  th.onclick=()=>openVideoModal({play:true});
+  th.setAttribute('role','button');th.setAttribute('tabindex','0');
+  th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openVideoModal({play:true});}};
   try{const r=await fetch(`/api/social/albums/${slug}/images/thumbnail`).then(r=>r.json());
     const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_thumb||w.cover_url})`;}catch(e){}
 }
 const vm=document.getElementById('vm');
 document.getElementById('vm-close').onclick=()=>closeVm();
 vm.onclick=e=>{if(e.target===vm)closeVm();};
-function closeVm(){vm.classList.remove('show');setTimeout(()=>vm.classList.add('hidden'),180);}
-async function openVideoModal(){await loadVmImages();paintVm();vm.classList.remove('hidden');requestAnimationFrame(()=>vm.classList.add('show'));}
-async function loadVmImages(){await Promise.all(VM_KINDS.map(async k=>{
-  try{VM_DATA[k]=(await fetch(`/api/social/albums/${slug}/images/${k}`).then(r=>r.json())).covers||[];}catch(e){VM_DATA[k]=[];}}));}
-function vmSlotHtml(kind){
-  const list=VM_DATA[kind]||[],win=list[0]||null,g=ME.is_gestionnaire;
-  const img=win?`<img src="${win.cover_medium||win.cover_url}" alt="">`:`<span class="vm-slot-ph"><span class="material-symbols-outlined">image</span><span>${VT('empty')}</span></span>`;
-  const imp=ME.authenticated?`<button class="vm-slot-imp" data-imp="${kind}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${VT('imp')}</span></button>`:'';
-  const dl=win?`<a class="vm-act" href="/download/cover/${win.id}" title="${VT('dl')}"><span class="material-symbols-outlined">download</span></a>`:'';
-  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined">push_pin</span></button>`:'';
-  const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" title="${VT('del')}"><span class="material-symbols-outlined">delete</span></button>`:'';
-  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined">auto_awesome</span>${VT('auto')}</span>`:'';
-  const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
-  return `<div class="vm-slot"><div class="vm-slot-head"><b>${VT('k_'+kind)}</b>${badge}${cnt}</div>
-    <div class="vm-slot-art" style="aspect-ratio:${VM_ASPECT[kind]}">${img}${imp}</div>
-    <div class="vm-slot-actions">${dl}${pin}${del}</div></div>`;
+function closeVm(){
+  // Couper le flux : sans ça le MP4 continue de se télécharger en fond.
+  const v=document.getElementById('vm-video');
+  if(v){v.pause();v.removeAttribute('src');v.load();}
+  vm.classList.remove('show');setTimeout(()=>vm.classList.add('hidden'),180);
 }
-function paintVm(){
+async function openVideoModal(opt){
+  await loadVmImages();paintVm(opt&&opt.play);
+  vm.classList.remove('hidden');requestAnimationFrame(()=>vm.classList.add('show'));
+}
+async function loadVmImages(){await Promise.all(VM_IMG_KINDS.map(async k=>{
+  try{VM_DATA[k]=(await fetch(`/api/social/albums/${slug}/images/${k}`).then(r=>r.json())).covers||[];}catch(e){VM_DATA[k]=[];}}));}
+
+// Emplacement « pochette » : réutilise la gagnante du carrousel (COVERS[0]),
+// en lecture seule — un seul endroit gère les pochettes.
+function vmCoverWinner(){
+  const c=(COVERS||[])[0];
+  if(!c)return null;
+  return {id:c.id,cover_url:c.cover_url,cover_medium:c.cover_medium||c.cover_url,
+          dl:c.id?`/download/cover/${c.id}`:`/download/${slug}/cover`};
+}
+
+function vmSlotHtml(kind){
+  const ro=(kind==='cover');
+  const list=ro?[]:(VM_DATA[kind]||[]);
+  const win=ro?vmCoverWinner():(list[0]||null);
+  const g=ME.is_gestionnaire&&!ro;
+  const big=win?(win.cover_url||win.cover_medium):'';
+
+  let stage;
+  if(win){
+    stage=`<img src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}" loading="lazy" decoding="async">
+      <button class="vm-zoom" data-zoom="${big}" aria-label="${VT('zoom')}" title="${VT('zoom')}">
+        <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span>${VT('zoom')}</button>`;
+  }else if(!ro&&ME.authenticated){
+    stage=`<button class="vm-empty" data-imp="${kind}" aria-label="${VT('impn')}">
+      <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span><span>${VT('imp')}</span></button>`;
+  }else{
+    stage=`<span class="vm-slot-ph"><span class="material-symbols-outlined" aria-hidden="true">image</span>
+      <span>${ro?VT('empty_ro'):VT('empty')}</span></span>`;
+  }
+
+  const dl=(win&&ME.authenticated)
+    ?`<a class="vm-act" href="${ro?win.dl:`/download/cover/${win.id}`}" aria-label="${VT('dl')}" title="${VT('dl')}"><span class="material-symbols-outlined" aria-hidden="true">download</span></a>`:'';
+  const imp=(win&&!ro&&ME.authenticated)
+    ?`<button class="vm-act" data-imp="${kind}" aria-label="${VT('impn')}" title="${VT('impn')}"><span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span></button>`:'';
+  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" aria-label="${win.pinned?VT('unpin'):VT('pin')}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined" aria-hidden="true">push_pin</span></button>`:'';
+  const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" aria-label="${VT('del')}" title="${VT('del')}"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>`:'';
+  const note=ro?`<span class="vm-note">${VT('cover_note')}</span>`:'';
+  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
+  const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
+
+  return `<div class="vm-slot">
+    <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${cnt}</div>
+    <div class="vm-stage${win?' filled':''}">${stage}</div>
+    <div class="vm-slot-actions">${dl}${imp}${note}<span class="vm-act-right">${pin}${del}</span></div></div>`;
+}
+
+function paintVm(autoplay){
+  const thumb=(VM_DATA.thumbnail||[])[0];
+  const poster=thumb?(thumb.cover_medium||thumb.cover_url):'';
+  const player=ME.authenticated
+    ?`<div class="vm-player"><video id="vm-video" controls preload="metadata" playsinline
+         ${poster?`poster="${poster}"`:''} src="/download/${slug}/video/stream">
+         <p class="vm-player-err">${VT('noplay')}</p></video></div>`
+    :`<div class="vm-player"><div class="vm-player-err">
+         <span class="material-symbols-outlined" aria-hidden="true">lock</span>${t('lockdl')}</div></div>`;
   const dlBtn=ME.authenticated
-    ?`<a class="vm-dl-mp4" href="/download/${slug}/video"><span class="material-symbols-outlined">movie</span> ${VT('dl_mp4')}</a>`
-    :`<span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span>`;
+    ?`<a class="vm-dl-mp4" href="/download/${slug}/video"><span class="material-symbols-outlined" aria-hidden="true">download</span> ${VT('dl_mp4')}</a>`
+    :`<span class="lock-inline"><span class="material-symbols-outlined" aria-hidden="true">lock</span>${t('lockdl')}</span>`;
   document.getElementById('vm-body').innerHTML=`
-    <h3 class="vm-title"><span class="material-symbols-outlined">movie</span> ${VT('video_h')}</h3>
+    <h3 class="vm-title"><span class="material-symbols-outlined" aria-hidden="true">movie</span> ${VT('video_h')}</h3>
+    ${player}
     <div class="vm-dl-row">${dlBtn}</div>
+    <h4 class="vm-sec-h"><span class="material-symbols-outlined" aria-hidden="true">photo_library</span> ${VT('art_h')}</h4>
+    <p class="vm-sec-sub">${VT('art_sub')}</p>
     <div class="vm-slots">${VM_KINDS.map(vmSlotHtml).join('')}</div>`;
+  vmBindSlots();
+  if(autoplay){const v=document.getElementById('vm-video');if(v)v.play().catch(()=>{});}
+}
+function vmBindSlots(){
   document.querySelectorAll('#vm-body [data-imp]').forEach(b=>b.onclick=()=>{VM_UP_KIND=b.dataset.imp;document.getElementById('vm-file').click();});
   document.querySelectorAll('#vm-body [data-pin]').forEach(b=>b.onclick=()=>vmPin(b.dataset.pin));
   document.querySelectorAll('#vm-body [data-del]').forEach(b=>b.onclick=()=>vmDel(b.dataset.del));
-  document.querySelectorAll('#vm-body .vm-slot-art img').forEach(im=>{im.style.cursor='zoom-in';im.onclick=()=>openLbx('image',im.src);});
+  document.querySelectorAll('#vm-body [data-zoom]').forEach(b=>b.onclick=()=>openLbx('image',b.dataset.zoom));
 }
 document.getElementById('vm-file').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f||!VM_UP_KIND)return;
   const fd=new FormData();fd.append('cover',f);
   try{const r=await fetch(`/api/social/albums/${slug}/images/${VM_UP_KIND}`,{method:'POST',body:fd});
-    if(r.ok){VM_DATA[VM_UP_KIND]=(await r.json()).covers||[];paintVm();vmSyncThumb();}
+    if(r.ok){VM_DATA[VM_UP_KIND]=(await r.json()).covers||[];vmRepaintKeepPlayback();vmSyncThumb();}
     else alert('Erreur ('+r.status+')');}catch(e){alert('Erreur réseau');}
 };
-async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
-async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
+async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();vmRepaintKeepPlayback();vmSyncThumb();}catch(e){}}
+async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();vmRepaintKeepPlayback();vmSyncThumb();}catch(e){}}
+// Gérer un visuel ne doit pas interrompre la lecture : on ne redessine que la
+// grille de visuels, jamais le <video> (le recréer relancerait le buffering).
+function vmRepaintKeepPlayback(){
+  const grid=document.querySelector('#vm-body .vm-slots');
+  if(!grid){paintVm(false);return;}
+  grid.innerHTML=VM_KINDS.map(vmSlotHtml).join('');
+  vmBindSlots();
+}
 function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_thumb||w.cover_url})`:'';}
 
 // ── Modale d'une pochette ────────────────────────────────────────────────
