@@ -166,7 +166,7 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-  .cm-box.vm-box{max-width:980px;width:96%}
+  .cm-box.vm-box{max-width:980px;width:96%;--vm-band:150px}
   .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding-right:40px}
   /* Lecteur : gros mais borné, jamais plein écran. */
   .vm-player{max-width:720px;margin:0 auto;border-radius:12px;overflow:hidden;
@@ -195,8 +195,11 @@
   /* Bande de hauteur FIXE (cartes de hauteur égale) dans laquelle la scène
      prend EXACTEMENT le ratio du visuel : pas de bandes noires autour d'une
      pochette 1:1 ou d'une miniature 16:9, et la bannière reste une bannière. */
-  .vm-stage-wrap{height:150px;display:flex;align-items:center;justify-content:center}
-  .vm-stage{position:relative;width:100%;max-width:100%;max-height:100%;
+  .vm-stage-wrap{height:var(--vm-band);display:flex;align-items:center;justify-content:center}
+  /* La largeur est bornée par `min(100%, bande × ratio)` (posée en ligne) :
+     `aspect-ratio` seul ne sait pas se contraindre sur les DEUX axes — avec
+     `width:100%` il débordait en hauteur, avec `height:100%` en largeur. */
+  .vm-stage{position:relative;
     border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--border);
     display:flex;align-items:center;justify-content:center}
   .vm-stage.filled{border-style:solid;border-color:var(--border)}
@@ -984,7 +987,8 @@ function vmSlotHtml(kind){
 
   return `<div class="vm-slot">
     <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${note}${cnt}</div>
-    <div class="vm-stage-wrap"><div class="vm-stage${win?' filled':''}" style="aspect-ratio:${VM_AR[kind]}">${stage}</div></div>
+    <div class="vm-stage-wrap"><div class="vm-stage${win?' filled':''}"
+      style="aspect-ratio:${VM_AR[kind]};width:min(100%,calc(var(--vm-band) * ${VM_AR[kind]}))">${stage}</div></div>
     <div class="vm-slot-actions">${dl}${imp}<span class="vm-act-right">${pin}${del}</span></div></div>`;
 }
 
