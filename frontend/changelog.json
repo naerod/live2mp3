@@ -11,7 +11,7 @@
       "fr": [
         "Lecteur vidéo intégré : la vignette « Vidéo du concert » ouvre désormais un vrai lecteur dans le navigateur (lecture et navigation sans télécharger le fichier) ; les visiteurs non connectés y trouvent un lien de connexion.",
         "Fenêtre « Vidéo du concert » repensée : lecteur en haut, puis les quatre visuels Jellyfin (pochette 1:1, miniature 16:9, bannière, poster) avec aperçu cliquable pour ouvrir l'image en grand.",
-        "Visuels Jellyfin : chaque aperçu a désormais la forme exacte du visuel attendu (pochette 1:1, miniature 16:9, bannière, poster 2:3) — plus de bandes noires autour des images — et les barres de boutons sont alignées d'une carte à l'autre.",
+        "Visuels Jellyfin : chaque aperçu a désormais la forme exacte du visuel attendu (pochette 1:1, miniature 16:9, bannière, poster 2:3) — plus de bandes noires autour des images, boutons d'action parfaitement alignés — et les barres de boutons sont alignées d'une carte à l'autre.",
         "Badges « Nouveau » et « Mis à jour » fiabilisés : ils ne se déclenchent plus sur une écriture technique (redémarrage du service, like de pochette) mais uniquement sur une vraie mise en ligne ou modification.",
         "Publier un album ou le promouvoir en production ne le fait plus apparaître comme « Mis à jour » : seule une vraie modification compte.",
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
@@ -19,7 +19,7 @@
       "en": [
         "Built-in video player: the “Concert video” thumbnail now opens a real in-browser player (play and seek without downloading the file); logged-out visitors get a sign-in link instead.",
         "Redesigned “Concert video” dialog: player on top, then the four Jellyfin artworks (1:1 cover, 16:9 thumbnail, banner, poster) with a clickable preview to open the image full size.",
-        "Jellyfin artwork: each preview now has the exact shape of the expected image (1:1 cover, 16:9 thumbnail, banner, 2:3 poster) — no more letterboxing — and button rows line up across cards.",
+        "Jellyfin artwork: each preview now has the exact shape of the expected image (1:1 cover, 16:9 thumbnail, banner, 2:3 poster) — no more letterboxing, action buttons perfectly aligned — and button rows line up across cards.",
         "Reliable “New” and “Updated” badges: they no longer trigger on technical writes (service restart, cover like) but only on an actual release or edit.",
         "Publishing or promoting an album to production no longer marks it as “Updated”: only a genuine edit counts.",
         "Self-hosted Umami analytics, cookie-free and with no GDPR banner (replaces Google Analytics)."

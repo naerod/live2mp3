@@ -1,3 +1,38 @@
+2026-09-22 (suite) : **Visuels Jellyfin — deux pièges CSS résolus**
+(preprod v1.24.25).
+- **Barre d'actions désalignée** : `app.css` applique
+  `margin-top:16px; padding:11px 16px; font-size:14px` à **tout `button`**.
+  `.vm-act` fixait width/height mais pas la marge → les `<button>`
+  (importer/épingler/supprimer) tombaient **8 px sous** le `<a>` de
+  téléchargement. Reset `margin:0;padding:0;font:inherit` sur `.vm-act`.
+  Le même piège est déjà documenté plus haut dans le fichier pour
+  `.up-btns>button` — **y penser pour toute barre d'icônes future**.
+- **Bandes noires autour des aperçus** : la scène était un cadre fixe
+  150 px avec `object-fit:contain` → une pochette 1:1 et une miniature
+  16:9 y flottaient. Corrigé en donnant à la scène **le ratio exact du
+  visuel**, dans une bande de hauteur fixe (cartes de hauteur égale).
+  ⚠️ `aspect-ratio` ne sait pas se contraindre sur les deux axes :
+  `width:100%` déborde en hauteur, `height:100%` déborde en largeur
+  (un axe définitif empêche le recalcul par le ratio). Solution :
+  `width:min(100%, var(--vm-band) * ratio)` + `aspect-ratio`.
+  Mesuré : 150×150 / 197×111 / 197×36 / 100×150, actions toutes à la
+  même ordonnée. L'overlay « Agrandir » est en **icône seule** : il doit
+  tenir dans une bannière de ~36 px de haut.
+
+**Deux comportements « anormaux » qui n'en sont pas** (questions du jour) :
+- *Clic sur la pochette : pop-up ou simple agrandissement ?* —
+  `renderCarousel()` : `c.id` → `openCoverModal()` (fiche pochette),
+  sinon → `openLbx()`. Les albums sans ligne dans la table `covers` de
+  l'env (TIF, Gazo, PLK en preprod) affichent la pseudo-cover du
+  manifest (`id:0`) et n'ont donc que l'agrandissement. **Les
+  métadonnées d'album sont sur un volume partagé prod/preprod, mais la
+  base sociale est scindée par env** — d'où l'écart.
+- *Pochette « épinglée » ou non* — une pochette déposée par l'outil de
+  gestion (`POST /api/albums/{slug}/cover`, main.py) est insérée avec
+  `pinned=1` (une seule épinglée par album) ; une pochette proposée
+  depuis le carrousel public (`POST /api/social/albums/{slug}/covers`)
+  arrive avec `pinned=0`. Rien de cassé : c'est l'origine du dépôt.
+
 2026-09-22 : **Vidéo du concert — lecteur intégré + refonte de la
 grille de visuels Jellyfin** (preprod v1.24.22).
 - **Backend** : nouvelle route `GET /download/{slug}/video/stream` —
