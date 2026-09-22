@@ -1,3 +1,22 @@
+2026-09-22 (suite 4) : **Chevauchements de la vitrine** (preprod v1.24.39).
+- **Mode sélection** : la case à cocher (`.pick`, top:8 left:8) recouvrait
+  les badges « Nouveau » / « Mis à jour » (`.new-badge`, top:10 left:10).
+  Premier essai — décalage latéral `left:42px` — **rejeté après mesure** :
+  à 320 px la carte ne fait que ~136 px et le badge (82-94 px) heurtait
+  alors l'engrenage de gestion. Retenu : **empiler** le badge sous la
+  case (`top:42px`), indépendant de la largeur.
+- **Chevauchement préexistant trouvé au passage** : à moins de 400 px la
+  grille restait à 2 colonnes → cartes de ~136 px, titre illisible et
+  « MIS À JOUR » sous l'engrenage. Passée à **1 colonne sous 400 px**.
+- **Détection outillée** (à réutiliser) : script CDP qui teste
+  l'intersection des rects de tous les éléments positionnés d'une carte
+  (`.pick,.new-badge,.status-badge,.video-badge,.gear,.draft-badge`),
+  en mode normal ET en mode sélection, à 320/360/390/480/768/1280/1600.
+  Résultat final : **0 chevauchement partout**.
+- **Règle inscrite dans `CLAUDE.md` § Direction artistique** : aucun
+  chevauchement toléré, sur aucun site, et à vérifier dans tous les états
+  (sélection, survol, focus, libellés longs, EN, clair/sombre, 320 px).
+
 2026-09-22 (suite 3) : **Badge « Pochette épinglée » — affiché
 seulement en concurrence** (preprod v1.24.35).
 Incohérence signalée : kyo-untitled portait le badge, calogero-untitled
