@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Menu de profil réordonné : profil, puis réglages (paramètres, langue, thème), puis « Voir en tant que » et déconnexion, séparés par des filets.",
         "En-tête : ouvrir les notifications ferme le menu de profil, et inversement — les deux panneaux ne se chevauchent plus.",
         "Menu de profil : l'entrée « Notifications » a été retirée, la cloche de l'en-tête fait déjà le travail.",
         "Barre d'outils du catalogue : « Filtres » et « Sélectionner » étaient décalés vers le bas par rapport au nombre d'albums — les trois sont désormais alignés.",
@@ -31,6 +32,7 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Profile menu reordered: profile, then settings (preferences, language, theme), then \"View as\" and sign-out, separated by dividers.",
         "Header: opening notifications now closes the profile menu, and vice versa — the two panels no longer overlap.",
         "Profile menu: the \"Notifications\" entry was removed, the header bell already does the job.",
         "Catalogue toolbar: \"Filters\" and \"Select\" sat lower than the album count — all three are now aligned.",

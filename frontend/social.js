@@ -480,11 +480,12 @@ const L2M = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
+        <div class="um-sep"></div>
         <a class="um-item" href="/settings"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
-        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <div class="um-sep"></div>
+        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <a class="um-item danger" href="/api/logout"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
     const trigger = mountEl.querySelector(".um-trigger");

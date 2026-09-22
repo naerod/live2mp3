@@ -1083,7 +1083,9 @@ function viewAsLabel(key){
 }
 function injectViewAsMenu(um){
   const pop=um.querySelector(".um-pop");
-  const sep=pop.querySelector(".um-sep");
+  // Le menu compte deux séparateurs : « Voir en tant que » va dans le dernier
+  // groupe, juste avant Déconnexion — on ancre donc sur le lien de déconnexion.
+  const sep=pop.querySelector("a.um-item.danger");
   const wrap=document.createElement("div");
   wrap.className="um-viewas";
   wrap.innerHTML=`<button class="um-item"><span class="material-symbols-outlined">visibility</span><span class="um-viewas-label">${T[L()].view_as}</span><span class="material-symbols-outlined" style="margin-left:auto;font-size:16px">chevron_left</span></button>
