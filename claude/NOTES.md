@@ -1,3 +1,50 @@
+2026-09-22 : **Vidéo du concert — lecteur intégré + refonte de la
+grille de visuels Jellyfin** (preprod v1.24.22).
+- **Backend** : nouvelle route `GET /download/{slug}/video/stream` —
+  même MP4 que `/download/{slug}/video` mais servi `inline`. Starlette
+  1.6 gère les requêtes Range nativement : le navigateur démarre et se
+  déplace dans un fichier de plusieurs Go sans le télécharger (vérifié :
+  206 Partial Content, `readyState 4`, durée lue sur TIF 1 h 36 et
+  Coldplay 3,5 Go). Les MP4 sont déjà en `faststart` (moov en tête).
+  Helper `_video_full_file(slug)` factorisé entre les deux routes.
+  ⚠️ Le chemin reste **sous `/download/`** exprès : il est ainsi couvert
+  par la règle forward-auth nginx existante (`^/(app|api/…|download)(/|$)`)
+  — aucune modification nginx à prévoir à la promotion en prod.
+- **Modale** : lecteur `<video controls>` 16/9 borné à 720 px en haut
+  (poster = miniature Jellyfin), bouton « Télécharger la vidéo (MP4) »
+  dessous, puis la section « Visuels Jellyfin ». Clic sur la vignette de
+  la fiche → ouverture avec `play()` (autoplay best-effort). Fermer la
+  modale coupe le flux (`pause()` + `removeAttribute('src')` + `load()`),
+  sinon le MP4 continue de se télécharger en fond.
+- **4ᵉ emplacement « Pochette » (1:1)**, en lecture seule (download
+  uniquement) : elle reste gérée par le carrousel de la fiche. Les 3
+  autres (miniature / bannière / poster) passent toujours par
+  `/api/social/albums/{slug}/images/{kind}`.
+- **Alignement** — les deux bugs signalés :
+  - les aperçus utilisaient `aspect-ratio` par type, donc bannière
+    (1000/185) et poster (2/3) n'avaient ni la même hauteur ni le même
+    encombrement → scène de **hauteur fixe 150 px** commune, image en
+    `object-fit:contain`.
+  - les barres d'actions flottaient à des hauteurs différentes →
+    carte en `flex-column` + `margin-top:auto` sur la barre, et
+    **hauteur fixe** de la barre (une carte vide réserve la même bande).
+  - ⚠️ **Piège CSS** : `.vm-box{max-width}` était déclarée AVANT
+    `.cm-box` (même spécificité) → le `max-width:860px` de la modale
+    générique gagnait et la grille retombait à 3 colonnes. Corrigé en
+    `.cm-box.vm-box{max-width:980px}`.
+- **UX/DA** : aperçu cliquable (overlay « Agrandir » → lightbox),
+  emplacement vide = bouton d'import plein cadre visible en permanence
+  (plus de survol), épingler/supprimer repoussés à droite (jamais collés
+  au téléchargement), `aria-label` sur chaque icône, visiteur non
+  connecté → lien de connexion à la place du lecteur et « Aucune image »
+  au lieu de « importez-en une ». Gérer un visuel ne redessine que la
+  grille : la lecture en cours n'est pas coupée.
+- Vérifié en headless CT102 (CDP) : 1280 px clair + sombre, 390 px
+  mobile, rôles gestionnaire et visiteur, 0 erreur console.
+- **Reste à faire** : Jellyfin accepte aussi un *Backdrop/Fanart* 16:9
+  et un *Logo* — non gérés (ni en DB `IMAGE_KINDS`, ni dans
+  `jellyfin.py`). À ajouter si besoin.
+
 2026-08-15 (encore plus tard) : **Recut RÉACTIVÉ en mode triptyque +
 cadenas** (preprod v1.23.25). Après avoir désactivé la version « piste
 seule » (peu pertinente pour un album live), le patron correct est
