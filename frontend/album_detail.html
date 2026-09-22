@@ -192,34 +192,38 @@
   .vm-auto{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
   .vm-auto .material-symbols-outlined{font-size:13px}
   .vm-count{margin-left:auto;color:var(--muted);font-size:11px}
-  /* Scène de hauteur FIXE et identique partout : le visuel est contenu dedans
-     (object-fit:contain), donc une bannière très large et un poster très haut
-     occupent le même encombrement et n'écartent plus les cartes. */
-  .vm-stage{position:relative;height:150px;display:flex;align-items:center;justify-content:center;
-    border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--border)}
-  .vm-stage.filled{border-style:solid}
-  .vm-stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-  .vm-slot-ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);
-    font-size:11px;padding:12px;text-align:center}
-  .vm-slot-ph .material-symbols-outlined{font-size:26px}
-  /* Import sur un emplacement vide : visible en permanence, il remplit la scène. */
-  .vm-empty{position:absolute;inset:0;border:0;background:transparent;color:var(--muted);
-    cursor:pointer;font:inherit;font-size:11px;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:6px;transition:color .15s,background .15s}
+  /* Bande de hauteur FIXE (cartes de hauteur égale) dans laquelle la scène
+     prend EXACTEMENT le ratio du visuel : pas de bandes noires autour d'une
+     pochette 1:1 ou d'une miniature 16:9, et la bannière reste une bannière. */
+  .vm-stage-wrap{height:150px;display:flex;align-items:center;justify-content:center}
+  .vm-stage{position:relative;width:100%;max-width:100%;max-height:100%;
+    border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--border);
+    display:flex;align-items:center;justify-content:center}
+  .vm-stage.filled{border-style:solid;border-color:var(--border)}
+  .vm-stage img{width:100%;height:100%;object-fit:cover;display:block}
+  .vm-slot-ph,.vm-empty{position:absolute;inset:0;margin:0;padding:0;border:0;background:transparent;
+    color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;
+    font:inherit;font-size:11px;text-align:center}
+  .vm-empty{cursor:pointer;transition:color .15s,background .15s}
   .vm-empty:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
-  .vm-empty .material-symbols-outlined{font-size:26px}
-  /* Aperçu rempli : la scène entière agrandit l'image. */
-  .vm-zoom{position:absolute;inset:0;border:0;cursor:zoom-in;font:inherit;font-size:12px;color:#fff;
-    background:rgba(0,0,0,.5);opacity:0;transition:opacity .15s;
-    display:flex;align-items:center;justify-content:center;gap:6px}
+  .vm-slot-ph .material-symbols-outlined,.vm-empty .material-symbols-outlined{font-size:24px}
+  /* Aperçu rempli : la scène entière agrandit l'image (icône seule : elle doit
+     tenir aussi dans une bannière de ~35 px de haut). */
+  .vm-zoom{position:absolute;inset:0;margin:0;padding:0;border:0;cursor:zoom-in;
+    font:inherit;color:#fff;background:rgba(0,0,0,.5);opacity:0;transition:opacity .15s;
+    display:flex;align-items:center;justify-content:center}
   .vm-stage:hover .vm-zoom,.vm-zoom:focus-visible{opacity:1}
   .vm-zoom .material-symbols-outlined{font-size:22px}
   .vm-slot-actions{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:12px;height:46px;box-sizing:content-box}
   /* Les actions destructives/secondaires sont repoussées à droite, jamais
      collées au téléchargement (règle DA). */
-  .vm-act-right{margin-left:auto;display:flex;gap:6px}
-  .vm-act{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;
-    border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none;flex:none}
+  .vm-act-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  /* app.css donne margin-top:16px et padding:11px 16px à `button` : sans ce
+     reset, les <button> de la barre se posaient 8 px plus bas que le <a>. */
+  .vm-act{display:inline-flex;align-items:center;justify-content:center;
+    width:34px;height:34px;margin:0;padding:0;box-sizing:border-box;border-radius:8px;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg);
+    font:inherit;cursor:pointer;text-decoration:none;flex:none}
   .vm-act:hover{border-color:var(--accent);color:var(--accent)}
   .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
@@ -880,7 +884,7 @@ const VLANG={
       dl_mp4:"Télécharger la vidéo (MP4)",
       k_cover:"Pochette",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
       art_h:"Visuels Jellyfin",
-      art_sub:"Images utilisées par Jellyfin pour cet album. Cliquez un aperçu pour l'ouvrir en grand.",
+      art_sub:"Images utilisées par Jellyfin pour ce concert. Cliquez un aperçu pour l'ouvrir en grand.",
       imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
       del:"Supprimer",zoom:"Agrandir",
       empty:"Aucune image — importez-en une",empty_ro:"Aucune image",
@@ -893,7 +897,7 @@ const VLANG={
       dl_mp4:"Download video (MP4)",
       k_cover:"Cover",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
       art_h:"Jellyfin artwork",
-      art_sub:"Images Jellyfin uses for this album. Click a preview to open it full size.",
+      art_sub:"Images Jellyfin uses for this concert. Click a preview to open it full size.",
       imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",
       del:"Delete",zoom:"Enlarge",
       empty:"No image — import one",empty_ro:"No image",
@@ -908,6 +912,9 @@ function VT(k){const l=(L2M.getLang?L2M.getLang():'fr');const d=VLANG[l]||VLANG.
 const VM_KINDS=['cover','thumbnail','banner','poster'];
 const VM_IMG_KINDS=['thumbnail','banner','poster'];
 const VM_RATIO={cover:'1:1',thumbnail:'16:9',banner:'1000×185',poster:'2:3'};
+// Ratio numérique de la scène : elle prend la forme exacte du visuel attendu.
+// Au-delà de 3 (bannière), la scène est trop basse pour un libellé → icône seule.
+const VM_AR={cover:1,thumbnail:16/9,banner:1000/185,poster:2/3};
 let VM_DATA={},VM_UP_KIND=null;
 
 async function initVideo(d){
@@ -951,17 +958,18 @@ function vmSlotHtml(kind){
   const g=ME.is_gestionnaire&&!ro;
   const big=win?(win.cover_url||win.cover_medium):'';
 
+  const flat=VM_AR[kind]>3;  // bannière : pas la place d'un libellé
   let stage;
   if(win){
     stage=`<img src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}" loading="lazy" decoding="async">
       <button class="vm-zoom" data-zoom="${big}" aria-label="${VT('zoom')}" title="${VT('zoom')}">
-        <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span>${VT('zoom')}</button>`;
+        <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span></button>`;
   }else if(!ro&&ME.authenticated){
-    stage=`<button class="vm-empty" data-imp="${kind}" aria-label="${VT('impn')}">
-      <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span><span>${VT('imp')}</span></button>`;
+    stage=`<button class="vm-empty" data-imp="${kind}" aria-label="${VT('impn')}" title="${VT('impn')}">
+      <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>${flat?'':`<span>${VT('imp')}</span>`}</button>`;
   }else{
-    stage=`<span class="vm-slot-ph"><span class="material-symbols-outlined" aria-hidden="true">image</span>
-      <span>${VT('empty_ro')}</span></span>`;
+    stage=`<span class="vm-slot-ph" title="${VT('empty_ro')}">
+      <span class="material-symbols-outlined" aria-hidden="true">image</span>${flat?'':`<span>${VT('empty_ro')}</span>`}</span>`;
   }
 
   const dl=(win&&ME.authenticated)
@@ -976,7 +984,7 @@ function vmSlotHtml(kind){
 
   return `<div class="vm-slot">
     <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${note}${cnt}</div>
-    <div class="vm-stage${win?' filled':''}">${stage}</div>
+    <div class="vm-stage-wrap"><div class="vm-stage${win?' filled':''}" style="aspect-ratio:${VM_AR[kind]}">${stage}</div></div>
     <div class="vm-slot-actions">${dl}${imp}<span class="vm-act-right">${pin}${del}</span></div></div>`;
 }
 
