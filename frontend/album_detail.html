@@ -166,7 +166,7 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-  .vm-box{max-width:920px;width:96%}
+  .cm-box.vm-box{max-width:980px;width:96%}
   .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding-right:40px}
   /* Lecteur : gros mais borné, jamais plein écran. */
   .vm-player{max-width:720px;margin:0 auto;border-radius:12px;overflow:hidden;
@@ -181,7 +181,7 @@
     margin:0 0 4px;padding-top:16px;border-top:1px solid var(--border)}
   .vm-sec-h .material-symbols-outlined{font-size:18px}
   .vm-sec-sub{color:var(--muted);font-size:12px;margin:0 0 14px;max-width:70ch}
-  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
   /* Carte en colonne : la barre d'actions est poussée en bas (margin-top:auto),
      donc toutes les cartes ont leurs boutons sur la même ligne quelle que soit
      la forme du visuel. */
@@ -214,7 +214,7 @@
     display:flex;align-items:center;justify-content:center;gap:6px}
   .vm-stage:hover .vm-zoom,.vm-zoom:focus-visible{opacity:1}
   .vm-zoom .material-symbols-outlined{font-size:22px}
-  .vm-slot-actions{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;min-height:44px}
+  .vm-slot-actions{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:12px;height:46px;box-sizing:content-box}
   /* Les actions destructives/secondaires sont repoussées à droite, jamais
      collées au téléchargement (règle DA). */
   .vm-act-right{margin-left:auto;display:flex;gap:6px}
@@ -224,7 +224,7 @@
   .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
   .vm-act .material-symbols-outlined{font-size:18px}
-  .vm-note{color:var(--muted);font-size:11px;line-height:1.3}
+  .vm-hint{margin-left:auto;color:var(--muted);font-size:11px}
   @media(max-width:640px){
     .vm-slots{grid-template-columns:1fr}
     .vm-dl-row{justify-content:stretch}
@@ -884,7 +884,7 @@ const VLANG={
       imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
       del:"Supprimer",zoom:"Agrandir",
       empty:"Aucune image — importez-en une",empty_ro:"Aucune image",
-      cover_note:"Gérée dans le carrousel des pochettes.",
+      cover_note:"Gérée dans le carrousel des pochettes de la fiche.",cover_hint:"Carrousel",
       auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?",
       noplay:"Lecture impossible dans ce navigateur. Téléchargez le fichier MP4."},
   en:{video_h:"Concert video",video_open:"Play the concert",
@@ -896,7 +896,7 @@ const VLANG={
       imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",
       del:"Delete",zoom:"Enlarge",
       empty:"No image — import one",empty_ro:"No image",
-      cover_note:"Managed in the cover carousel.",
+      cover_note:"Managed in the cover carousel on this page.",cover_hint:"Carousel",
       auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?",
       noplay:"Playback unsupported in this browser. Download the MP4 file instead."}
 };
@@ -968,14 +968,14 @@ function vmSlotHtml(kind){
     ?`<button class="vm-act" data-imp="${kind}" aria-label="${VT('impn')}" title="${VT('impn')}"><span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span></button>`:'';
   const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" aria-label="${win.pinned?VT('unpin'):VT('pin')}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined" aria-hidden="true">push_pin</span></button>`:'';
   const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" aria-label="${VT('del')}" title="${VT('del')}"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>`:'';
-  const note=ro?`<span class="vm-note">${VT('cover_note')}</span>`:'';
+  const note=ro?`<span class="vm-hint" title="${VT('cover_note')}">${VT('cover_hint')}</span>`:'';
   const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
   const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
 
   return `<div class="vm-slot">
-    <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${cnt}</div>
+    <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${note}${cnt}</div>
     <div class="vm-stage${win?' filled':''}">${stage}</div>
-    <div class="vm-slot-actions">${dl}${imp}${note}<span class="vm-act-right">${pin}${del}</span></div></div>`;
+    <div class="vm-slot-actions">${dl}${imp}<span class="vm-act-right">${pin}${del}</span></div></div>`;
 }
 
 function paintVm(autoplay){
