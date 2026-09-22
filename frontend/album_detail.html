@@ -293,8 +293,32 @@
   .cm-close{position:absolute;top:12px;right:12px;z-index:2}
   .cm-top{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
   @media(max-width:640px){.cm-top{grid-template-columns:1fr}}
-  .cm-art{display:flex;flex-direction:column;gap:10px}
-  .cm-art img{width:100%;border-radius:12px;border:1px solid var(--border);display:block;cursor:zoom-in}
+  .cm-art{display:flex;flex-direction:column;gap:16px}
+  .cm-slot{display:flex;flex-direction:column;gap:6px}
+  .cm-frame{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+  .cm-frame img{width:100%;display:block;cursor:zoom-in}
+  /* Emplacement tray card vide : toujours présent, au format d'un inlay de
+     boîtier CD (150×118 mm), et actionnable — c'est lui qui porte l'ajout,
+     il n'y a donc plus de bouton « Ajouter une tray card » dans la barre. */
+  .cm-frame.empty{border-style:dashed;aspect-ratio:150/118;background:var(--bg);
+    display:flex;align-items:center;justify-content:center}
+  /* app.css donne margin-top:16px et padding:11px à `button` : sans reset,
+     un bouton qui remplit un cadre en sort. */
+  .cm-empty,.cm-frame-act{margin:0;padding:0;border:0;font:inherit;background:transparent;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .cm-empty{position:absolute;inset:0;flex-direction:column;color:var(--muted);
+    font-size:12px;text-align:center;cursor:pointer;transition:color .15s,background .15s}
+  .cm-empty:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+  .cm-empty .material-symbols-outlined{font-size:28px}
+  .cm-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:6px;color:var(--muted);font-size:12px;text-align:center}
+  .cm-ph .material-symbols-outlined{font-size:28px}
+  /* Remplacer une tray card existante : overlay au survol du cadre. */
+  .cm-frame-act{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:8px 0;
+    background:linear-gradient(transparent,rgba(6,7,10,.85));color:#fff;font-size:12px;
+    font-weight:600;cursor:pointer;opacity:0;transition:opacity .15s}
+  .cm-frame:hover .cm-frame-act,.cm-frame-act:focus-visible{opacity:1}
+  .cm-frame-act .material-symbols-outlined{font-size:18px}
   /* Lightbox pour agrandir cover/traycard dans la modale */
   .lbx-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:none;
     align-items:center;justify-content:center}
@@ -305,10 +329,9 @@
   .lbx-close{position:fixed;top:14px;right:14px;all:unset;cursor:pointer;padding:6px;
     border-radius:50%;background:rgba(255,255,255,.12);display:flex;z-index:2001}
   .lbx-close .material-symbols-outlined{font-size:28px;color:#fff}
-  .cm-art .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+  .cm-slot .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
     color:var(--muted);font-weight:700}
-  .cm-tray-embed{width:100%;height:200px;border-radius:12px;border:1px solid var(--border);
-    background:var(--bg)}
+  .cm-tray-embed{width:100%;height:200px;border:0;display:block;background:var(--bg)}
   .cm-caption{color:var(--fg);font-size:14px;margin:10px 0 0;line-height:1.45}
   .cm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
   .cm-comments{margin-top:22px;border-top:1px solid var(--border);padding-top:6px}
@@ -1060,17 +1083,33 @@ function paintModal(id){
   const c=COVERS.find(x=>x.id===id);
   if(!c)return;
   const mine=ME.authenticated&&(c.username===ME.username||ME.is_gestionnaire);
-  const tray=c.has_traycard
-    ?`<div class="lbl">${t('cv_tray')}</div>${
-        c.traycard_kind==='pdf'
-          ?`<iframe class="cm-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
-          :`<img src="${c.traycard_url}" alt="${t('cv_tray')}">`}`
-    :`<div class="lbl" style="opacity:.5">${t('cv_no_tray')}</div>`;
+  // La tray card a TOUJOURS son emplacement, même vide : c'est lui qui porte
+  // l'ajout (plus de bouton « Ajouter une tray card » dans la barre d'actions).
+  const trayInner=c.has_traycard
+    ?(c.traycard_kind==='pdf'
+        ?`<iframe class="cm-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
+        :`<img id="cm-tray-img" src="${c.traycard_url}" alt="${t('cv_tray')}">`)
+      +(mine?`<button class="cm-frame-act" id="cm-tray-rep">
+          <span class="material-symbols-outlined" aria-hidden="true">note_add</span>${t('cv_replace_tray')}</button>`:'')
+    :(mine
+        ?`<button class="cm-empty" id="cm-tray-add">
+            <span class="material-symbols-outlined" aria-hidden="true">note_add</span>
+            <span>${t('cv_add_tray')}</span></button>`
+        :`<span class="cm-ph"><span class="material-symbols-outlined" aria-hidden="true">description</span>
+            <span>${t('cv_no_tray')}</span></span>`);
+  const tray=`<div class="cm-slot">
+      <div class="lbl">${t('cv_tray')}</div>
+      <div class="cm-frame${c.has_traycard?'':' empty'}" id="cm-tray-frame">${trayInner}</div>
+    </div>`;
 
   document.getElementById('cm-body').innerHTML=`
     <div class="cm-top">
       <div class="cm-art">
-        <img src="${c.cover_thumb||c.cover_url}" alt="" loading="lazy" decoding="async">
+        <div class="cm-slot">
+          <div class="lbl">${t('cv_cover')}</div>
+          <div class="cm-frame"><img id="cm-cover-img" src="${c.cover_thumb||c.cover_url}"
+            alt="${t('cv_cover')}" loading="lazy" decoding="async"></div>
+        </div>
         ${tray}
       </div>
       <div>
@@ -1089,9 +1128,6 @@ function paintModal(id){
         <div class="cm-actions">
           ${ME.authenticated?dlSplit('image',t('cv_dl_cover'),`/download/cover/${c.id}`,`/download/cover/${c.id}/pdf`):''}
           ${ME.authenticated&&c.has_traycard?dlSplit('description',t('cv_dl_tray'),`/download/traycard/${c.id}`,`/download/traycard/${c.id}/pdf`):''}
-          ${mine?`<button class="icon-btn" id="cm-tray">
-            <span class="material-symbols-outlined">note_add</span>
-            ${c.has_traycard?t('cv_replace_tray'):t('cv_add_tray')}</button>`:''}
           ${ME.is_gestionnaire?`<button class="icon-btn" id="cm-pin">
             <span class="material-symbols-outlined">push_pin</span>
             ${c.pinned?t('cv_unpin'):t('cv_pin')}</button>`:''}
@@ -1101,14 +1137,20 @@ function paintModal(id){
       </div>
     </div>`;
 
-  // Click to enlarge cover
-  const cmCoverImg=document.querySelector('#cm-body .cm-art img:first-child');
+  // Agrandir la pochette
+  const cmCoverImg=document.getElementById('cm-cover-img');
   if(cmCoverImg)cmCoverImg.onclick=e=>{e.stopPropagation();openLbx('image',c.cover_url);};
-  // Click to enlarge traycard
-  const cmTrayImg=document.querySelector('#cm-body .cm-art img:not(:first-child)');
-  if(cmTrayImg){cmTrayImg.style.cursor='zoom-in';cmTrayImg.onclick=e=>{e.stopPropagation();openLbx('img',c.traycard_url);};}
+  // Agrandir la tray card (image, ou PDF : l'iframe ne reçoit pas le clic,
+  // c'est le cadre qui l'ouvre).
+  const cmTrayImg=document.getElementById('cm-tray-img');
+  if(cmTrayImg)cmTrayImg.onclick=e=>{e.stopPropagation();openLbx('img',c.traycard_url);};
   const cmTrayFrame=document.querySelector('#cm-body .cm-tray-embed');
-  if(cmTrayFrame){cmTrayFrame.style.cursor='zoom-in';cmTrayFrame.style.pointerEvents='none';cmTrayFrame.parentElement.style.cursor='zoom-in';cmTrayFrame.parentElement.onclick=e=>{e.stopPropagation();openLbx('pdf',c.traycard_url);};}
+  if(cmTrayFrame){
+    cmTrayFrame.style.pointerEvents='none';
+    const box=document.getElementById('cm-tray-frame');
+    box.style.cursor='zoom-in';
+    box.onclick=e=>{e.stopPropagation();openLbx('pdf',c.traycard_url);};
+  }
   document.getElementById('cm-like').onclick=()=>toggleCoverLike(c.id);
   // Dans la modale les commentaires sont déjà rendus plus bas : on y amène.
   document.getElementById('cm-comment').onclick=()=>
@@ -1130,8 +1172,11 @@ function paintModal(id){
     COVERS=d.covers||[];buildSlides();IDX=0;
     closeModal();renderCarousel();
   };
-  const trayBtn=document.getElementById('cm-tray');
-  if(trayBtn)trayBtn.onclick=()=>openUpload(c.id);
+  // Ajout / remplacement de la tray card : porté par l'emplacement lui-même.
+  ['cm-tray-add','cm-tray-rep'].forEach(bid=>{
+    const b=document.getElementById(bid);
+    if(b)b.onclick=e=>{e.stopPropagation();openUpload(c.id);};
+  });
 }
 
 // ── Import d'une pochette / d'une tray card ──────────────────────────────
