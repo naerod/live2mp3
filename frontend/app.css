@@ -348,10 +348,6 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 /* Posteur d'un album (avatar + pseudo) */.page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
 
 /* ============ Mobile ============ */
-/* Écrans tactiles : les contrôles cachés derrière un survol doivent rester visibles */
-@media (hover:none){
-  .gear{opacity:1;transform:none}
-}
 @media (max-width:768px){
   header{padding:12px 14px;flex-wrap:wrap;row-gap:10px}
   .brand{font-size:21px;gap:9px}

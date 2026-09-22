@@ -9,6 +9,7 @@
         "en": "Setlists & import (upcoming)"
       },
       "fr": [
+        "Cartes du catalogue : l'engrenage de gestion et les étiquettes MP3/MP4 disparaissent. Tous les albums sont en MP3 — seule la vidéo méritait une information, signalée par la petite icône du coin, désormais visible aussi en vue gestionnaire. Les réglages d'un album s'ouvrent depuis sa page.",
         "Vue visiteur simulée : la cloche de notifications est désormais masquée (elle affichait les notifications du compte connecté), et son volet se referme au passage en vue visiteur.",
         "Prévisualisation « Voir en tant que » : le bouton « Quitter » du bandeau était désaligné vers le bas — recentré.",
         "Barre d'outils du catalogue : « Filtres » à gauche, « Sélectionner » à droite, et le nombre d'albums centré entre les deux, dans une taille plus lisible.",
@@ -27,6 +28,7 @@
         "Mesure d'audience Umami auto-hébergée, sans cookie ni bandeau RGPD (remplace Google Analytics)."
       ],
       "en": [
+        "Catalogue cards: the management gear and the MP3/MP4 tags are gone. Every album is MP3 — only video is worth flagging, via the small corner icon, now visible in manager view too. Album settings are reached from its own page.",
         "Simulated visitor view: the notification bell is now hidden (it used to show the logged-in account's notifications), and its panel closes when switching to visitor view.",
         "\"View as\" preview: the \"Exit\" button in the banner was misaligned downwards — recentred.",
         "Catalogue toolbar: “Filters” on the left, “Select” on the right, and the album count centred between them, in a more readable size.",

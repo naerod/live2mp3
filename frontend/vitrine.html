@@ -29,7 +29,9 @@
   .sort-label{color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap;
     display:flex;align-items:center;gap:5px}
   .sort-label .material-symbols-outlined{font-size:15px}
-  .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+  /* margin:0 obligatoire : `button` (app.css) impose margin-top:16px, qui
+     descendait les chips sous la ligne du compteur d'albums. */
+  .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:0;
     border-radius:999px;border:1px solid var(--border);background:var(--card);
     color:var(--muted);font-size:12.5px;font-weight:500;cursor:pointer;
     transition:all .15s;white-space:nowrap}
@@ -73,33 +75,19 @@
     backdrop-filter:blur(3px)}
   .draft-badge .material-symbols-outlined{font-size:12px}
   /* Badge de statut — draft/non-publié seulement (alertes sur la cover) */
-  .status-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
+  .status-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
     gap:3px;padding:3px 8px 3px 5px;border-radius:7px;color:#fff;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(3px)}
   .status-badge .material-symbols-outlined{font-size:12px}
   .status-badge.st-draft{background:rgba(220,60,60,.88)}
   .status-badge.st-unpublished{background:rgba(214,158,46,.9)}
-  /* Tags de format (mp3 / mp4) — dans le corps de la carte */
-  .al-formats{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
-  .fmt-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px 2px 5px;
-    border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-    background:var(--fmt-bg,rgba(56,142,96,.18));color:var(--fmt-col,rgba(56,142,96,1));
-    border:1px solid var(--fmt-bord,rgba(56,142,96,.35))}
-  .fmt-tag .material-symbols-outlined{font-size:11px}
-  .fmt-tag.fmt-mp4{--fmt-bg:rgba(46,132,150,.15);--fmt-col:rgba(46,132,150,1);--fmt-bord:rgba(46,132,150,.35)}
+  /* L'icône vidéo tient le coin haut-droit : le badge de statut se décale. */
+  .status-badge.has-video{right:46px}
   .video-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
     justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);
     color:#fff;backdrop-filter:blur(2px)}
   .video-badge .material-symbols-outlined{font-size:16px}
   .album.unpublished{opacity:.6;outline:2px dashed rgba(220,60,60,.5);outline-offset:2px}
-  .gear{position:absolute;top:10px;right:10px;z-index:2;width:34px;height:34px;
-    display:flex;align-items:center;justify-content:center;border-radius:9px;
-    background:rgba(13,15,19,.72);color:#fff;border:1px solid rgba(255,255,255,.18);
-    opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s,background .15s;
-    text-decoration:none;backdrop-filter:blur(2px)}
-  .gear .material-symbols-outlined{font-size:19px}
-  .album:hover .gear{opacity:1;transform:none}
-  .gear:hover{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .cover{aspect-ratio:1;overflow:hidden;background:#0a0a0a}
   /* Squelette animé sous la vignette tant qu'elle n'est pas peinte — la grille
      de carrés noirs figés faisait croire à une page cassée (2026-09-15).
@@ -336,7 +324,7 @@
     .filter-clear{margin-left:0;width:100%;justify-content:center}
     .albums{grid-template-columns:1fr 1fr;gap:12px}
     /* Sous ~400 px, deux colonnes donnent des cartes de ~135 px : titre illisible
-       et le badge « Mis à jour » finit sous l'engrenage de gestion. Une colonne. */
+       et les badges des deux coins se rejoignent. Une colonne. */
     @media(max-width:400px){.albums{grid-template-columns:1fr}}
     .album .body{padding:9px 10px 3px}
     .album .btns{padding:2px 10px 8px}
@@ -359,9 +347,8 @@
   /* ── Sélection multiple ──────────────────────────────────────────────── */
   .chip.selecting{background:var(--accent);color:#fff;border-color:var(--accent)}
   /* En mode sélection la carte entière devient cliquable pour cocher : on
-     neutralise les liens internes (gear, téléchargement, entités). */
+     neutralise les liens internes (téléchargement, entités). */
   body.select-mode .album{cursor:pointer}
-  body.select-mode .album .gear,
   body.select-mode .album .btns a,
   body.select-mode .album .al-social,
   body.select-mode .album .al-artist a,
@@ -778,24 +765,18 @@ function albumCard(a){
       dlBtn=`<a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">lock</span>${T[L()].lockdl}</a>`;
     }
   }
-  const gear=md.is_gestionnaire
-    ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
     ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
     :(isUpdated(a)
       ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
   // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
   const ST_IC={draft:"draft",unpublished:"visibility_off"};
+  const hasVideoBadge=!!a.has_video_full;
   const statusBadge=md.is_gestionnaire&&a.status&&ST_IC[a.status]
-    ?`<span class="status-badge st-${a.status}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
-  // Tags de format MP3 / MP4 affichés dans le body de la carte (gestionnaire seulement).
-  const fmtTags=md.is_gestionnaire&&(a.status==="published_audio"||a.status==="published_av")
-    ?`<div class="al-formats">`+
-      `<span class="fmt-tag fmt-mp3"><span class="material-symbols-outlined">graphic_eq</span>MP3</span>`+
-      (a.status==="published_av"?`<span class="fmt-tag fmt-mp4"><span class="material-symbols-outlined">movie</span>MP4</span>`:"")
-      +`</div>`:"";
-  // Icône vidéo conservée pour le public (info de contenu, pas de statut).
-  const videoBadge=(!md.is_gestionnaire&&a.has_video_full)
+    ?`<span class="status-badge st-${a.status}${hasVideoBadge?" has-video":""}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
+  // Tout le catalogue est en MP3 (c'est l'objet du site) : seule la vidéo est une
+  // information — même icône pour tout le monde, gestionnaire compris.
+  const videoBadge=hasVideoBadge
     ?`<span class="video-badge" title="${L()==="fr"?"Concert complet en vidéo":"Full concert video"}"><span class="material-symbols-outlined">movie</span></span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
@@ -803,7 +784,6 @@ function albumCard(a){
   return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}">
     <a class="album-open" draggable="false" href="/album/${a.slug}" tabindex="-1" aria-hidden="true"></a>
     ${pick}
-    ${gear}
     ${statusBadge}
     ${newBadge}
     ${videoBadge}
@@ -815,7 +795,6 @@ function albumCard(a){
       <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink(a,'venue',a.venue):T[L()].venue_unknown}</div>
       ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${entLink(a,'festival',a.festival)}</div>`:""}
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
-      ${fmtTags}
     </div>
     <div class="al-social"></div>
     ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
