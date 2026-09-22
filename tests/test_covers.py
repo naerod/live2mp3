@@ -654,3 +654,25 @@ def test_manifest_cover_materialisee_en_ligne_covers(client):
                files={"cover": ("c.png", _png((0, 255, 0)), "image/png")}, headers=USER)
     assert r.status_code == 200
     assert r.json()["covers"][0]["auto"] is False
+
+
+def test_zip_des_visuels(client):
+    """« Tout télécharger » : un ZIP des visuels gagnants, construit sur disque."""
+    c, projects = client
+    slug = _album(c)
+    c.post(f"/api/social/albums/{slug}/covers",
+           files={"cover": ("c.png", _png(), "image/png")}, headers=USER)
+    c.post(f"/api/social/albums/{slug}/images/banner",
+           files={"cover": ("b.png", _png((0, 0, 255)), "image/png")}, headers=USER)
+
+    r = c.get(f"/download/{slug}/artwork", headers=USER)
+    assert r.status_code == 200
+    names = sorted(zipfile.ZipFile(io.BytesIO(r.content)).namelist())
+    assert names == [f"{slug}-banner.png", f"{slug}-cover.png"]
+
+    # Sans aucun visuel : 404 plutôt qu'une archive vide.
+    other = _album(c, title="Vide")
+    assert c.get(f"/download/{other}/artwork", headers=USER).status_code == 404
+
+    # Anonyme : refusé comme les autres téléchargements.
+    assert c.get(f"/download/{slug}/artwork").status_code in (401, 403)

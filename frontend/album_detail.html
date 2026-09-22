@@ -179,14 +179,28 @@
     background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
   .vm-sec-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
     margin:0 0 4px;padding-top:16px;border-top:1px solid var(--border)}
+  /* Action secondaire de la section, alignée à droite du titre (l'espace y
+     était vide). Reset margin/padding : app.css touche tous les `button`. */
+  .vm-dl-all{margin:0 0 0 auto;padding:8px 14px;border-radius:10px;font:inherit;font-size:13px;
+    font-weight:600;display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+  .vm-dl-all:hover{border-color:var(--accent);color:var(--accent)}
+  .vm-dl-all .material-symbols-outlined{font-size:18px}
   .vm-sec-h .material-symbols-outlined{font-size:18px}
   .vm-sec-sub{color:var(--muted);font-size:12px;margin:0 0 14px;max-width:70ch}
   .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
   /* Carte en colonne : la barre d'actions est poussée en bas (margin-top:auto),
      donc toutes les cartes ont leurs boutons sur la même ligne quelle que soit
      la forme du visuel. */
-  .vm-slot{display:flex;flex-direction:column;border:1px solid var(--border);
-    border-radius:12px;padding:12px;background:var(--card)}
+  /* La carte n'est plus qu'un aperçu cliquable : toutes les actions (télécharger,
+     importer, épingler, supprimer) sont dans la fiche du visuel. `button` pour
+     avoir le clavier et le focus sans les réimplémenter — d'où le reset
+     margin/padding/font (app.css style tous les `button`). */
+  .vm-slot{display:flex;flex-direction:column;width:100%;margin:0;padding:12px;
+    font:inherit;text-align:left;cursor:pointer;
+    border:1px solid var(--border);border-radius:12px;background:var(--card);
+    transition:border-color .15s,background .15s}
+  .vm-slot:hover{border-color:var(--accent)}
   .vm-slot-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;min-height:22px}
   .vm-ratio{font-family:"Google Sans Code",monospace;font-size:11px;color:var(--muted)}
   .vm-auto{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
@@ -204,33 +218,35 @@
     display:flex;align-items:center;justify-content:center}
   .vm-stage.filled{border-style:solid;border-color:var(--border)}
   .vm-stage img{width:100%;height:100%;object-fit:cover;display:block}
-  .vm-slot-ph,.vm-empty{position:absolute;inset:0;margin:0;padding:0;border:0;background:transparent;
+  .vm-slot-ph{position:absolute;inset:0;margin:0;padding:0 8px;border:0;background:transparent;
     color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;
     font:inherit;font-size:11px;text-align:center}
-  .vm-empty{cursor:pointer;transition:color .15s,background .15s}
-  .vm-empty:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
-  .vm-slot-ph .material-symbols-outlined,.vm-empty .material-symbols-outlined{font-size:24px}
-  /* Aperçu rempli : la scène entière agrandit l'image (icône seule : elle doit
-     tenir aussi dans une bannière de ~35 px de haut). */
-  .vm-zoom{position:absolute;inset:0;margin:0;padding:0;border:0;cursor:zoom-in;
-    font:inherit;color:#fff;background:rgba(0,0,0,.5);opacity:0;transition:opacity .15s;
+  .vm-slot:hover .vm-slot-ph{color:var(--accent)}
+  .vm-slot-ph .material-symbols-outlined{font-size:24px}
+  /* Fiche d'un visuel : aperçu en grand + toutes ses actions. */
+  .vs{z-index:70}
+  .cm-box.vs-box{max-width:620px;width:94%}
+  .vs-frame{position:relative;margin:0 auto;border-radius:12px;overflow:hidden;
+    border:1px solid var(--border);background:var(--bg);
     display:flex;align-items:center;justify-content:center}
-  .vm-stage:hover .vm-zoom,.vm-zoom:focus-visible{opacity:1}
-  .vm-zoom .material-symbols-outlined{font-size:22px}
-  .vm-slot-actions{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:12px;height:46px;box-sizing:content-box}
-  /* Les actions destructives/secondaires sont repoussées à droite, jamais
-     collées au téléchargement (règle DA). */
-  .vm-act-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .vs-frame.empty{border-style:dashed}
+  .vs-frame img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+  .vs-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px}
+  /* L'action destructive n'est jamais collée à l'action principale (règle DA). */
+  .vs-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .vs-note{color:var(--muted);font-size:12px;margin:12px 0 0;max-width:70ch}
   /* app.css donne margin-top:16px et padding:11px 16px à `button` : sans ce
      reset, les <button> de la barre se posaient 8 px plus bas que le <a>. */
-  .vm-act{display:inline-flex;align-items:center;justify-content:center;
-    width:34px;height:34px;margin:0;padding:0;box-sizing:border-box;border-radius:8px;
+  /* app.css donne margin-top:16px à tout `button` : reset systématique. */
+  .vm-act{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    height:38px;margin:0;padding:0 14px;box-sizing:border-box;border-radius:10px;
     border:1px solid var(--border);background:var(--bg);color:var(--fg);
-    font:inherit;cursor:pointer;text-decoration:none;flex:none}
+    font:inherit;font-size:13px;cursor:pointer;text-decoration:none}
   .vm-act:hover{border-color:var(--accent);color:var(--accent)}
   .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
   .vm-act .material-symbols-outlined{font-size:18px}
+  .vm-act.danger{color:var(--like)}
   .vm-hint{margin-left:auto;color:var(--muted);font-size:11px}
   @media(max-width:640px){
     .vm-slots{grid-template-columns:1fr}
@@ -414,6 +430,15 @@
   <div class="cm-box vm-box">
     <button class="icon-btn icon-only cm-close" id="vm-close"><span class="material-symbols-outlined">close</span></button>
     <div id="vm-body"></div>
+  </div>
+</div>
+<!-- Fiche d'un visuel Jellyfin : aperçu en grand + ses actions (télécharger,
+     importer/remplacer, épingler, supprimer). S'ouvre PAR-DESSUS la fenêtre
+     « Vidéo du concert », qui reste en place derrière. -->
+<div id="vs" class="cm vs hidden">
+  <div class="cm-box vs-box">
+    <button class="icon-btn icon-only cm-close" id="vs-close"><span class="material-symbols-outlined">close</span></button>
+    <div id="vs-body"></div>
   </div>
 </div>
 <input type="file" id="vm-file" accept="image/jpeg,image/png,image/webp" style="display:none">
@@ -909,9 +934,11 @@ const VLANG={
       video_sub:"Concert complet + visuels Jellyfin (pochette, miniature, bannière, poster).",
       dl_mp4:"Télécharger la vidéo (MP4)",
       k_cover:"Pochette",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
-      art_h:"Visuels Jellyfin",
+      art_h:"Visuels Jellyfin",dl_all:"Tout télécharger",
+      dl_all_t:"Télécharger les visuels en ZIP (pochette, miniature, bannière, poster)",
       art_sub:"Images utilisées par Jellyfin pour ce concert. Cliquez un aperçu pour l'ouvrir en grand.",
-      imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
+      imp:"Importer",impn:"Importer une image",repl:"Remplacer l'image",
+      open_slot:n=>`Ouvrir ${n.toLowerCase()}`,dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
       del:"Supprimer",zoom:"Agrandir",
       empty:"Aucune image — importez-en une",empty_ro:"Aucune image",
       cover_note:"Gérée dans le carrousel des pochettes de la fiche.",cover_hint:"Carrousel",
@@ -922,9 +949,11 @@ const VLANG={
       video_sub:"Full concert + Jellyfin artwork (cover, thumbnail, banner, poster).",
       dl_mp4:"Download video (MP4)",
       k_cover:"Cover",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
-      art_h:"Jellyfin artwork",
+      art_h:"Jellyfin artwork",dl_all:"Download all",
+      dl_all_t:"Download the artwork as a ZIP (cover, thumbnail, banner, poster)",
       art_sub:"Images Jellyfin uses for this concert. Click a preview to open it full size.",
-      imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",
+      imp:"Import",impn:"Import an image",repl:"Replace image",
+      open_slot:n=>`Open ${n.toLowerCase()}`,dl:"Download",pin:"Pin",unpin:"Unpin",
       del:"Delete",zoom:"Enlarge",
       empty:"No image — import one",empty_ro:"No image",
       cover_note:"Managed in the cover carousel on this page.",cover_hint:"Carousel",
@@ -981,38 +1010,34 @@ function vmSlotHtml(kind){
   const ro=(kind==='cover');
   const list=ro?[]:(VM_DATA[kind]||[]);
   const win=ro?vmCoverWinner():(list[0]||null);
-  const g=ME.is_gestionnaire&&!ro;
-  const big=win?(win.cover_url||win.cover_medium):'';
 
   const flat=VM_AR[kind]>3;  // bannière : pas la place d'un libellé
-  let stage;
-  if(win){
-    stage=`<img src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}" loading="lazy" decoding="async">
-      <button class="vm-zoom" data-zoom="${big}" aria-label="${VT('zoom')}" title="${VT('zoom')}">
-        <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span></button>`;
-  }else if(!ro&&ME.authenticated){
-    stage=`<button class="vm-empty" data-imp="${kind}" aria-label="${VT('impn')}" title="${VT('impn')}">
-      <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>${flat?'':`<span>${VT('imp')}</span>`}</button>`;
-  }else{
-    stage=`<span class="vm-slot-ph" title="${VT('empty_ro')}">
-      <span class="material-symbols-outlined" aria-hidden="true">image</span>${flat?'':`<span>${VT('empty_ro')}</span>`}</span>`;
-  }
+  const stage=win
+    ?`<img src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}" loading="lazy" decoding="async">`
+    :`<span class="vm-slot-ph">
+        <span class="material-symbols-outlined" aria-hidden="true">${(!ro&&ME.authenticated)?'add_photo_alternate':'image'}</span>${
+        flat?'':`<span>${(!ro&&ME.authenticated)?VT('imp'):VT('empty_ro')}</span>`}</span>`;
 
-  const dl=(win&&ME.authenticated)
-    ?`<a class="vm-act" href="${ro?win.dl:`/download/cover/${win.id}`}" aria-label="${VT('dl')}" title="${VT('dl')}"><span class="material-symbols-outlined" aria-hidden="true">download</span></a>`:'';
-  const imp=(win&&!ro&&ME.authenticated)
-    ?`<button class="vm-act" data-imp="${kind}" aria-label="${VT('impn')}" title="${VT('impn')}"><span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span></button>`:'';
-  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" aria-label="${win.pinned?VT('unpin'):VT('pin')}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined" aria-hidden="true">push_pin</span></button>`:'';
-  const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" aria-label="${VT('del')}" title="${VT('del')}"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>`:'';
   const note=ro?`<span class="vm-hint" title="${VT('cover_note')}">${VT('cover_hint')}</span>`:'';
   const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
   const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
 
-  return `<div class="vm-slot">
+  return `<button class="vm-slot" data-slot="${kind}" title="${VT('open_slot')(VT('k_'+kind))}">
     <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${note}${cnt}</div>
     <div class="vm-stage-wrap"><div class="vm-stage${win?' filled':''}"
       style="aspect-ratio:${VM_AR[kind]};width:min(100%,calc(var(--vm-band) * ${VM_AR[kind]}))">${stage}</div></div>
-    <div class="vm-slot-actions">${dl}${imp}<span class="vm-act-right">${pin}${del}</span></div></div>`;
+  </button>`;
+}
+
+// « Tout télécharger » n'apparaît que s'il y a au moins un visuel à mettre dans
+// le ZIP : un bouton qui renverrait un 404 n'a rien à faire là.
+function vmSecHeadHtml(){
+  const anyArt=!!vmCoverWinner()||VM_IMG_KINDS.some(k=>(VM_DATA[k]||[]).length);
+  const dlAll=(ME.authenticated&&anyArt)
+    ?`<a class="vm-dl-all" href="/download/${slug}/artwork" title="${VT('dl_all_t')}">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_zip</span>${VT('dl_all')}</a>`
+    :'';
+  return `<span class="material-symbols-outlined" aria-hidden="true">photo_library</span> ${VT('art_h')}${dlAll}`;
 }
 
 function paintVm(autoplay){
@@ -1031,18 +1056,69 @@ function paintVm(autoplay){
     <h3 class="vm-title"><span class="material-symbols-outlined" aria-hidden="true">movie</span> ${VT('video_h')}</h3>
     ${player}
     <div class="vm-dl-row">${dlBtn}</div>
-    <h4 class="vm-sec-h"><span class="material-symbols-outlined" aria-hidden="true">photo_library</span> ${VT('art_h')}</h4>
+    <h4 class="vm-sec-h" id="vm-sec-h">${vmSecHeadHtml()}</h4>
     <p class="vm-sec-sub">${VT('art_sub')}</p>
     <div class="vm-slots">${VM_KINDS.map(vmSlotHtml).join('')}</div>`;
   vmBindSlots();
   if(autoplay){const v=document.getElementById('vm-video');if(v)v.play().catch(()=>{});}
 }
 function vmBindSlots(){
-  document.querySelectorAll('#vm-body [data-imp]').forEach(b=>b.onclick=()=>{VM_UP_KIND=b.dataset.imp;document.getElementById('vm-file').click();});
-  document.querySelectorAll('#vm-body [data-pin]').forEach(b=>b.onclick=()=>vmPin(b.dataset.pin));
-  document.querySelectorAll('#vm-body [data-del]').forEach(b=>b.onclick=()=>vmDel(b.dataset.del));
-  document.querySelectorAll('#vm-body [data-zoom]').forEach(b=>b.onclick=()=>openLbx('image',b.dataset.zoom));
+  document.querySelectorAll('#vm-body [data-slot]').forEach(b=>b.onclick=()=>openVsSheet(b.dataset.slot));
 }
+// ── Fiche d'un visuel (par-dessus la fenêtre vidéo) ───────────────────────
+const vs=document.getElementById('vs');
+let VS_KIND=null;
+document.getElementById('vs-close').onclick=()=>closeVs();
+vs.onclick=e=>{if(e.target===vs)closeVs();};
+function closeVs(){VS_KIND=null;vs.classList.remove('show');setTimeout(()=>vs.classList.add('hidden'),180);}
+function openVsSheet(kind){
+  VS_KIND=kind;paintVs();
+  vs.classList.remove('hidden');requestAnimationFrame(()=>vs.classList.add('show'));
+}
+function paintVs(){
+  const kind=VS_KIND;if(!kind)return;
+  const ro=(kind==='cover');
+  const list=ro?[]:(VM_DATA[kind]||[]);
+  const win=ro?vmCoverWinner():(list[0]||null);
+  const g=ME.is_gestionnaire&&!ro;
+  const ar=VM_AR[kind];
+  // Cadre au ratio du visuel, borné pour ne pas sortir de la fiche.
+  const frame=`width:min(100%,calc(46vh * ${ar}));aspect-ratio:${ar}`;
+  const inner=win
+    ?`<img id="vs-img" src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}">`
+    :`<span class="vm-slot-ph" style="position:absolute;inset:0">
+        <span class="material-symbols-outlined" aria-hidden="true">image</span>
+        <span>${(!ro&&ME.authenticated)?VT('empty'):VT('empty_ro')}</span></span>`;
+
+  const dl=(win&&ME.authenticated)
+    ?`<a class="vm-act" href="${ro?win.dl:`/download/cover/${win.id}`}">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>${VT('dl')}</a>`:'';
+  const imp=(!ro&&ME.authenticated)
+    ?`<button class="vm-act" id="vs-imp">
+        <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>${win?VT('repl'):VT('impn')}</button>`:'';
+  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" id="vs-pin">
+        <span class="material-symbols-outlined" aria-hidden="true">push_pin</span>${win.pinned?VT('unpin'):VT('pin')}</button>`:'';
+  const del=(win&&g)?`<button class="vm-act danger" id="vs-del">
+        <span class="material-symbols-outlined" aria-hidden="true">delete</span>${VT('del')}</button>`:'';
+  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
+
+  document.getElementById('vs-body').innerHTML=`
+    <h3 class="vm-title"><span class="material-symbols-outlined" aria-hidden="true">image</span>
+      ${VT('k_'+kind)}<span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}</h3>
+    <div class="vs-frame${win?'':' empty'}" style="${frame}">${inner}</div>
+    <div class="vs-actions">${dl}${imp}<span class="vs-right">${pin}${del}</span></div>
+    ${ro?`<p class="vs-note">${VT('cover_note')}</p>`:''}`;
+
+  const img=document.getElementById('vs-img');
+  if(img)img.onclick=()=>openLbx('image',win.cover_url||win.cover_medium);
+  const bi=document.getElementById('vs-imp');
+  if(bi)bi.onclick=()=>{VM_UP_KIND=kind;document.getElementById('vm-file').click();};
+  const bp=document.getElementById('vs-pin');
+  if(bp)bp.onclick=()=>vmPin(win.id);
+  const bd=document.getElementById('vs-del');
+  if(bd)bd.onclick=()=>vmDel(win.id);
+}
+
 document.getElementById('vm-file').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f||!VM_UP_KIND)return;
   const fd=new FormData();fd.append('cover',f);
@@ -1055,9 +1131,13 @@ async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`
 // Gérer un visuel ne doit pas interrompre la lecture : on ne redessine que la
 // grille de visuels, jamais le <video> (le recréer relancerait le buffering).
 function vmRepaintKeepPlayback(){
+  if(VS_KIND)paintVs();
   const grid=document.querySelector('#vm-body .vm-slots');
   if(!grid){paintVm(false);return;}
   grid.innerHTML=VM_KINDS.map(vmSlotHtml).join('');
+  // Le premier visuel importé fait apparaître « Tout télécharger ».
+  const head=document.getElementById('vm-sec-h');
+  if(head)head.innerHTML=vmSecHeadHtml();
   vmBindSlots();
 }
 function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_thumb||w.cover_url})`:'';}

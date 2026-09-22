@@ -58,6 +58,8 @@ from . import slugrename
 from .pipeline import boundaries, bundle, download, preanalyze
 from .covers import (
     COVER_EXTS,
+    _ensure_auto_cover,
+    _ensure_auto_thumbnail,
     COVER_MAX_BYTES,
     MEDIA_TYPES,
     _on_covers_changed,
@@ -626,6 +628,40 @@ def stream_video(slug: str, identity: dict = Depends(require_user)) -> FileRespo
     f = _video_full_file(slug)
     return FileResponse(f, media_type="video/mp4",
                         headers={"Content-Disposition": "inline"})
+
+
+@app.get("/download/{slug}/artwork")
+def download_artwork(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """ZIP des visuels gagnants de l'album : pochette 1:1, miniature 16:9,
+    bannière et poster — exactement ce que montre la fenêtre « Vidéo du
+    concert ». L'archive est construite sur disque puis servie en
+    `FileResponse` et supprimée après envoi : jamais d'archive en RAM.
+    """
+    _ensure_album_visible(slug, identity)
+    # Mêmes garanties que l'affichage : la pochette du manifest et la miniature
+    # extraite de la vidéo existent en base avant qu'on aille les chercher.
+    _ensure_auto_cover(slug)
+    _ensure_auto_thumbnail(slug)
+    entries: list[tuple[Path, str]] = []
+    with get_conn() as conn:
+        for kind in ("cover", "thumbnail", "banner", "poster"):
+            win = top_cover(conn, slug, kind)
+            if not win:
+                continue
+            src = cover_file(slug, win["file_key"], win["cover_ext"], kind)
+            if src.is_file():
+                entries.append((src, f"{slug}-{kind}{win['cover_ext']}"))
+    if not entries:
+        raise HTTPException(404, "aucun visuel pour cet album")
+    fd, tmp = tempfile.mkstemp(prefix="l2m_art_", suffix=".zip")
+    os.close(fd)
+    # ZIP_STORED : des JPEG/PNG déjà compressés, deflate ne gagnerait rien.
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for src, arc in entries:
+            z.write(src, arc)
+    return FileResponse(tmp, media_type="application/zip",
+                        filename=f"{slug}-visuels.zip",
+                        background=BackgroundTask(os.remove, tmp))
 
 
 @app.get("/download/{slug}/cover")
