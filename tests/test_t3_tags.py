@@ -13,9 +13,11 @@ def test_id3_tags_complete(synth_project):
     mp3s = sorted((synth_project / "build" / "audio").glob("*.mp3"))
     assert mp3s
     id3 = ID3(str(mp3s[0]))
-    # Le tag titre est préfixé du numéro (« 01. » pour la piste 1) — c'est ce
-    # qui force l'ordre des pistes sur les lecteurs qui trient par titre.
-    assert id3["TIT2"].text[0] == "01. Overcompensate"
+    # Titre NU dans le tag (2026-09-19) : en streaming, Finamp numérote déjà
+    # ses lignes, un préfixe ferait doublon. L'ordre est porté par TRCK et par
+    # le nom de fichier, qui lui reste numéroté (cf. assertion plus bas).
+    assert id3["TIT2"].text[0] == "Overcompensate"
+    assert mp3s[0].name == "01. Overcompensate.mp3"
     assert id3["TPE1"].text[0] == "Twenty One Pilots"
     assert id3["TALB"].text[0].startswith("The Clancy Tour")
     assert id3["TCON"].text[0] == "Live"
@@ -40,7 +42,7 @@ def test_mp4_metadata(synth_project):
     piste au niveau du fichier vidéo depuis le 2026-08-02."""
     render.run(synth_project, video=True)
     tags.run(synth_project)
-    mp4s = sorted((synth_project / "build" / "video").glob("*.mp4"))
+    mp4s = sorted((synth_project / "build" / "video-full").glob("*.mp4"))
     assert len(mp4s) == 1
     meta = MP4(str(mp4s[0]))
     assert meta.tags["\xa9nam"][0].startswith("The Clancy Tour")

@@ -33,6 +33,7 @@ import re
 from uuid import uuid4
 from . import catalogue, entities, jellyfin, linktool, llm
 from . import progress, renderqueue, setlistfm
+from . import thumbs
 from .albumfiles import (
     _rename_audio_files,
     _write_album_cover,
@@ -57,6 +58,8 @@ from . import slugrename
 from .pipeline import boundaries, bundle, download, preanalyze
 from .covers import (
     COVER_EXTS,
+    _ensure_auto_cover,
+    _ensure_auto_thumbnail,
     COVER_MAX_BYTES,
     MEDIA_TYPES,
     _on_covers_changed,
@@ -134,6 +137,13 @@ def _startup() -> None:
         notifications.ensure_seeded()
     except Exception as exc:
         log.warning("amorçage des notifications impossible : %s", exc)
+    # Date de publication originelle des albums antérieurs à la mesure.
+    try:
+        n = catalogue.backfill_first_published()
+        if n:
+            log.info("first_published_at renseigné sur %d album(s)", n)
+    except Exception as exc:
+        log.warning("backfill first_published_at impossible : %s", exc)
 
 # --- État de progression (Redis, partagé API <-> worker) ------------------
 # Le rendu s'exécute dans le worker RQ : l'émetteur et le lecteur du flux SSE
@@ -474,7 +484,8 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 
 
 @app.get("/cover/{slug}")
-def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
+def get_cover(slug: str, identity: dict = Depends(roles),
+              w: int = 0, v: str = "") -> FileResponse:
     m = _ensure_album_visible(slug, identity)
     cover_rel = m.data.get("album", {}).get("cover")
     if not cover_rel:
@@ -482,11 +493,21 @@ def get_cover(slug: str, identity: dict = Depends(roles)) -> FileResponse:
     cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
-    # Le front ajoute ?v=<mtime> pour invalider dès qu'un gestionnaire remplace
-    # la cover. On force la revalidation pour rattraper les vieux liens sans v=.
-    return FileResponse(cover, headers={
-        "Cache-Control": "no-cache, must-revalidate",
-    })
+    # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
+    # aucune largeur n'est demandée ou s'il est déjà plus petit que la cible.
+    derived = thumbs.derive(cover, w) if w else None
+    # Le front ajoute ?v=<mtime> : l'URL change dès qu'un gestionnaire remplace
+    # la pochette, donc la réponse est immuable et peut se cacher à vie. Sans
+    # `v=` (vieux liens), on force la revalidation.
+    cc = ("public, max-age=31536000, immutable" if v
+          else "no-cache, must-revalidate")
+    if derived:
+        # media_type explicite : FileResponse déduit le type du nom de fichier
+        # et rendait `application/octet-stream` pour le .webp, que certains
+        # navigateurs refusent d'afficher dans un <img>.
+        return FileResponse(derived, media_type="image/webp",
+                            headers={"Cache-Control": cc})
+    return FileResponse(cover, headers={"Cache-Control": cc})
 
 
 # --- Téléchargements (niveau user) ----------------------------------------
@@ -518,7 +539,7 @@ def _album_extras(project_dir: Path) -> list[tuple[Path, str]]:
 
 def _zip_media(project_dir: Path, kind: str) -> Path:
     """Construit (et met en cache) un zip des MP3/MP4 + toutes les pochettes."""
-    sub = "audio" if kind == "mp3" else "video"
+    sub = "audio" if kind == "mp3" else "video-full"
     src = project_dir / "build" / sub
     if not src.exists() or not any(src.glob(f"*.{kind}")):
         raise HTTPException(404, f"aucun {kind} pour cet album")
@@ -576,16 +597,71 @@ def download_track(slug: str, n: int,
     return FileResponse(f, filename=dl_name, media_type="audio/mpeg")
 
 
-@app.get("/download/{slug}/video")
-def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
-    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
-    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
-    m = _ensure_album_visible(slug, identity)
+def _video_full_file(slug: str) -> Path:
+    """Le MP4 concert-complet d'un album (build/video-full), ou 404."""
     vfdir = PROJECTS_DIR / slug / "build" / "video-full"
     mp4s = sorted(vfdir.glob("*.mp4")) if vfdir.exists() else []
     if not mp4s:
         raise HTTPException(404, "pas de concert complet")
-    return FileResponse(mp4s[0], filename=mp4s[0].name, media_type="video/mp4")
+    return mp4s[0]
+
+
+@app.get("/download/{slug}/video")
+def download_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Télécharge le MP4 concert-complet (build/video-full). Streaming natif
+    (FileResponse) — pas de mise en RAM, adapté aux fichiers de plusieurs Go."""
+    _ensure_album_visible(slug, identity)
+    f = _video_full_file(slug)
+    return FileResponse(f, filename=f.name, media_type="video/mp4")
+
+
+@app.get("/download/{slug}/video/stream")
+def stream_video(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """Lecture en ligne du concert dans le navigateur (player de la fiche).
+
+    Même fichier que `/download/{slug}/video`, mais servi `inline` : Starlette
+    gère les requêtes Range, donc le navigateur peut démarrer et se déplacer
+    dans la vidéo sans télécharger les quelques Go du fichier. Le chemin reste
+    sous `/download/` pour rester couvert par la règle forward-auth nginx.
+    """
+    _ensure_album_visible(slug, identity)
+    f = _video_full_file(slug)
+    return FileResponse(f, media_type="video/mp4",
+                        headers={"Content-Disposition": "inline"})
+
+
+@app.get("/download/{slug}/artwork")
+def download_artwork(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
+    """ZIP des visuels gagnants de l'album : pochette 1:1, miniature 16:9,
+    bannière et poster — exactement ce que montre la fenêtre « Vidéo du
+    concert ». L'archive est construite sur disque puis servie en
+    `FileResponse` et supprimée après envoi : jamais d'archive en RAM.
+    """
+    _ensure_album_visible(slug, identity)
+    # Mêmes garanties que l'affichage : la pochette du manifest et la miniature
+    # extraite de la vidéo existent en base avant qu'on aille les chercher.
+    _ensure_auto_cover(slug)
+    _ensure_auto_thumbnail(slug)
+    entries: list[tuple[Path, str]] = []
+    with get_conn() as conn:
+        for kind in ("cover", "thumbnail", "banner", "poster"):
+            win = top_cover(conn, slug, kind)
+            if not win:
+                continue
+            src = cover_file(slug, win["file_key"], win["cover_ext"], kind)
+            if src.is_file():
+                entries.append((src, f"{slug}-{kind}{win['cover_ext']}"))
+    if not entries:
+        raise HTTPException(404, "aucun visuel pour cet album")
+    fd, tmp = tempfile.mkstemp(prefix="l2m_art_", suffix=".zip")
+    os.close(fd)
+    # ZIP_STORED : des JPEG/PNG déjà compressés, deflate ne gagnerait rien.
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for src, arc in entries:
+            z.write(src, arc)
+    return FileResponse(tmp, media_type="application/zip",
+                        filename=f"{slug}-visuels.zip",
+                        background=BackgroundTask(os.remove, tmp))
 
 
 @app.get("/download/{slug}/cover")
@@ -852,6 +928,11 @@ def update_album_meta(slug: str, payload: AlbumMetaIn,
     src["label"] = payload.source_label
     m.save()
     tagged = _write_album_tags(slug, m)
+    # Les tags ID3 sont réécrits, mais Jellyfin garde en base le nom d'album
+    # qu'il a indexé la première fois : sans ce rafraîchissement ciblé en
+    # `ReplaceAllMetadata`, le renommage n'arrivait jamais jusqu'à Finamp
+    # (incident 2026-09-19). Best-effort, comme partout ailleurs.
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "mp3_tagged": tagged}
 
 
@@ -930,7 +1011,7 @@ def update_tracks(slug: str, payload: TracksEditIn,
     # avec l'ancien chemin/nom en cache : la lecture du fichier disparu
     # échoue côté client (« an error has occurred »). Best-effort, comme
     # à l'ajout de piste (cf. jellyfin.py).
-    jellyfin.refresh_album(slug)
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "tracks": len(new_tracks), "mp3_tagged": tagged, "renamed": renamed}
 
 
@@ -1040,7 +1121,11 @@ def set_published(slug: str, payload: PublishIn,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     m.data["published"] = payload.published
-    m.save(path)
+    if payload.published:
+        catalogue.stamp_first_published(m)
+    # Publier/dépublier n'est pas une modification de contenu : pas de `touch`,
+    # sinon un vieil album republié afficherait « Mis à jour ».
+    m.save(path, touch=False)
     # Symlink Jellyfin (apparition/retrait dans Finamp) dès maintenant, plutôt
     # que d'attendre le prochain passage du cron sync-media.sh (jusqu'à 10 min).
     jellyfin.trigger_sync()
@@ -1073,7 +1158,9 @@ def set_published_bulk(payload: BulkPublishIn,
         if m.data.get("published", True) == payload.published:
             continue  # déjà dans l'état visé
         m.data["published"] = payload.published
-        m.save(path)
+        if payload.published:
+            catalogue.stamp_first_published(m)
+        m.save(path, touch=False)
         updated.append(slug)
         if payload.published:
             try:
@@ -1139,6 +1226,11 @@ def patch_track_meta(
         else:
             track.pop("artist", None)
     m.save()
+    # Même règle que l'édition en masse : le manifeste seul ne suffit pas, il
+    # faut réécrire les tags du MP3 puis forcer Jellyfin à les relire, sinon
+    # le titre reste l'ancien dans Finamp.
+    _write_track_tags(slug, m)
+    jellyfin.refresh_album(slug, replace_metadata=True)
     return {"ok": True, "track": track}
 
 @app.get("/album/{slug}", response_class=HTMLResponse)
@@ -1547,7 +1639,9 @@ def prepare_ai(payload: PrepareAIIn,
             if setlist_url:
                 setlist = setlistfm.lookup_by_url(setlist_url)
             elif album["date"]:
-                setlist = setlistfm.lookup(album["artist"], album["date"])
+                # Tolérant : l'artiste ou la date saisis peuvent être approximatifs.
+                setlist = setlistfm.lookup_flexible(
+                    [album["artist"]], album["date"], venue=album.get("venue", ""))
         except setlistfm.SetlistUnavailable:
             setlist = None
         if setlist:
@@ -1807,7 +1901,9 @@ def promote_album(slug: str,
     if not m.data.get("origin_env"):
         raise HTTPException(400, "cet album est déjà visible en production")
     m.data.pop("origin_env", None)
-    m.save()
+    # Changement de visibilite, pas de contenu : meme regle que
+    # `set_published` (cf. incident 2026-09-21).
+    m.save(touch=False)
     return {"ok": True, "slug": slug, "origin_env": "prod"}
 
 
@@ -1826,7 +1922,8 @@ def demote_album(slug: str,
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
     m.data["origin_env"] = APP_ENV
-    m.save()
+    # Changement de visibilite, pas de contenu (cf. incident 2026-09-21).
+    m.save(touch=False)
     return {"ok": True, "slug": slug, "origin_env": APP_ENV}
 
 

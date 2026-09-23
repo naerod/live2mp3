@@ -65,3 +65,46 @@ def test_labels_concert_complet_compte_comme_video():
     assert L({}, True, True, False)[0] == "audio + vidéo"
     # Les libellés manuels restent, le média passe en tête.
     assert L({"labels": ["concert"]}, True, False, True) == ["audio + vidéo", "concert"]
+
+
+def test_backfill_ignore_le_mtime(synth_audio_only, monkeypatch):
+    """Régression 2026-09-21 : `first_published_at` ne vient JAMAIS du mtime.
+
+    Le mtime est réécrit par toute écriture technique (le backfill lui-même
+    tournait à chaque démarrage) : des albums importés depuis des mois
+    héritaient d'une date de mise en ligne récente et s'affichaient « Nouveau »
+    puis « Mis à jour » par lots.
+    """
+    import os
+    import time
+    from backend.manifest import Manifest
+
+    monkeypatch.setattr(catalogue, "PROJECTS_DIR", synth_audio_only.parent)
+    path = synth_audio_only / "manifest.yaml"
+    m = Manifest.load(path)
+    m.data["published"] = True
+    m.data["meta"] = {"imported_at": "2024-10-05T10:00:00+00:00"}
+    m.save(path, touch=False)
+    os.utime(path, (time.time(), time.time()))   # mtime = maintenant
+
+    assert catalogue.backfill_first_published() == 1
+    meta = Manifest.load(path).data["meta"]
+    assert meta["first_published_at"] == "2024-10-05T10:00:00+00:00"
+    assert meta["updated_at"] == "2024-10-05T10:00:00+00:00"
+
+    # Passage unique : un second démarrage ne réécrit plus rien.
+    assert catalogue.backfill_first_published() == 0
+
+
+def test_backfill_sans_imported_at_n_invente_rien(synth_audio_only, monkeypatch):
+    from backend.manifest import Manifest
+
+    monkeypatch.setattr(catalogue, "PROJECTS_DIR", synth_audio_only.parent)
+    path = synth_audio_only / "manifest.yaml"
+    m = Manifest.load(path)
+    m.data["published"] = True
+    m.data["meta"] = {}
+    m.save(path, touch=False)
+
+    assert catalogue.backfill_first_published() == 0
+    assert not Manifest.load(path).data["meta"].get("first_published_at")

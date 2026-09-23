@@ -101,6 +101,72 @@ def album_status(published: bool, has_mp3: bool, has_mp4: bool,
     return "published_audio"
 
 
+def stamp_first_published(m) -> bool:
+    """Horodate la **première** publication d'un album, et une seule fois.
+
+    `meta.first_published_at` est la date de mise en ligne originelle : c'est
+    elle qui pilote le tri « Nouveauté » et le badge « Nouveau », pas la date
+    d'import (un album importé il y a longtemps puis publié aujourd'hui est une
+    nouveauté pour le public). Une dépublication suivie d'une republication ne
+    la réécrit pas : l'album ne redevient jamais « nouveau ».
+
+    Renvoie True si le manifest a été modifié (appelant responsable du save).
+    """
+    meta = m.data.setdefault("meta", {})
+    if meta.get("first_published_at"):
+        return False
+    meta["first_published_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return True
+
+
+def backfill_first_published() -> int:
+    """Renseigne `first_published_at` / `updated_at` sur les albums antérieurs.
+
+    **Ne jamais dériver ces dates du mtime du manifest** (bug 2026-09-21) : le
+    mtime est réécrit par n'importe quelle écriture technique — y compris par
+    ce backfill lui-même, qui tournait à chaque démarrage. Des albums importés
+    depuis des mois héritaient ainsi d'une « première publication » égale à la
+    date d'un redémarrage récent, et s'affichaient « Nouveau » puis
+    « Mis à jour » par lots entiers (horodatages identiques à la seconde).
+
+    Repli retenu : `imported_at`, la seule date réelle dont on dispose. Sans
+    `imported_at`, on n'écrit rien — mieux vaut pas de badge qu'un faux badge.
+    Le passage est marqué (`meta.backfilled`) pour être définitivement unique :
+    plus aucune réécriture au démarrage, donc plus de churn de mtime.
+    """
+    if not PROJECTS_DIR.exists():
+        return 0
+    done = 0
+    for pdir in sorted(PROJECTS_DIR.iterdir()):
+        path = pdir / "manifest.yaml"
+        if not path.is_file():
+            continue
+        try:
+            m = Manifest.load(path)
+        except Exception:
+            continue
+        meta = m.data.setdefault("meta", {})
+        if meta.get("backfilled"):
+            continue
+        if meta.get("first_published_at") and meta.get("updated_at"):
+            meta["backfilled"] = True
+        else:
+            imported = str(meta.get("imported_at") or "")
+            if not imported:
+                continue  # aucune date fiable : on n'invente pas
+            if m.data.get("published", True) and not meta.get("first_published_at"):
+                meta["first_published_at"] = imported
+            if not meta.get("updated_at"):
+                meta["updated_at"] = meta.get("first_published_at") or imported
+            meta["backfilled"] = True
+        try:
+            m.save(path, touch=False)
+            done += 1
+        except Exception:
+            continue
+    return done
+
+
 def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> list[dict]:
     albums: list[dict] = []
     if not PROJECTS_DIR.exists():
@@ -122,10 +188,12 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             continue
         album = m.data.get("album", {})
         has_mp3 = _has_files(pdir / "build" / "audio", "mp3")
-        has_mp4 = _has_files(pdir / "build" / "video", "mp4")
-        # Concert complet (MP4 unique) : distinct des clips par piste (build/video).
-        # C'est lui qu'on met en avant (icône vidéo, miniature, download).
+        # Concert complet (MP4 unique), dans build/video-full. `build/video` est
+        # l'ancien dossier (clips par piste, puis rendus égarés du 2026-08-13 au
+        # 2026-09-18) : encore lu pour ne pas faire disparaître un album tant
+        # qu'il n'a pas été migré.
         has_video_full = _has_files(pdir / "build" / "video-full", "mp4")
+        has_mp4 = has_video_full or _has_files(pdir / "build" / "video", "mp4")
         if not (has_mp3 or has_mp4 or has_video_full):
             continue
         cover_rel = album.get("cover")
@@ -171,6 +239,8 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
             "imported_by": meta.get("imported_by", ""),
             "imported_at": meta.get("imported_at", ""),
             "drive_added_at": meta.get("drive_added_at", ""),
+            "first_published_at": meta.get("first_published_at", ""),
+            "updated_at": meta.get("updated_at", ""),
             "published": published,
         })
 
@@ -186,15 +256,17 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
                         parts[2].zfill(2) if len(parts) > 2 else "00")
             except Exception:
                 return ("0000", "00", "00")
-        elif sort == "date_import":
-            return a.get("imported_at", "") or ""
+        elif sort in ("date_publication", "date_import"):
+            # « Nouveauté » = date de mise en ligne, pas date d'import.
+            # Repli sur l'import pour les brouillons / non publiés.
+            return (a.get("first_published_at") or a.get("imported_at") or "")
         elif sort == "artist":
             return (a.get("artist", "") or "").lower()
         elif sort == "title":
             return (a.get("title", "") or "").lower()
         return ""
 
-    reverse = sort in ("date_concert", "date_import")  # plus récent en premier
+    reverse = sort in ("date_concert", "date_import", "date_publication")  # plus récent en premier
     albums.sort(key=_sort_key, reverse=reverse)
     return albums
 
@@ -220,6 +292,7 @@ def list_drafts() -> list[dict]:
         if not manifest.is_file():
             continue
         if _has_files(pdir / "build" / "audio", "mp3") or \
+           _has_files(pdir / "build" / "video-full", "mp4") or \
            _has_files(pdir / "build" / "video", "mp4"):
             continue
         try:

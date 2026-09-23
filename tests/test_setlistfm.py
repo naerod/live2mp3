@@ -147,3 +147,62 @@ def test_apply_setlistfm_survives_api_down(monkeypatch):
     sug = {"artist": "U2", "date": "2014-12-01", "tracks": []}
     assert linktool.apply_setlistfm(sug) is None
     assert sug["tracks"] == []
+
+
+# --- Recherche tolérante (artiste/date devinés par l'IA) -------------------
+# Deux concerts de la même tournée à quinze jours d'écart : la date proposée
+# par l'IA (le 20) ne correspond à aucun des deux. Seule une preuve
+# (même date, même salle, même ville) doit permettre un rattachement.
+YEAR_RAW = [
+    {"artist": {"name": "twenty one pilots"}, "eventDate": "05-07-2026",
+     "venue": {"name": "La Citadelle",
+               "city": {"name": "Arras", "country": {"code": "FR"}}},
+     "url": "https://www.setlist.fm/setlist/top/2026/la-citadelle-43416fdf.html",
+     "sets": {"set": [{"song": [{"name": "Overcompensate"}, {"name": "Heathens"}]}]}},
+    {"artist": {"name": "twenty one pilots"}, "eventDate": "21-07-2026",
+     "venue": {"name": "Grande Scène",
+               "city": {"name": "Carhaix", "country": {"code": "FR"}}},
+     "url": "https://www.setlist.fm/setlist/top/2026/grande-scene-1234abcd.html",
+     "sets": {"set": [{"song": [{"name": "Jumpsuit"}]}]}},
+]
+
+
+def test_from_api_date():
+    assert setlistfm.from_api_date("05-07-2026") == "2026-07-05"
+    assert setlistfm.from_api_date("") == ""
+
+
+def test_parse_setlist_exposes_iso_date():
+    assert setlistfm.parse_setlist(YEAR_RAW[0])["date"] == "2026-07-05"
+
+
+def _stub_year(monkeypatch):
+    monkeypatch.setattr(setlistfm, "_search", lambda a, d: [])
+    monkeypatch.setattr(
+        setlistfm, "_search_raw",
+        lambda params: YEAR_RAW if params.get("artistName", "").casefold()
+        == "twenty one pilots" else [])
+
+
+def test_lookup_flexible_ignores_festival_name_and_finds_artist(monkeypatch):
+    """« Main Square 2026 - Twenty One Pilots » : le festival n'est pas l'artiste."""
+    _stub_year(monkeypatch)
+    sl = setlistfm.lookup_flexible(["Main Square 2026", "Twenty One Pilots"],
+                                   "2026-07-20", city="Arras")
+    assert sl and sl["date"] == "2026-07-05" and sl["venue"] == "La Citadelle"
+
+
+def test_lookup_flexible_refuses_a_merely_close_date(monkeypatch):
+    """Sans preuve (salle/ville/date exacte), on ne propose rien : une setlist
+    fausse serait pire que pas de setlist."""
+    _stub_year(monkeypatch)
+    assert setlistfm.lookup_flexible(
+        ["Main Square 2026", "Twenty One Pilots"], "2026-07-20") is None
+
+
+def test_artist_candidates_from_video_title():
+    cands = linktool.artist_candidates(
+        {"artist": "Main Square 2026"},
+        {"title": "Main Square 2026 - Twenty One Pilots"})
+    assert "Twenty One Pilots" in cands
+    assert cands[0] == "Main Square 2026"      # la proposition de l'IA d'abord

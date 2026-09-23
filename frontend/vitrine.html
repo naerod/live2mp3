@@ -24,17 +24,21 @@
     transform:translateY(-50%);color:var(--muted);font-size:20px;pointer-events:none}
   .search input{width:100%;height:38px;padding:0 14px 0 42px;font-size:14px}
   .toolbar-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tr-left,.tr-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 0;min-width:0}
+  .tr-right{justify-content:flex-end}
   .sort-label{color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap;
     display:flex;align-items:center;gap:5px}
   .sort-label .material-symbols-outlined{font-size:15px}
-  .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;
+  /* margin:0 obligatoire : `button` (app.css) impose margin-top:16px, qui
+     descendait les chips sous la ligne du compteur d'albums. */
+  .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:0;
     border-radius:999px;border:1px solid var(--border);background:var(--card);
     color:var(--muted);font-size:12.5px;font-weight:500;cursor:pointer;
     transition:all .15s;white-space:nowrap}
   .chip:hover{border-color:var(--accent);color:var(--fg)}
   .chip.active{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
-  .count{color:var(--muted);font-size:12.5px;flex:1;text-align:right;white-space:nowrap}
+  .count{color:var(--muted);font-size:14.5px;flex:0 0 auto;text-align:center;white-space:nowrap}
   #sort-select{height:38px;padding:0 10px;font-size:14px;cursor:pointer;border-radius:8px;min-width:160px}
   /* Vue par artiste */
   .artist-group{margin-bottom:28px}
@@ -46,6 +50,11 @@
   .album{position:relative;background:var(--card);border:1px solid var(--border);
     border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
     transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+  /* Lien réel couvrant la carte : rend possible clic-molette / Ctrl+clic
+     (ouverture dans un nouvel onglet), impossible avec un simple handler JS. */
+  .album .album-open{position:absolute;inset:0;z-index:1;border-radius:16px}
+  .album .body a,.album .al-social,.album .btns,.album .al-poster{position:relative;z-index:2}
+  body.select-mode .album .album-open{pointer-events:none}
   .album:hover{transform:translateY(-6px);border-color:var(--accent);
     box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
   .album:hover .cover-img{transform:scale(1.03)}
@@ -55,6 +64,10 @@
     background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
   .new-badge .material-symbols-outlined{font-size:12px}
+  /* Mise à jour récente : même gabarit que « Nouveau », teinte neutre pour ne
+     pas concurrencer la nouveauté (et contraste AA sur fond clair et sombre). */
+  .new-badge.upd-badge{background:var(--card);color:var(--fg);
+    border:1px solid var(--border)}
   .draft-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
     gap:3px;padding:3px 8px 3px 5px;border-radius:7px;
     background:rgba(220,60,60,.85);color:#fff;font-size:10.5px;font-weight:700;
@@ -62,35 +75,32 @@
     backdrop-filter:blur(3px)}
   .draft-badge .material-symbols-outlined{font-size:12px}
   /* Badge de statut — draft/non-publié seulement (alertes sur la cover) */
-  .status-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
+  .status-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
     gap:3px;padding:3px 8px 3px 5px;border-radius:7px;color:#fff;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(3px)}
   .status-badge .material-symbols-outlined{font-size:12px}
   .status-badge.st-draft{background:rgba(220,60,60,.88)}
   .status-badge.st-unpublished{background:rgba(214,158,46,.9)}
-  /* Tags de format (mp3 / mp4) — dans le corps de la carte */
-  .al-formats{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap}
-  .fmt-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px 2px 5px;
-    border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-    background:var(--fmt-bg,rgba(56,142,96,.18));color:var(--fmt-col,rgba(56,142,96,1));
-    border:1px solid var(--fmt-bord,rgba(56,142,96,.35))}
-  .fmt-tag .material-symbols-outlined{font-size:11px}
-  .fmt-tag.fmt-mp4{--fmt-bg:rgba(46,132,150,.15);--fmt-col:rgba(46,132,150,1);--fmt-bord:rgba(46,132,150,.35)}
+  /* L'icône vidéo tient le coin haut-droit : le badge de statut se décale. */
+  .status-badge.has-video{right:46px}
   .video-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
     justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);
     color:#fff;backdrop-filter:blur(2px)}
   .video-badge .material-symbols-outlined{font-size:16px}
   .album.unpublished{opacity:.6;outline:2px dashed rgba(220,60,60,.5);outline-offset:2px}
-  .gear{position:absolute;top:10px;right:10px;z-index:2;width:34px;height:34px;
-    display:flex;align-items:center;justify-content:center;border-radius:9px;
-    background:rgba(13,15,19,.72);color:#fff;border:1px solid rgba(255,255,255,.18);
-    opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s,background .15s;
-    text-decoration:none;backdrop-filter:blur(2px)}
-  .gear .material-symbols-outlined{font-size:19px}
-  .album:hover .gear{opacity:1;transform:none}
-  .gear:hover{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .cover{aspect-ratio:1;overflow:hidden;background:#0a0a0a}
-  .cover-img{width:100%;height:100%;object-fit:cover;display:block}
+  /* Squelette animé sous la vignette tant qu'elle n'est pas peinte — la grille
+     de carrés noirs figés faisait croire à une page cassée (2026-09-15).
+     La pochette est opaque et couvre tout : elle masque le motif en arrivant. */
+  .cover.is-load{background-image:linear-gradient(100deg,
+    #0a0a0a 30%,#1c1f27 48%,#0a0a0a 66%);background-size:250% 100%;
+    animation:l2m-shimmer 1.4s linear infinite}
+  @keyframes l2m-shimmer{from{background-position:180% 0}to{background-position:-80% 0}}
+  .cover-img{width:100%;height:100%;object-fit:cover;display:block;
+    opacity:0;transition:opacity .2s ease}
+  .cover-img.rdy{opacity:1}
+  @media (prefers-reduced-motion:reduce){.cover.is-load{animation:none}
+    .cover-img{transition:none}}
   .cover-generic{width:100%;height:100%;display:flex;align-items:center;
     justify-content:center;background:#0a0a0a}
   .cover-generic svg{width:65%;height:65%;opacity:.6}
@@ -131,17 +141,16 @@
   .album .btns a .material-symbols-outlined{font-size:15px;line-height:1}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
-  .foot{margin:36px 0 14px;text-align:center;color:var(--muted);font-size:12px}
-  .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
-    border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums}
-  .foot .env-preprod{color:var(--run);border-color:var(--run)}
   /* Preview banner */
   .preview-banner{display:none;align-items:center;justify-content:center;gap:8px;
     padding:6px 14px;background:rgba(255,140,0,.12);border-bottom:1px solid rgba(255,140,0,.35);
     color:#ffb347;font-size:12.5px;font-weight:600}
   .preview-banner.show{display:flex}
   .preview-banner .material-symbols-outlined{font-size:16px}
-  .preview-banner button{padding:2px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);
+  /* margin-top:16px vient de la regle globale `button` (app.css) et decale le
+     bouton vers le bas dans la barre flex -> neutralise. */
+  .preview-banner button{display:inline-flex;align-items:center;margin:0;line-height:1;
+    padding:4px 10px;border-radius:6px;border:1px solid rgba(255,140,0,.5);
     background:transparent;color:#ffb347;font-size:11.5px;cursor:pointer}
   .preview-banner button:hover{background:rgba(255,140,0,.18)}
   /* View-as submenu in usermenu */
@@ -305,11 +314,14 @@
     .sort-label{font-size:13px}
     .chip{height:42px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
     .chip .material-symbols-outlined{font-size:19px}
-    .count{font-size:13px}
+    .count{font-size:14px}
     .filter-group{flex:1 1 100%;min-width:0}
     .filter-group select{height:44px;font-size:15px}
     .filter-clear{margin-left:0;width:100%;justify-content:center}
     .albums{grid-template-columns:1fr 1fr;gap:12px}
+    /* Sous ~400 px, deux colonnes donnent des cartes de ~135 px : titre illisible
+       et les badges des deux coins se rejoignent. Une colonne. */
+    @media(max-width:400px){.albums{grid-template-columns:1fr}}
     .album .body{padding:9px 10px 3px}
     .album .btns{padding:2px 10px 8px}
     .album .btns a{height:auto;min-height:34px;padding:6px 8px;font-size:11.5px;
@@ -331,9 +343,8 @@
   /* ── Sélection multiple ──────────────────────────────────────────────── */
   .chip.selecting{background:var(--accent);color:#fff;border-color:var(--accent)}
   /* En mode sélection la carte entière devient cliquable pour cocher : on
-     neutralise les liens internes (gear, téléchargement, entités). */
+     neutralise les liens internes (téléchargement, entités). */
   body.select-mode .album{cursor:pointer}
-  body.select-mode .album .gear,
   body.select-mode .album .btns a,
   body.select-mode .album .al-social,
   body.select-mode .album .al-artist a,
@@ -344,6 +355,13 @@
     display:none;align-items:center;justify-content:center;color:transparent;
     backdrop-filter:blur(2px);transition:.12s}
   body.select-mode .album .pick{display:flex}
+  /* La case à cocher occupe le coin haut-gauche de la carte, exactement là où
+     se posent « Nouveau » / « Mis à jour ». En mode sélection le badge passe
+     donc SOUS la case plutôt qu'à côté : décalé horizontalement, il heurtait
+     l'engrenage de gestion sur une carte étroite (320 px). Empiler ne dépend
+     pas de la largeur. Aucun recouvrement toléré, dans aucun état. */
+  .new-badge{transition:top .12s}
+  body.select-mode .album .new-badge{top:42px}
   .album .pick .material-symbols-outlined{font-size:18px;line-height:1}
   .album.picked{outline:2px solid var(--accent);outline-offset:2px}
   .album.picked .pick{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -402,10 +420,14 @@
       </div>
     </div>
     <div class="toolbar-row">
-      <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
-      <button class="chip" id="select-btn"><span class="material-symbols-outlined">check_box</span><span id="t-select">Sélectionner</span></button>
-      <div id="active-filters" style="display:contents"></div>
+      <div class="tr-left">
+        <button class="chip" id="filter-btn"><span class="material-symbols-outlined">filter_alt</span><span id="t-filter">Filtres</span></button>
+        <div id="active-filters" style="display:contents"></div>
+      </div>
       <span class="count" id="count"></span>
+      <div class="tr-right">
+        <button class="chip" id="select-btn"><span class="material-symbols-outlined">check_box</span><span id="t-select">Sélectionner</span></button>
+      </div>
     </div>
     <div id="filter-panel" class="filter-panel">
       <div class="filter-group">
@@ -429,7 +451,7 @@
     <span class="material-symbols-outlined">library_music</span>
     <div id="empty-msg">Aucun album pour le moment.</div>
   </div>
-  <div class="foot" id="foot"></div>
+  <div class="site-foot" id="foot"></div>
 </main>
 
 <!-- Barre d'actions en masse (mode sélection) -->
@@ -485,6 +507,7 @@ const T={
       dltrack:"Télécharger cette piste",lockdl:"Se connecter pour télécharger",login:"Connexion",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
+      badge_new:"Nouveau",badge_updated:"Mis à jour",
       sort_artist:"Artiste",sort_title:"Titre",
       logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
@@ -536,6 +559,7 @@ const T={
       dltrack:"Download this track",lockdl:"Log in to download",login:"Log in",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
+      badge_new:"New",badge_updated:"Updated",
       sort_artist:"Artist",sort_title:"Title",
       logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
@@ -596,6 +620,16 @@ function applyViewToHeader(){
   // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
   show("import-btn",md.authenticated);
   show("usermenu",md.authenticated);
+  // La cloche de notifications n'existe que pour un compte connecté : en vue
+  // visiteur simulée, elle doit disparaître (et se refermer si elle était ouverte).
+  const bell=document.getElementById("notif-bell");
+  if(bell&&ME.authenticated){
+    bell.style.display=md.authenticated?"":"none";
+    if(!md.authenticated){
+      bell.classList.remove("open");
+      const pop=bell.querySelector(".nb-pop");if(pop)pop.hidden=true;
+    }
+  }
   show("login",!md.authenticated);
   show("lang",!md.authenticated);
   show("theme",!md.authenticated);
@@ -643,7 +677,17 @@ function coverHtml(a,size){
     // le navigateur refetch — sans ce param, la vitrine sert l'ancienne image
     // depuis son cache disque (le nom de fichier ne change pas).
     const v=a.cover_v||0;
-    return `<img class="cover-img" src="/cover/${a.slug}?v=${v}" alt="" loading="lazy" ${sz}>`;
+    // w=320 : vignette WebP dérivée (~20 Ko) au lieu de la pochette d'origine
+    // (jusqu'à 5 Mo). La pleine résolution reste servie sans `w` (fiche album,
+    // lightbox, téléchargement).
+    const w=size&&size>320?640:320;
+    // srcset 1x/2x : un écran haute densité prend la version 640 sans imposer
+    // son poids aux autres.
+    const w2=w===320?640:1024;
+    const u=n=>`/cover/${a.slug}?v=${v}&w=${n}`;
+    return `<img class="cover-img" src="${u(w)}" srcset="${u(w)} 1x, ${u(w2)} 2x" alt="" loading="lazy" decoding="async" ${sz}
+      onload="this.classList.add('rdy');this.parentNode.classList.remove('is-load')"
+      onerror="this.classList.add('rdy');this.parentNode.classList.remove('is-load')">`;
   }
   return GENERIC_COVER;
 }
@@ -678,10 +722,23 @@ function matches(a){
 }
 
 const NEW_DAYS=21;
+const UPDATED_DAYS=30;
+function daysSince(ref){
+  if(!ref) return Infinity;
+  const t=new Date(ref).getTime();
+  if(isNaN(t)) return Infinity;
+  return (Date.now()-t)/864e5;
+}
+// « Nouveau » = mise en ligne récente, pas import récent : un album importé il y
+// a des mois mais publié aujourd'hui est une nouveauté. Repli sur l'import pour
+// les albums sans date de publication (brouillons, vue gestionnaire).
 function isNew(a){
-  const ref=a.drive_added_at||a.imported_at;
-  if(!ref) return false;
-  return (Date.now()-new Date(ref).getTime())/(864e5)<=NEW_DAYS;
+  return daysSince(a.first_published_at||a.imported_at)<=NEW_DAYS;
+}
+// « Mis à jour » = manifest réécrit récemment (pistes, titres, pochette…) sur un
+// album qui n'est plus une nouveauté — les deux badges ne coexistent jamais.
+function isUpdated(a){
+  return !isNew(a)&&daysSince(a.updated_at)<=UPDATED_DAYS;
 }
 
 // Nom d'entité cliquable vers sa page auto (artiste/lieu/festival), comme sur la
@@ -704,33 +761,29 @@ function albumCard(a){
       dlBtn=`<a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">lock</span>${T[L()].lockdl}</a>`;
     }
   }
-  const gear=md.is_gestionnaire
-    ?`<a class="gear" href="/app/album/${a.slug}" title="${T[L()].manage}"><span class="material-symbols-outlined">settings</span></a>`:"";
   const newBadge=isNew(a)
-    ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${L()==="fr"?"Nouveau":"New"}</span>`:"";
+    ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
+    :(isUpdated(a)
+      ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
   // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
   const ST_IC={draft:"draft",unpublished:"visibility_off"};
+  const hasVideoBadge=!!a.has_video_full;
   const statusBadge=md.is_gestionnaire&&a.status&&ST_IC[a.status]
-    ?`<span class="status-badge st-${a.status}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
-  // Tags de format MP3 / MP4 affichés dans le body de la carte (gestionnaire seulement).
-  const fmtTags=md.is_gestionnaire&&(a.status==="published_audio"||a.status==="published_av")
-    ?`<div class="al-formats">`+
-      `<span class="fmt-tag fmt-mp3"><span class="material-symbols-outlined">graphic_eq</span>MP3</span>`+
-      (a.status==="published_av"?`<span class="fmt-tag fmt-mp4"><span class="material-symbols-outlined">movie</span>MP4</span>`:"")
-      +`</div>`:"";
-  // Icône vidéo conservée pour le public (info de contenu, pas de statut).
-  const videoBadge=(!md.is_gestionnaire&&a.has_video_full)
+    ?`<span class="status-badge st-${a.status}${hasVideoBadge?" has-video":""}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
+  // Tout le catalogue est en MP3 (c'est l'objet du site) : seule la vidéo est une
+  // information — même icône pour tout le monde, gestionnaire compris.
+  const videoBadge=hasVideoBadge
     ?`<span class="video-badge" title="${L()==="fr"?"Concert complet en vidéo":"Full concert video"}"><span class="material-symbols-outlined">movie</span></span>`:"";
   const showArtist=currentSort!=="artist";
   const posterHtml=posterFor(a.imported_by);
   const pick=`<div class="pick" aria-hidden="true"><span class="material-symbols-outlined">check</span></div>`;
   return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}">
+    <a class="album-open" draggable="false" href="/album/${a.slug}" tabindex="-1" aria-hidden="true"></a>
     ${pick}
-    ${gear}
     ${statusBadge}
     ${newBadge}
     ${videoBadge}
-    <div class="cover">${coverHtml(a)}</div>
+    <div class="cover${a.has_cover?' is-load':''}">${coverHtml(a)}</div>
     <div class="body">
       ${showArtist&&a.artist?`<div class="al-artist">${entLink(a,'artist',a.artist)}</div>`:""}
       <div class="al-title">${a.title||a.slug}</div>
@@ -738,7 +791,6 @@ function albumCard(a){
       <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink(a,'venue',a.venue):T[L()].venue_unknown}</div>
       ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${entLink(a,'festival',a.festival)}</div>`:""}
       ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
-      ${fmtTags}
     </div>
     <div class="al-social"></div>
     ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
@@ -991,23 +1043,17 @@ document.getElementById("albums").addEventListener("click",e=>{
   if(!card) return;
   // Mode sélection : toute la carte coche/décoche, pas de navigation.
   if(selectMode){e.preventDefault();togglePick(card.dataset.slug);return;}
-  if(e.target.closest("a,button")) return;
+  const link=e.target.closest("a,button");
+  if(link&&!link.classList.contains("album-open")) return;
   const slugs=[...document.querySelectorAll('#albums .album')].map(c=>c.dataset.slug);
   sessionStorage.setItem('l2m-album-nav',JSON.stringify({slugs}));
+  // Clic sur l'ancre : on laisse le navigateur suivre le lien (onglet, historique).
+  if(link) return;
   location.href=`/album/${card.dataset.slug}`;
 });
 document.getElementById("select-btn").onclick=toggleSelectMode;
 
 // ── Version footer ────────────────────────────────────────────────────────
-async function loadVersion(){
-  try{
-    const v=await(await fetch("/api/version")).json();
-    const cls=v.env==="prod"?"":"env-preprod";
-    const commit=v.commit?` · ${v.commit}`:"";
-    document.getElementById("foot").innerHTML=
-      `<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
-  }catch(e){}
-}
 
 // ── View-as menu (dev tool) ───────────────────────────────────────────────
 const VIEW_MODES=[
@@ -1024,7 +1070,9 @@ function viewAsLabel(key){
 }
 function injectViewAsMenu(um){
   const pop=um.querySelector(".um-pop");
-  const sep=pop.querySelector(".um-sep");
+  // Le menu compte deux séparateurs : « Voir en tant que » va dans le dernier
+  // groupe, juste avant Déconnexion — on ancre donc sur le lien de déconnexion.
+  const sep=pop.querySelector("a.um-item.danger");
   const wrap=document.createElement("div");
   wrap.className="um-viewas";
   wrap.innerHTML=`<button class="um-item"><span class="material-symbols-outlined">visibility</span><span class="um-viewas-label">${T[L()].view_as}</span><span class="material-symbols-outlined" style="margin-left:auto;font-size:16px">chevron_left</span></button>
@@ -1053,7 +1101,6 @@ async function load(){
   // Redirection legacy ?album=slug → page dédiée (avant tout chargement)
   const wanted=new URLSearchParams(location.search).get("album");
   if(wanted){location.replace(`/album/${encodeURIComponent(wanted)}`);return;}
-  loadVersion();
   // Restaurer le tri depuis localStorage
   const savedSort=localStorage.getItem("l2m-sort")||"date_import";
   currentSort=savedSort;

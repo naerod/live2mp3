@@ -5,7 +5,7 @@ Boucle sur les pistes du manifest et coupe :
   une piste à la fois.
 - Vidéo : depuis master.mkv -> **un seul MP4** couvrant tout le concert
   (du début de la 1re piste à la fin de la dernière — pas de découpe par
-  piste), dans build/video/. Décision du 2026-08-02 : la lecture "morceau par
+  piste), dans build/video-full/. Décision du 2026-08-02 : la lecture "morceau par
   morceau" (playlist/série) sur Jellyfin est pénible pour l'utilisateur ; un
   fichier complet évite aussi de re-render la vidéo à chaque ajustement de
   timecode d'une piste (seul l'audio en dépend encore).
@@ -13,6 +13,13 @@ Boucle sur les pistes du manifest et coupe :
 Chaque piste dont start/end est renseigné est rendue (audio) ; les pistes
 sans timecode sont ignorées, y compris pour le calcul des bornes vidéo.
 Stage idempotent (skip si le fichier existe déjà et --force absent).
+
+⚠️ Emplacement du MP4 : `build/video-full/`, **pas** `build/video/`. C'est le
+seul dossier que la synchronisation Jellyfin expose (CT110 `sync-media.sh`), et
+celui que lisent `has_video_full`, les visuels sidecar et le téléchargement MP4.
+Le rendu a écrit dans `build/video/` du 2026-08-13 au 2026-09-18 : les concerts
+produits sur cette période étaient invisibles dans Jellyfin. `build/video/` reste
+lu en secours (`adopt_existing_video`) pour récupérer ces fichiers sans réencoder.
 """
 from __future__ import annotations
 
@@ -23,7 +30,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from ..manifest import Manifest, download_stem
+from ..manifest import Manifest, jellyfin_stem
 
 # Réglages d'encodage vidéo, surchargeables sans redéploiement.
 #
@@ -38,6 +45,14 @@ from ..manifest import Manifest, download_stem
 VIDEO_CODEC = os.environ.get("L2M_VIDEO_CODEC", "libx264")
 VIDEO_CRF = os.environ.get("L2M_VIDEO_CRF", "23")
 VIDEO_PRESET = os.environ.get("L2M_VIDEO_PRESET", "veryfast")
+
+
+# Emplacement du MP4 concert complet. `build/video/` est l'ancien dossier des
+# clips par piste (abandonnés le 2026-08-02) : on n'y écrit plus, on s'y contente
+# de récupérer les fichiers qui y ont atterri par erreur.
+VIDEO_FULL_DIRNAME = "video-full"
+LEGACY_VIDEO_DIRNAME = "video"
+MEDIA_SUFFIXES = {".mp3", ".mp4"}
 
 
 class Cancelled(Exception):
@@ -195,17 +210,27 @@ def _expected_filenames(m: Manifest, ext: str) -> set[str]:
     return names
 
 
-def _purge_orphans(dir_: Path, expected: set[str]) -> None:
+def _purge_orphans(dir_: Path, expected: set[str],
+                   only_media: bool = False) -> None:
     """Retire les fichiers d'un rendu précédent qui ne correspondent plus à
     ce qui est attendu (piste renommée/supprimée, ou changement de nom du
     fichier vidéo complet suite à une modif d'artiste/titre/date). Sans ça,
     un re-rendu sur un album déjà publié laisse des fichiers fantômes dans le
-    ZIP et dans la bibliothèque Jellyfin."""
+    ZIP et dans la bibliothèque Jellyfin.
+
+    `only_media` épargne tout ce qui n'est pas un média ou un `.part` : dans
+    `build/video-full/`, le MP4 cohabite avec les images sidecar Jellyfin
+    (`-poster`, `-thumb`, `-banner`) posées par `covers.py`, qu'une purge
+    aveugle effacerait à chaque re-rendu."""
     if not dir_.exists():
         return
     for f in dir_.iterdir():
-        if f.is_file() and f.name not in expected:
-            f.unlink()
+        if not f.is_file() or f.name in expected:
+            continue
+        if only_media and not (f.suffix.lower() in MEDIA_SUFFIXES
+                               or f.name.endswith(".part")):
+            continue
+        f.unlink()
 
 
 def _render_or_cleanup(fn, src: Path, start, end, out: Path,
@@ -241,10 +266,62 @@ def _render_or_cleanup(fn, src: Path, start, end, out: Path,
 
 
 def video_filename(m: Manifest, project_slug: str) -> str:
-    """Nom du MP4 complet : suit le même schéma que les ZIP de téléchargement
-    (`download_stem`) pour rester cohérent et se renommer automatiquement en
-    cas de correction d'artiste/titre/date."""
-    return f"{download_stem(m.data, project_slug)}_concert-complet.mp4"
+    """Nom du MP4 complet, aux conventions Jellyfin (`jellyfin_stem`) : c'est ce
+    nom que Jellyfin affiche comme titre de l'item, et celui que porte le
+    téléchargement MP4. Recalculé depuis le manifeste, il se met à jour tout
+    seul en cas de correction d'artiste/titre/date."""
+    return f"{jellyfin_stem(m.data, project_slug)}.mp4"
+
+
+def video_dir(project_dir: Path) -> Path:
+    """Dossier du MP4 concert complet — cf. l'avertissement en tête de module."""
+    return Path(project_dir) / "build" / VIDEO_FULL_DIRNAME
+
+
+def adopt_existing_video(project_dir: str | Path, expected_name: str | None = None) -> Path | None:
+    """Met le MP4 déjà encodé à sa place et à son nom, sans réencoder.
+
+    Couvre deux situations :
+    - un concert rendu dans l'ancien `build/video/` (régression du 2026-08-13) ;
+    - un MP4 déjà à sa place mais sous un ancien nom, après correction des
+      métadonnées de l'album.
+
+    Les images sidecar Jellyfin suivent le renommage (leur nom dérive du stem du
+    MP4 : les laisser en arrière les rendrait orphelines). Renvoie le chemin
+    final si quelque chose a bougé, `None` sinon. Ne lève pas si le dossier est
+    absent ou déjà conforme.
+    """
+    project_dir = Path(project_dir)
+    if expected_name is None:
+        mpath = project_dir / "manifest.yaml"
+        if not mpath.is_file():
+            return None
+        expected_name = video_filename(Manifest.load(mpath), project_dir.name)
+    dest_dir = video_dir(project_dir)
+    dest = dest_dir / expected_name
+    if dest.exists():
+        return None
+    # Un `.part` n'est pas un rendu abouti : il ne doit jamais être adopté.
+    candidates = sorted(dest_dir.glob("*.mp4")) if dest_dir.exists() else []
+    legacy_dir = project_dir / "build" / LEGACY_VIDEO_DIRNAME
+    if not candidates and legacy_dir.exists():
+        candidates = sorted(legacy_dir.glob("*.mp4"))
+    if len(candidates) != 1:
+        # Zéro : rien à adopter. Plusieurs : on ne devine pas lequel est le
+        # concert complet — le rendu tranchera plutôt qu'un choix arbitraire.
+        return None
+    src = candidates[0]
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    # `iterdir` plutôt que `glob` : un titre d'album peut contenir `[` ou `?`,
+    # que glob interpréterait comme un motif.
+    for side in sorted(src.parent.iterdir()):
+        if not side.is_file() or not side.name.startswith(f"{src.stem}-"):
+            continue
+        if side.suffix.lower() in MEDIA_SUFFIXES:
+            continue
+        os.replace(side, dest_dir / f"{dest.stem}{side.name[len(src.stem):]}")
+    os.replace(src, dest)
+    return dest
 
 
 def run(project_dir: str | Path, force: bool = False, video: bool = True,
@@ -269,7 +346,7 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
     master_wav = project_dir / m.data["source"]["master_wav"]
     master_mkv = project_dir / m.data["source"]["master_mkv"]
     audio_dir = project_dir / "build" / "audio"
-    video_dir = project_dir / "build" / "video"
+    video_full_dir = video_dir(project_dir)
 
     # Les pistes externes sont exclues du découpage : leur audio ne vient pas
     # du master (elles n'ont d'ailleurs pas de timecodes d'album).
@@ -297,14 +374,19 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
     # Vidéo : un seul fichier, du début de la 1re piste à la fin de la
     # dernière (master.mkv peut être absent en test audio-only).
     #
-    # ⚠️ Aucune purge de `build/video` quand `video` est faux : le job audio de
-    # phase 1 tourne précisément avec `video=False` et détruirait sinon le MP4
+    # ⚠️ Aucune purge de `build/video-full` quand `video` est faux : le job audio
+    # de phase 1 tourne précisément avec `video=False` et détruirait sinon le MP4
     # déjà produit — c'est la régression que le découplage rendait possible.
     if video and master_mkv.exists() and todo:
         v_start, v_end = todo[0]["start"], todo[-1]["end"]
         v_name = video_filename(m, project_dir.name)
-        _purge_orphans(video_dir, {v_name})
-        v_out = video_dir / v_name
+        # Avant toute purge : récupérer un MP4 déjà encodé (ancien dossier ou
+        # ancien nom). Sans ça, la purge le détruirait et on réencoderait
+        # plusieurs Go pour rien.
+        if not force:
+            adopt_existing_video(project_dir, v_name)
+        _purge_orphans(video_full_dir, {v_name}, only_media=True)
+        v_out = video_full_dir / v_name
         if force or not v_out.exists():
             _render_or_cleanup(render_video, master_mkv, v_start, v_end,
                                v_out, cancel, paused, on_progress=on_video)
@@ -312,7 +394,7 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
             on_video(1.0)
         rendered["video"].append(str(v_out))
     elif video:
-        _purge_orphans(video_dir, set())
+        _purge_orphans(video_full_dir, set(), only_media=True)
 
     if audio:
         m.set_state("render", "done")

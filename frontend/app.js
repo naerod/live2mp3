@@ -283,6 +283,12 @@ $("btn-fetch-setlist").onclick=async()=>{
   try{
     const r=await fetch("/api/import/setlist-lookup",{method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    // Une erreur HTTP (session expirée, droits, 5xx) n'est PAS « aucune setlist » :
+    // sans ce test, le JSON d'erreur (sans `found`) affichait un message trompeur.
+    if(!r.ok){
+      alert(T(r.status===401||r.status===403?"setlist_err_auth":"setlist_err_http"));
+      return;
+    }
     const d=await r.json();
     if(d.found){
       setlistSource={tracks:d.tracks.length,url:d.url,name:d.name||"setlist.fm"};

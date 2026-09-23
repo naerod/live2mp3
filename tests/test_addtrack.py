@@ -159,7 +159,7 @@ def api(tmp_path, monkeypatch, synth_audio_only):
         return dest
 
     monkeypatch.setattr(download, "download_audio", fake_download)
-    monkeypatch.setattr(addtrack.jellyfin, "refresh_album", lambda slug: True)
+    monkeypatch.setattr(addtrack.jellyfin, "refresh_album", lambda slug, **kw: True)
     return TestClient(main.app), synth_audio_only
 
 

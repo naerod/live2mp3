@@ -12,6 +12,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime, timezone
 from typing import Any
 
 import yaml
@@ -85,10 +86,14 @@ def project_slug(manifest: dict[str, Any]) -> str:
 def numbered_title(n: Any, title: str) -> str:
     """Titre préfixé du numéro de piste sur 2 chiffres : ``01. Overcompensate``.
 
-    Utilisé **uniquement** pour le tag ID3/metadata (TIT2) — le titre affiché
-    dans l'app reste nu (lu depuis le manifeste). Le numéro dans le titre force
-    l'ordre des pistes sur les lecteurs qui trient alphabétiquement (Spotify
-    local, etc.).
+    Utilisé **uniquement pour les noms de fichiers** — fichiers rendus et nom
+    du téléchargement — où le numéro garde l'ordre du concert dans un dossier
+    ou un ZIP trié alphabétiquement.
+
+    **Pas pour le tag ID3 TIT2** : décision du 2026-09-19. En streaming, le
+    lecteur (Finamp, Jellyfin) trie déjà sur TRCK et affiche son propre numéro
+    de ligne — le préfixe faisait donc doublon à l'écran (« 1  01. Intro »).
+    Le tag porte le titre nu ; c'est le fichier qui reste numéroté.
     """
     title = title or ""
     try:
@@ -119,6 +124,27 @@ def download_stem(manifest: dict[str, Any], fallback: str = "") -> str:
     return "_".join(parts) or slugify(fallback) or "album"
 
 
+def jellyfin_stem(manifest: dict[str, Any], fallback: str = "") -> str:
+    """Base du nom du MP4 concert complet, aux conventions Jellyfin :
+    ``Artiste - Titre (AAAA-MM-JJ)``.
+
+    Jellyfin prend le nom de fichier comme titre de l'item : contrairement aux
+    téléchargements (`download_stem`, slugifié), il faut ici un libellé lisible,
+    avec espaces et accents. Les champs absents sont omis plutôt que remplacés
+    par un marqueur — un album sans artiste donne « Titre (date) ».
+    """
+    album = manifest.get("album", {})
+    artist = str(album.get("artist", "") or "").strip()
+    title = str(album.get("title", "") or "").strip()
+    if title.lower() in ("", "untitled"):
+        title = "Concert Complet"
+    date = str(album.get("date", "") or "").strip()
+    stem = f"{artist} - {title}" if artist else title
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        stem = f"{stem} ({date})"
+    return sanitize_filename(stem) or slugify(fallback) or "album"
+
+
 @dataclass
 class Manifest:
     """Wrapper autour du dict manifest avec accès disque."""
@@ -136,10 +162,21 @@ class Manifest:
         m.validate()
         return m
 
-    def save(self, path: str | Path | None = None) -> Path:
+    def save(self, path: str | Path | None = None, touch: bool = True) -> Path:
+        """Écrit le manifest. `touch` horodate `meta.updated_at`.
+
+        `meta.updated_at` est la date de dernière modification réelle de
+        l'album : elle pilote le badge « Mis à jour » de la vitrine. Le mtime du
+        fichier ne convient pas — toute migration ou réécriture technique le
+        remettrait à zéro et rendrait tout le catalogue « modifié ». Passer
+        `touch=False` pour ces écritures-là.
+        """
         target = Path(path) if path else self.path
         if target is None:
             raise ManifestError("Aucun chemin de sauvegarde fourni.")
+        if touch:
+            self.data.setdefault("meta", {})["updated_at"] = datetime.now(
+                timezone.utc).isoformat(timespec="seconds")
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(

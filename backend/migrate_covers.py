@@ -75,7 +75,9 @@ def migrate(dry_run: bool = False) -> int:
             # Repointer le manifest : `album.cover` désigne désormais la gagnante
             # dans la nouvelle arborescence, comme le fait `_on_covers_changed`.
             m.data["album"]["cover"] = f"artwork/covers/{LEGACY_KEY}_cover{cext}"
-            m.save()
+            # Repointage technique dans une migration : pas de `touch`
+            # (cf. incident 2026-09-21).
+            m.save(touch=False)
         done += 1
     return done
 

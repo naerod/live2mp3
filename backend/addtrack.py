@@ -477,7 +477,7 @@ def _run_prep_bg(token: str, url: str) -> None:
         preview = work / "preview.mp3"
         subprocess.run([
             "ffmpeg", "-y", "-i", str(wav),
-            "-vn", "-c:a", "libmp3lame", "-b:a", "128k", str(preview),
+            "-vn", "-c:a", "libmp3lame", "-b:a", "64k", "-ac", "1", str(preview),
         ], check=True, capture_output=True)
 
         # La waveform (donc le lecteur) porte sur le WAV : sa durée réelle est

@@ -18,7 +18,8 @@ const Naerod = (function () {
       follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
       login_follow: "Connectez-vous pour suivre",
       notify_on: "Notifications activées", notify_off: "Notifications coupées",
-      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_user: "Simple utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_supporter: "Soutien",
       role_artiste: "Artiste", role_organisation: "Organisation",
       now: "à l'instant", min: "min", h: "h", d: "j",
       notif_empty: "Aucune notification pour l'instant.",
@@ -43,7 +44,8 @@ const Naerod = (function () {
       follow: "Follow", following: "Following", unfollow: "Unfollow",
       login_follow: "Log in to follow",
       notify_on: "Notifications on", notify_off: "Notifications off",
-      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_user: "User", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_supporter: "Supporter",
       role_artiste: "Artist", role_organisation: "Organisation",
       now: "just now", min: "min", h: "h", d: "d",
       notif_empty: "No notifications yet.",
@@ -175,9 +177,11 @@ const Naerod = (function () {
   }
 
   function roleBadge(role) {
-    if (!role) return "";
+    // Tout le monde porte un badge : l'absence de rôle = simple utilisateur.
+    role = role || "user";
     const icon = role === "admin" ? "shield_person"
       : role === "gestionnaire" ? "manage_accounts"
+      : role === "supporter" ? "crown"
       : role === "artiste" ? "artist"
       : role === "organisation" ? "festival" : "person";
     return `<span class="role-badge role-${esc(role)}">` +
@@ -200,14 +204,14 @@ const Naerod = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="${href}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
-        ${(opts.extraItems || []).map((it, i) => it.href
-          ? `<a class="um-item" href="${it.href}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></a>`
-          : `<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></button>`).join("")}
-        <a class="um-item" href="${CFG.notificationsHref}"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
+        <div class="um-sep"></div>
         <a class="um-item" href="${CFG.settingsHref}"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
         <div class="um-sep"></div>
+        ${(opts.extraItems || []).map((it, i) => it.href
+          ? `<a class="um-item" href="${it.href}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></a>`
+          : `<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${esc(it.label)}</span></button>`).join("")}
         <a class="um-item danger" href="${typeof CFG.logoutHref === 'function' ? CFG.logoutHref() : CFG.logoutHref}"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
     const trigger = mountEl.querySelector(".um-trigger");
@@ -218,7 +222,6 @@ const Naerod = (function () {
     function refresh() {
       const dark = CFG.theme() === "dark";
       set("profile", t("view_profile"));
-      set("notifications", t("notifications"));
       set("settings", t("settings"));
       set("lang", t("language"));
       set("langval", CFG.lang().toUpperCase());

@@ -20,7 +20,8 @@ const L2M = (function () {
       follow: "Suivre", following: "Suivi", unfollow: "Ne plus suivre",
       login_follow: "Connectez-vous pour suivre",
       notify_on: "Notifications activées", notify_off: "Notifications coupées",
-      role_user: "Utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_user: "Simple utilisateur", role_gestionnaire: "Gestionnaire", role_admin: "Admin",
+      role_supporter: "Soutien",
       followers: "abonnés", posts: "posts",
       notifications: "Notifications", settings: "Paramètres",
       notif_empty: "Aucune notification pour l'instant.",
@@ -65,7 +66,8 @@ const L2M = (function () {
       follow: "Follow", following: "Following", unfollow: "Unfollow",
       login_follow: "Log in to follow",
       notify_on: "Notifications on", notify_off: "Notifications off",
-      role_user: "Member", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_user: "User", role_gestionnaire: "Manager", role_admin: "Admin",
+      role_supporter: "Supporter",
       followers: "followers", posts: "posts",
       notifications: "Notifications", settings: "Settings",
       notif_empty: "No notifications yet.",
@@ -261,7 +263,7 @@ const L2M = (function () {
         list.innerHTML = hits.map(a => `
           <button class="imp-pick-row" data-slug="${esc(a.slug)}">
             ${a.has_cover
-              ? `<img class="imp-pick-cov" src="/cover/${encodeURIComponent(a.slug)}?v=${a.cover_v || 0}" alt="" loading="lazy">`
+              ? `<img class="imp-pick-cov" src="/cover/${encodeURIComponent(a.slug)}?v=${a.cover_v || 0}&w=320" alt="" loading="lazy">`
               : `<span class="imp-pick-cov ph"><span class="material-symbols-outlined">album</span></span>`}
             <span class="imp-pick-meta">
               <span class="imp-pick-t">${esc(a.title || a.slug)}</span>
@@ -321,6 +323,29 @@ const L2M = (function () {
   }
 
   /* ---------------- Header unifié ---------------- */
+  /* ---------------- Pied de page (badge de version) ----------------
+     Une seule implémentation pour tout le site : appelée par initHeader, donc
+     présente sur chaque page, y compris le profil et le centre de
+     notifications. Les pages n'ont plus à recoder ni styler ce bloc. */
+  async function initFooter() {
+    // Une page peut déjà porter son propre conteneur (#foot / #site-foot).
+    let el = document.getElementById("site-foot") || document.getElementById("foot");
+    if (!el) {
+      el = document.createElement("footer");
+      el.id = "site-foot";
+      el.className = "site-foot";
+      document.body.appendChild(el);
+    }
+    el.classList.add("site-foot");
+    try {
+      const v = await (await fetch("/api/version")).json();
+      const cls = v.env === "prod" ? "" : "env-preprod";
+      const commit = v.commit ? ` \u00b7 ${v.commit}` : "";
+      el.innerHTML = `<a href="/changelog" class="badge ${cls}">v${v.version} \u00b7 ${v.env}${commit}</a>`;
+      return v;
+    } catch (e) { return null; }
+  }
+
   async function initHeader(opts) {
     opts = opts || {};
     installSpeculationRules();
@@ -457,10 +482,21 @@ const L2M = (function () {
       loginEl.style.display = "";
     }
 
+    // Pied de page : même bloc sur toutes les pages (cf. initFooter).
+    if (opts.footer !== false) initFooter();
+
     return meData;
   }
 
   /* ---------------- Menu utilisateur (avatar déroulant) ---------------- */
+  /* ── Registre des panels flottants (profil, notifs…) ─────────────────
+     Chaque panel s'enregistre ici à sa création et appelle _closeAll(self)
+     avant de s'ouvrir : ouvrir l'un ferme l'autre, jamais de superposition.
+     Même mécanique que le bundle partagé shared/naerod/naerod-social.js. */
+  const _panels = [];
+  function _registerPanel(closeFn) { _panels.push(closeFn); }
+  function _closeAll(except) { _panels.forEach((fn) => { if (fn !== except) fn(); }); }
+
   // mountEl doit avoir la classe .usermenu. opts.onChange(kind) après thème/langue.
   function userMenu(mountEl, meData, opts) {
     opts = opts || {};
@@ -472,12 +508,12 @@ const L2M = (function () {
           <div class="um-id"><div class="um-name">${esc(meData.display_name || uname)}</div>
             <div class="um-handle">@${esc(uname)}</div></div></a>
         <a class="um-item" href="/u/${encodeURIComponent(uname)}"><span class="material-symbols-outlined">account_circle</span><span data-k="profile"></span></a>
-        <a class="um-item" href="/notifications"><span class="material-symbols-outlined">notifications</span><span data-k="notifications"></span></a>
+        <div class="um-sep"></div>
         <a class="um-item" href="/settings"><span class="material-symbols-outlined">settings</span><span data-k="settings"></span></a>
         <button class="um-item" data-act="lang"><span class="material-symbols-outlined">translate</span><span data-k="lang"></span><span class="um-val" data-k="langval"></span></button>
         <button class="um-item" data-act="theme"><span class="material-symbols-outlined" data-k="themeic"></span><span data-k="theme"></span></button>
-        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <div class="um-sep"></div>
+        ${(opts.extraItems||[]).map((it,i)=>`<button class="um-item" data-extra="${i}"><span class="material-symbols-outlined">${it.icon}</span><span data-k="extra${i}">${it.label}</span></button>`).join("")}
         <a class="um-item danger" href="/api/logout"><span class="material-symbols-outlined">logout</span><span data-k="logout"></span></a>
       </div>`;
     const trigger = mountEl.querySelector(".um-trigger");
@@ -485,12 +521,19 @@ const L2M = (function () {
     function refresh() {
       const dark = getTheme() === "dark";
       set("profile", t("view_profile")); set("lang", t("language")); set("langval", getLang().toUpperCase());
-      set("notifications", t("notifications")); set("settings", t("settings"));
+      set("settings", t("settings"));
       set("logout", t("logout")); set("themeic", dark ? "light_mode" : "dark_mode");
       set("theme", dark ? t("theme_light") : t("theme_dark"));
     }
     refresh();
-    trigger.onclick = (e) => { e.stopPropagation(); mountEl.classList.toggle("open"); };
+    const _closeProfile = () => mountEl.classList.remove("open");
+    _registerPanel(_closeProfile);
+    trigger.onclick = (e) => {
+      e.stopPropagation();
+      const opening = !mountEl.classList.contains("open");
+      if (opening) _closeAll(_closeProfile);
+      mountEl.classList.toggle("open", opening);
+    };
     document.addEventListener("click", (e) => { if (!mountEl.contains(e.target)) mountEl.classList.remove("open"); });
     mountEl.querySelector('[data-act="lang"]').onclick = () => {
       applyLang(getLang() === "fr" ? "en" : "fr"); refresh(); if (opts.onChange) opts.onChange("lang");
@@ -619,9 +662,11 @@ const L2M = (function () {
 
   // Badge de rôle (utilisateur / gestionnaire / admin) — affiché sur les profils.
   function roleBadge(role) {
-    if (!role) return "";
+    // Tout le monde porte un badge : l'absence de rôle = simple utilisateur.
+    role = role || "user";
     const icon = role === "admin" ? "shield_person"
-      : role === "gestionnaire" ? "manage_accounts" : "person";
+      : role === "gestionnaire" ? "manage_accounts"
+      : role === "supporter" ? "crown" : "person";
     return `<span class="role-badge role-${role}"><span class="material-symbols-outlined">${icon}</span>${t("role_" + role)}</span>`;
   }
 
@@ -864,14 +909,19 @@ const L2M = (function () {
         });
       });
     }
+    const _closeNotifs = () => { open = false; mountEl.classList.remove("open"); pop.hidden = true; };
+    _registerPanel(_closeNotifs);
     trigger.onclick = (e) => {
       e.stopPropagation();
-      open = !open; mountEl.classList.toggle("open", open); pop.hidden = !open;
+      open = !open;
+      if (open) _closeAll(_closeNotifs);
+      mountEl.classList.toggle("open", open); pop.hidden = !open;
       if (open) loadPop();
     };
     document.addEventListener("click", (e) => {
       if (!mountEl.contains(e.target)) { open = false; mountEl.classList.remove("open"); pop.hidden = true; }
     });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") _closeNotifs(); });
     await refreshCount();
     return { refresh: refreshCount };
   }
@@ -1246,6 +1296,6 @@ const L2M = (function () {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
     likeButton, followButton, roleBadge, entityHref, comments, userMenu,
     notifBell, notifItem, loadArtistThumbs, autocomplete, LANG,
-    getTheme, applyTheme, getLang, applyLang, initHeader,
+    getTheme, applyTheme, getLang, applyLang, initHeader, initFooter,
   };
 })();

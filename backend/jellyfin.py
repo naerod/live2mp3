@@ -1,7 +1,7 @@
 """Rafraîchissement de la bibliothèque Jellyfin après un re-rendu.
 
 Sur CT110, `sync-media.sh` (cron) monte les albums publiés dans Jellyfin via
-des symlinks vers `build/audio`/`build/video` et ne déclenche un scan que
+des symlinks vers `build/audio`/`build/video-full` et ne déclenche un scan que
 lorsqu'un symlink apparaît ou disparaît (publication/dépublication). Un
 re-rendu de contenu à l'intérieur d'un dossier déjà monté (ré-édition d'un
 album déjà publié) n'est donc jamais détecté sans appel explicite.
@@ -85,7 +85,7 @@ def _find_album_id(slug: str) -> str | None:
     return None
 
 
-def refresh_album(slug: str) -> bool:
+def refresh_album(slug: str, replace_metadata: bool = False) -> bool:
     """Force Jellyfin à re-scanner un album ET à ré-extraire ses images.
 
     Un `Library/Refresh` ordinaire ne ré-extrait pas l'art déjà en cache : sur
@@ -93,6 +93,20 @@ def refresh_album(slug: str) -> bool:
     reste figée côté serveur, donc côté Finamp. On cible l'album par son
     chemin et on impose `ReplaceAllImages` + `FullRefresh` (récursif pour
     couvrir les pistes, utile aux albums à pochette par piste).
+
+    `replace_metadata=True` est INDISPENSABLE quand ce sont les métadonnées
+    *textuelles* qui changent (titre d'album, artiste, titres de pistes) :
+    avec `ReplaceAllMetadata=false`, Jellyfin re-scanne les fichiers mais
+    conserve le nom déjà en base — l'album gardait son ancien titre dans
+    Finamp indéfiniment (incident 2026-09-19). Les données utilisateur
+    (favoris, écoutes) ne sont pas touchées : elles ne font pas partie des
+    métadonnées d'item.
+
+    **Mais `ReplaceAllMetadata=true` efface au passage l'artiste et l'année de
+    l'item album**, qui ne viennent d'aucun fichier : Jellyfin les *dérive* des
+    pistes. L'album repassait donc « Unknown Artist » dans Finamp. On enchaîne
+    pour cette raison un second refresh non destructif, qui reconstruit ces
+    champs dérivés sans toucher au nom déjà corrigé par le premier.
 
     Best-effort : ne lève jamais. Retourne False si pas de clé, album
     introuvable ou erreur réseau.
@@ -103,18 +117,34 @@ def refresh_album(slug: str) -> bool:
         item_id = _find_album_id(slug)
         if not item_id:
             return False
+        headers = {"X-Emby-Token": JELLYFIN_API_KEY}
         r = requests.post(
             f"{JELLYFIN_URL}/Items/{item_id}/Refresh",
             params={
                 "MetadataRefreshMode": "FullRefresh",
                 "ImageRefreshMode": "FullRefresh",
                 "ReplaceAllImages": "true",
+                "ReplaceAllMetadata": "true" if replace_metadata else "false",
+                "Recursive": "true",
+            },
+            headers=headers,
+            timeout=_TIMEOUT,
+        )
+        if not replace_metadata or r.status_code >= 400:
+            return r.status_code < 400
+        # Second passage : restaure artiste/année dérivés des pistes, effacés
+        # par le `ReplaceAllMetadata` ci-dessus. Le nom, lui, reste corrigé.
+        r2 = requests.post(
+            f"{JELLYFIN_URL}/Items/{item_id}/Refresh",
+            params={
+                "MetadataRefreshMode": "FullRefresh",
+                "ImageRefreshMode": "None",
                 "ReplaceAllMetadata": "false",
                 "Recursive": "true",
             },
-            headers={"X-Emby-Token": JELLYFIN_API_KEY},
+            headers=headers,
             timeout=_TIMEOUT,
         )
-        return r.status_code < 400
+        return r2.status_code < 400
     except requests.RequestException:
         return False

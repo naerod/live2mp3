@@ -118,6 +118,9 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 #overview{height:80px;background:var(--bg)}
 #zoom{height:160px;background:var(--bg)}
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* « Ajouter une piste » est placé au-dessus de la liste : l'action reste
+   visible sans dérouler toute la setlist. */
+.add-track-top{margin-top:0;margin-bottom:10px}
 /* dans une barre d'actions, le margin-top hérité de `button,.primary`
    désaligne verticalement les boutons -> neutralisé, l'espacement vient
    du margin-top du conteneur .actions */
@@ -212,7 +215,15 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
 .soc-more .material-symbols-outlined{font-size:16px}/* ============ Page profil ============ */
 .prof-hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
-.prof-hero/* Badge de rôle cliquable (admin) : ouvre le sélecteur de rôle */
+/* Le badge de rôle partage la ligne du pseudo et se cale à droite du bloc
+   d'identité : même hauteur que le nom, aucun espace vide au-dessus. Dans le
+   flux (pas d'absolute) : il ne peut recouvrir ni le nom, ni le bouton Suivre,
+   et passe sous le nom quand la place manque. */
+.prof-nameline{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.prof-nameline h1{margin:0}
+@media(max-width:520px){.prof-hero{align-items:flex-start}}
+/* Badge de rôle cliquable (admin) : ouvre le sélecteur de rôle */
 .role-badge-btn{display:inline-flex;align-items:center;gap:2px;margin:0;padding:0;
   border:none;background:none;cursor:pointer;vertical-align:middle;border-radius:999px;
   transition:opacity .12s}
@@ -310,7 +321,19 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
   overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
 .prof-alb:hover{transform:translateY(-4px);border-color:var(--accent)}
 .prof-alb .cv{aspect-ratio:1;background:#0a0a0a center/cover no-repeat;display:flex;
-  align-items:center;justify-content:center}
+  align-items:center;justify-content:center;position:relative;overflow:hidden}
+/* Squelette animé tant que la vignette n'est pas peinte : une grille de carrés
+   noirs figés donne l'impression que la page est cassée (cf. vignettes lentes,
+   2026-09-15). Retiré par l'`onload` de l'image. */
+.prof-alb .cv.is-load{background-image:linear-gradient(100deg,
+  #0a0a0a 30%,#1c1f27 48%,#0a0a0a 66%);background-size:250% 100%;
+  animation:l2m-shimmer 1.4s linear infinite}
+@keyframes l2m-shimmer{from{background-position:180% 0}to{background-position:-80% 0}}
+.prof-alb .cv-img{width:100%;height:100%;object-fit:cover;display:block;
+  opacity:0;transition:opacity .2s ease}
+.prof-alb .cv-img.rdy{opacity:1}
+@media (prefers-reduced-motion:reduce){.prof-alb .cv.is-load{animation:none}
+  .prof-alb .cv-img{transition:none}}
 .prof-alb .cv .material-symbols-outlined{font-size:40px;color:var(--accent);opacity:.5}
 .prof-alb .b{padding:9px 11px}
 .prof-alb .t{font-weight:700;font-size:13.5px;line-height:1.2}
@@ -321,7 +344,6 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 .prof-cmt .lnk b{color:var(--fg)}
 .prof-cmt .lnk:hover b{color:var(--accent)}
 .prof-cmt .txt{font-size:14px;line-height:1.5;white-space:pre-wrap}
-@media(max-width:520px){.prof-hero}
 
 /* ============ Menu utilisateur (avatar déroulant, header) ============ *//* Bouton retour (page profil) */
 .back-btn{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px 0 12px;
@@ -333,10 +355,6 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 /* Posteur d'un album (avatar + pseudo) */.page-nav{display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px}
 
 /* ============ Mobile ============ */
-/* Écrans tactiles : les contrôles cachés derrière un survol doivent rester visibles */
-@media (hover:none){
-  .gear{opacity:1;transform:none}
-}
 @media (max-width:768px){
   header{padding:12px 14px;flex-wrap:wrap;row-gap:10px}
   .brand{font-size:21px;gap:9px}
@@ -713,3 +731,36 @@ button,.primary{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
 
 @media (max-width:700px){  .set-cell{width:60px}
 }
+
+/* ============ Notifications propres à live2mp3 ============
+   Les entrées « brouillon », « rendu en cours » et « rendu terminé » sont
+   générées par social.js avec des classes qui n'avaient aucun style : l'icône
+   du tag retombait en inline, désalignée du texte (constat 2026-09-22). */
+.notif-draft-tag{
+  display:inline-flex;align-items:center;gap:5px;align-self:flex-start;flex-wrap:wrap;
+  font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--muted);margin-bottom:2px;line-height:1}
+.notif-draft-tag .material-symbols-outlined{
+  font-size:14px;line-height:1;
+  font-variation-settings:"FILL" 1,"wght" 500,"GRAD" 0,"opsz" 20}
+/* Étiquettes de format (MP3/MP4) et pourcentage d'avancement. */
+.notif-fmt{
+  display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:999px;
+  border:1px solid var(--border);background:var(--bg);color:var(--muted);
+  font-size:9.5px;font-weight:700;letter-spacing:.03em}
+.notif-render .notif-draft-tag{color:var(--accent)}
+.notif-video .notif-draft-tag{color:var(--run,var(--accent))}
+/* Vignette d'artiste : même gabarit que .notif-ic, mais porte une image. */
+.notif-pic{overflow:hidden;padding:0}
+.notif-pic img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* ============ Pied de page (badge de version) ============
+   Injecté par L2M.initFooter sur toutes les pages. Les styles vivent ici, plus
+   dans chaque page : un seul endroit à faire évoluer. */
+.site-foot{margin:40px 0 18px;text-align:center;color:var(--muted);font-size:12px}
+.site-foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
+  border-radius:999px;border:1px solid var(--border);background:var(--card);
+  color:var(--muted);text-decoration:none;font-variant-numeric:tabular-nums;
+  transition:border-color .15s,color .15s}
+.site-foot .badge:hover{border-color:var(--accent);color:var(--fg)}
+.site-foot .env-preprod{color:var(--run,#f59e0b);border-color:var(--run,#f59e0b)}

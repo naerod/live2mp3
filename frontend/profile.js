@@ -80,7 +80,10 @@
 
   function albumCard(a) {
     const cover = a.has_cover
-      ? `<div class="cv" style="background-image:url('/cover/${a.slug}')"></div>`
+      ? `<div class="cv is-load"><img class="cv-img" loading="lazy" decoding="async" alt=""
+           src="/cover/${a.slug}?v=${a.cover_v||0}&w=320"
+           srcset="/cover/${a.slug}?v=${a.cover_v||0}&w=320 1x, /cover/${a.slug}?v=${a.cover_v||0}&w=640 2x"
+           onload="this.parentNode.classList.remove('is-load');this.classList.add('rdy')"></div>`
       : `<div class="cv"><span class="material-symbols-outlined">album</span></div>`;
     return `<a class="prof-alb" href="/album/${encodeURIComponent(a.slug)}">
       ${cover}
@@ -364,7 +367,7 @@
             ${DATA.is_self ? `<label class="cam" title="${t("change_photo")}"><span class="material-symbols-outlined">photo_camera</span>
               <input type="file" accept="image/*" id="avatar-input" hidden></label>` : ""}</div>
           <div class="prof-id">
-            <h1>${esc(p.display_name)} ${roleControl(p)}</h1>
+            <div class="prof-nameline"><h1>${esc(p.display_name)}</h1>${roleControl(p)}</div>
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}

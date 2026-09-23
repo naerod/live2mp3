@@ -161,11 +161,12 @@ def _extract_slice(master: Path, start: float, end: float, out: Path) -> None:
 
 
 def _make_preview_mp3(wav: Path, out: Path) -> None:
-    """MP3 128 k léger pour la lecture in-browser."""
+    """MP3 64 k mono, léger pour la lecture in-browser (suffisant pour repérer
+    les coupes ; le rendu final part toujours du WAV master)."""
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["ffmpeg", "-y", "-i", str(wav), "-vn", "-c:a", "libmp3lame",
-         "-b:a", "128k", str(out)],
+         "-b:a", "64k", "-ac", "1", str(out)],
         check=True, capture_output=True)
 
 
@@ -457,7 +458,8 @@ def _tag_one(mp3: Path, m: Manifest, track: dict) -> None:
     date = alb.get("date") or ""
     if date:
         tags["date"] = [date[:4] if len(date) >= 4 else date]
-    tags["title"] = [_manifest_mod.numbered_title(pos, track.get("title", ""))]
+    # Titre nu (cf. manifest.numbered_title) : le numéro reste au fichier.
+    tags["title"] = [track.get("title", "")]
     tags["tracknumber"] = [f"{pos}/{total}"]
     tags.save()
 

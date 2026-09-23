@@ -26,8 +26,8 @@ from mutagen.id3 import (
 )
 from mutagen.mp3 import MP3
 
-from ..manifest import Manifest, numbered_title
-from .render import video_filename
+from ..manifest import Manifest
+from .render import video_dir, video_filename
 
 
 def _cover_bytes(project_dir: Path, manifest: Manifest) -> tuple[bytes | None, str]:
@@ -52,7 +52,12 @@ def tag_mp3(path: Path, track: dict, album: dict, total: int,
         audio.add_tags()
     tags = audio.tags
     tags.delall("APIC")
-    tags["TIT2"] = TIT2(encoding=3, text=numbered_title(track["n"], track["title"]))
+    # TPOS (numéro de disque) hérité du fichier source : live2mp3 n'a aucune
+    # notion de disque, et un TPOS hétérogène fait éclater l'album en
+    # « Disc 1 / Disc 2 » chez les clients (constaté sur Finamp, 2026-09-19).
+    tags.delall("TPOS")
+    # Titre nu (cf. manifest.numbered_title) : le numéro reste au fichier.
+    tags["TIT2"] = TIT2(encoding=3, text=track["title"])
     tags["TRCK"] = TRCK(encoding=3, text=f"{track['n']}/{total}")
     tags["TALB"] = TALB(encoding=3, text=album.get("title", ""))
     # Artiste de la piste (invité/duo) s'il diffère ; TPE2 reste l'artiste album.
@@ -95,7 +100,6 @@ def run(project_dir: str | Path) -> dict:
     total = len(m.tracks)
     cover, cover_mime = _cover_bytes(project_dir, m)
     audio_dir = project_dir / "build" / "audio"
-    video_dir = project_dir / "build" / "video"
 
     tagged = {"audio": [], "video": []}
     for track in m.tracks:
@@ -106,7 +110,7 @@ def run(project_dir: str | Path) -> dict:
             tag_mp3(mp3, track, album, total, cover, cover_mime)
             tagged["audio"].append(str(mp3))
 
-    mp4 = video_dir / video_filename(m, project_dir.name)
+    mp4 = video_dir(project_dir) / video_filename(m, project_dir.name)
     if mp4.exists():
         tag_video_full(mp4, album)
         tagged["video"].append(str(mp4))

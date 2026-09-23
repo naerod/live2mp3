@@ -238,7 +238,7 @@ def analyze(payload: AnalyzeIn,
     if suggestion is None:
         suggestion = heuristic_suggestion(video)
 
-    setlist_src = apply_setlistfm(suggestion)
+    setlist_src = apply_setlistfm(suggestion, video)
     _resolve_suggested_artist(suggestion)
     return {"video": video, "suggestion": suggestion, "ai": ai,
             "setlist_source": setlist_src}
@@ -333,7 +333,29 @@ def _resolve_suggested_artist(suggestion: dict) -> None:
             return
 
 
-def apply_setlistfm(suggestion: dict) -> dict | None:
+# Mots qui disqualifient un candidat « artiste » issu du titre de la vidéo.
+_NOT_ARTIST = re.compile(
+    r"^(?:\d{4}|live|full\s*(?:show|concert|set)|concert|festival|hd|4k|"
+    r"pro\s*shot|officiel|official)$", re.IGNORECASE)
+
+
+def artist_candidates(suggestion: dict, video: dict | None) -> list[str]:
+    """Noms d'artiste à essayer sur setlist.fm, du plus probable au moins.
+
+    L'IA confond régulièrement le festival et l'artiste quand le titre est de
+    la forme « Main Square 2026 - Twenty One Pilots » : on essaie donc aussi
+    les deux moitiés du titre de la vidéo.
+    """
+    out = [(suggestion.get("artist") or "").strip()]
+    title = (video or {}).get("title", "") or ""
+    for part in re.split(r"\s+[-–—|:]\s+", title):
+        part = _TRAIL_YEAR.sub("", part).strip(" -–—|:\"'")
+        if part and not _NOT_ARTIST.match(part) and len(part) < 60:
+            out.append(part)
+    return out
+
+
+def apply_setlistfm(suggestion: dict, video: dict | None = None) -> dict | None:
     """Complète la suggestion avec la setlist officielle du concert.
 
     L'IA lit le titre et la description de la vidéo — souvent incomplets ;
@@ -342,13 +364,30 @@ def apply_setlistfm(suggestion: dict) -> dict | None:
     lorsque des timecodes ont déjà été trouvés (chapitres de la vidéo) et que
     le nombre de titres diffère.
     """
-    artist, date = suggestion.get("artist", ""), suggestion.get("date") or ""
+    date = suggestion.get("date") or ""
+    year = None
+    if not date:
+        # Pas de date : l'année suffit à cadrer la recherche (« … 2026 »).
+        m = re.search(r"\b(19|20)\d{2}\b",
+                      f'{(video or {}).get("title", "")} '
+                      f'{suggestion.get("festival", "")} {suggestion.get("title", "")}')
+        year = int(m.group(0)) if m else None
     try:
-        sl = setlistfm.lookup(artist, date)
+        sl = setlistfm.lookup_flexible(
+            artist_candidates(suggestion, video), date,
+            venue=suggestion.get("venue", ""), city=suggestion.get("city", ""),
+            year=year)
     except setlistfm.SetlistUnavailable:
         return None
     if not sl or not sl["tracks"]:
         return None
+    # La donnée officielle corrige l'IA : nom exact de l'artiste et date réelle
+    # du concert (l'IA devine souvent une date d'édition de festival).
+    if sl.get("artist"):
+        suggestion["artist"] = sl["artist"]
+        suggestion.pop("artist_id", None)
+    if sl.get("date"):
+        suggestion["date"] = sl["date"]
 
     current = suggestion.get("tracks") or []
     has_timecodes = any(t.get("start") is not None for t in current)
@@ -385,7 +424,7 @@ def make_preview(project_dir: Path, manifest: Manifest) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run([
         "ffmpeg", "-y", "-i", str(wav),
-        "-c:a", "libmp3lame", "-b:a", "128k",
+        "-c:a", "libmp3lame", "-b:a", "64k", "-ac", "1",
         str(out),
     ], check=True, capture_output=True)
     return out

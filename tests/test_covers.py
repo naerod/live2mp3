@@ -479,7 +479,7 @@ def test_cover_change_propagates_to_media_and_jellyfin(client, monkeypatch):
     monkeypatch.setattr(albumfiles, "_write_album_cover",
                         lambda s, m: embedded.append(s) or 1)
     monkeypatch.setattr(jellyfin, "refresh_album",
-                        lambda s: refreshed.append(s) or True)
+                        lambda s, **kw: refreshed.append(s) or True)
 
     _post_cover(c, slug, USER)  # 1re gagnante -> changement réel
 
@@ -502,7 +502,7 @@ def test_per_track_album_propagates_folder_cover_only(client, monkeypatch):
                         lambda s, m: called.__setitem__("album", called["album"] + 1))
     monkeypatch.setattr(albumfiles, "_write_folder_cover",
                         lambda s, m: called.__setitem__("folder", called["folder"] + 1))
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: True)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: True)
 
     _post_cover(c, slug, USER)
 
@@ -523,7 +523,7 @@ def test_unpublished_album_does_not_touch_media(client, monkeypatch):
 
     hits = []
     monkeypatch.setattr(albumfiles, "_write_album_cover", lambda s, m: hits.append(s))
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: hits.append(s))
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: hits.append(s))
 
     _post_cover(c, slug, USER)
     assert hits == []
@@ -538,7 +538,7 @@ def test_reorder_tracks_renumbers_n(client, monkeypatch):
     (02,03,…,01). Le `n` doit refléter la position finale.
     """
     from backend import jellyfin
-    monkeypatch.setattr(jellyfin, "refresh_album", lambda s: None)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: None)
     c, root = client
     payload = {"album": {"artist": "Coldplay", "title": "Live", "date": "2026-01-01"},
                "tracks": [
@@ -563,6 +563,39 @@ def test_reorder_tracks_renumbers_n(client, monkeypatch):
     assert [(t["n"], t["title"]) for t in tracks] == [
         (1, "Third"), (2, "First"), (3, "Second")]
 
+
+# --- Image « Disc » Jellyfin ----------------------------------------------
+def test_folder_cover_also_writes_disc_image(client, monkeypatch):
+    """La pochette carrée devient aussi l'image « Disc » de Jellyfin.
+
+    Jellyfin lit `cover.jpg` (Primary) et `disc.<ext>` (Disc) dans le dossier
+    de l'album ; c'est ce qui rend la pochette « disque » automatique.
+    """
+    from backend import albumfiles, jellyfin, manifest
+    c, root = client
+    slug = _album(c)
+    audio = root / slug / "build" / "audio"
+    audio.mkdir(parents=True)
+    monkeypatch.setattr(albumfiles, "_projects_dir", lambda: root)
+    monkeypatch.setattr(jellyfin, "refresh_album", lambda s, **kw: True)
+    art = root / slug / "artwork"
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "cover.png").write_bytes(_png())
+    m = manifest.Manifest.load(root / slug / "manifest.yaml")
+    m.data.setdefault("album", {})["cover"] = "artwork/cover.png"
+    m.save()
+
+    assert albumfiles._write_folder_cover(slug, m) is True
+    assert (audio / "cover.jpg").exists()
+    assert (audio / "disc.png").exists()
+
+    # Pochette retirée → l'image « Disc » disparaît (pas d'image fantôme).
+    m.data["album"].pop("cover")
+    m.save()
+    albumfiles._write_disc_cover(slug, m)
+    assert not list(audio.glob("disc.*"))
+
+
 def test_manage_page_sees_cover_of_unpublished_album(client):
     """Régression 2026-09-10 (gazo-2025-09-07) : la page de gestion d'un album
     dépublié affichait « Aucune pochette » alors qu'une pochette existait —
@@ -578,3 +611,68 @@ def test_manage_page_sees_cover_of_unpublished_album(client):
     assert d["has_cover"] is True
     assert d["has_traycard"] is True
     assert d["has_mp3"] is True
+
+
+def test_manifest_cover_materialisee_en_ligne_covers(client):
+    """Un album dont la pochette ne vit que dans le manifest (cas des albums
+    importés dans un autre environnement : projets partagés, base sociale
+    scindée) doit exposer une VRAIE ligne `covers` à la première lecture.
+
+    Sans elle la fiche retombait sur une pseudo-pochette `id:0` : pas de
+    likes, pas de commentaires, pas d'épinglage, et le clic n'ouvrait que
+    l'agrandissement au lieu de la fiche pochette.
+    """
+    c, projects = client
+    slug = _album(c)
+    art = projects / slug / "artwork"
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "cover.png").write_bytes(_png())
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    m = Manifest.load(mpath)
+    m.data.setdefault("album", {})["cover"] = "artwork/cover.png"
+    m.save()
+
+    covers = c.get(f"/api/social/albums/{slug}/covers", headers=USER).json()["covers"]
+    assert len(covers) == 1
+    win = covers[0]
+    assert win["id"] > 0            # un vrai id → fiche pochette, likes, pin
+    assert win["auto"] is True      # un import manuel doit passer devant
+    # L'image est bien servie par le pipeline social.
+    assert c.get(f"/cover-img/{win['id']}").status_code == 200
+
+    # Idempotent : relire ne crée pas de doublon.
+    again = c.get(f"/api/social/albums/{slug}/covers", headers=USER).json()["covers"]
+    assert [x["id"] for x in again] == [win["id"]]
+
+    # Le manifest n'est PAS repointé : materialiser n'est pas changer de
+    # pochette (repointer ré-embarquerait les APIC sur le volume partagé).
+    assert Manifest.load(mpath).data["album"]["cover"] == "artwork/cover.png"
+
+    # Un import manuel passe devant la pochette auto.
+    r = c.post(f"/api/social/albums/{slug}/covers",
+               files={"cover": ("c.png", _png((0, 255, 0)), "image/png")}, headers=USER)
+    assert r.status_code == 200
+    assert r.json()["covers"][0]["auto"] is False
+
+
+def test_zip_des_visuels(client):
+    """« Tout télécharger » : un ZIP des visuels gagnants, construit sur disque."""
+    c, projects = client
+    slug = _album(c)
+    c.post(f"/api/social/albums/{slug}/covers",
+           files={"cover": ("c.png", _png(), "image/png")}, headers=USER)
+    c.post(f"/api/social/albums/{slug}/images/banner",
+           files={"cover": ("b.png", _png((0, 0, 255)), "image/png")}, headers=USER)
+
+    r = c.get(f"/download/{slug}/artwork", headers=USER)
+    assert r.status_code == 200
+    names = sorted(zipfile.ZipFile(io.BytesIO(r.content)).namelist())
+    assert names == [f"{slug}-banner.png", f"{slug}-cover.png"]
+
+    # Sans aucun visuel : 404 plutôt qu'une archive vide.
+    other = _album(c, artist="B", title="Vide", date="2026-02-02")
+    assert c.get(f"/download/{other}/artwork", headers=USER).status_code == 404
+
+    # Anonyme : refusé comme les autres téléchargements.
+    assert c.get(f"/download/{slug}/artwork").status_code in (401, 403)

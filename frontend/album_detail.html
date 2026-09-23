@@ -166,33 +166,97 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-  .vm-box{max-width:860px;width:94%}
-  .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 14px}
-  .vm-dl-row{margin-bottom:16px}
+  .cm-box.vm-box{max-width:980px;width:96%;--vm-band:150px}
+  .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding-right:40px}
+  /* Lecteur : gros mais borné, jamais plein écran. */
+  .vm-player{max-width:720px;margin:0 auto;border-radius:12px;overflow:hidden;
+    background:#000;border:1px solid var(--border)}
+  .vm-player video{display:block;width:100%;aspect-ratio:16/9;background:#000}
+  .vm-player-err{display:flex;text-decoration:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    aspect-ratio:16/9;color:var(--muted);font-size:13px;text-align:center;padding:16px}
+  .vm-dl-row{display:flex;justify-content:flex-end;margin:14px auto 22px;max-width:720px}
   .vm-dl-mp4{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;
     background:var(--accent);color:#fff;font-weight:600;text-decoration:none}
-  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-  .vm-slot{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--card)}
-  .vm-slot-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+  .vm-sec-h{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;
+    margin:0 0 4px;padding-top:16px;border-top:1px solid var(--border)}
+  /* Action secondaire de la section, alignée à droite du titre (l'espace y
+     était vide). Reset margin/padding : app.css touche tous les `button`. */
+  .vm-dl-all{margin:0 0 0 auto;padding:8px 14px;border-radius:10px;font:inherit;font-size:13px;
+    font-weight:600;display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg)}
+  .vm-dl-all:hover{border-color:var(--accent);color:var(--accent)}
+  .vm-dl-all .material-symbols-outlined{font-size:18px}
+  .vm-sec-h .material-symbols-outlined{font-size:18px}
+  .vm-sec-sub{color:var(--muted);font-size:12px;margin:0 0 14px;max-width:70ch}
+  .vm-slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+  /* Carte en colonne : la barre d'actions est poussée en bas (margin-top:auto),
+     donc toutes les cartes ont leurs boutons sur la même ligne quelle que soit
+     la forme du visuel. */
+  /* La carte n'est plus qu'un aperçu cliquable : toutes les actions (télécharger,
+     importer, épingler, supprimer) sont dans la fiche du visuel. `button` pour
+     avoir le clavier et le focus sans les réimplémenter — d'où le reset
+     margin/padding/font (app.css style tous les `button`). */
+  /* ⚠️ La feuille de style du navigateur pose `align-items:center` sur tout
+     `button` : sans `stretch`, les enfants se réduisent à leur contenu et un
+     emplacement vide s'effondrait à quelques pixels de large. */
+  .vm-slot{display:flex;flex-direction:column;align-items:stretch;
+    width:100%;margin:0;padding:12px;
+    font:inherit;text-align:left;cursor:pointer;
+    border:1px solid var(--border);border-radius:12px;background:var(--card);
+    transition:border-color .15s,background .15s}
+  .vm-slot:hover{border-color:var(--accent)}
+  .vm-slot-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:13px;min-height:22px}
+  .vm-ratio{font-family:"Google Sans Code",monospace;font-size:11px;color:var(--muted)}
   .vm-auto{display:inline-flex;align-items:center;gap:3px;color:var(--muted);font-size:11px}
   .vm-auto .material-symbols-outlined{font-size:13px}
   .vm-count{margin-left:auto;color:var(--muted);font-size:11px}
-  .vm-slot-art{position:relative;border-radius:8px;overflow:hidden;background:var(--border);
+  /* Bande de hauteur FIXE (cartes de hauteur égale) dans laquelle la scène
+     prend EXACTEMENT le ratio du visuel : pas de bandes noires autour d'une
+     pochette 1:1 ou d'une miniature 16:9, et la bannière reste une bannière. */
+  .vm-stage-wrap{height:var(--vm-band);display:flex;align-items:center;justify-content:center}
+  /* La largeur est bornée par `min(100%, bande × ratio)` (posée en ligne) :
+     `aspect-ratio` seul ne sait pas se contraindre sur les DEUX axes — avec
+     `width:100%` il débordait en hauteur, avec `height:100%` en largeur. */
+  .vm-stage{position:relative;
+    border-radius:8px;overflow:hidden;background:var(--bg);border:1px dashed var(--border);
     display:flex;align-items:center;justify-content:center}
-  .vm-slot-art img{width:100%;height:100%;object-fit:cover;display:block}
-  .vm-slot-ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:11px;padding:12px;text-align:center}
-  .vm-slot-ph .material-symbols-outlined{font-size:28px}
-  .vm-slot-imp{position:absolute;inset:0;border:0;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:0;transition:opacity .15s;font-size:12px}
-  .vm-slot-art:hover .vm-slot-imp{opacity:1}
-  .vm-slot-imp .material-symbols-outlined{font-size:26px}
-  .vm-slot-actions{display:flex;gap:6px;margin-top:8px}
-  .vm-act{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;
-    border:1px solid var(--border);background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none}
+  .vm-stage.filled{border-style:solid;border-color:var(--border)}
+  .vm-stage img{width:100%;height:100%;object-fit:cover;display:block}
+  .vm-slot-ph{position:absolute;inset:0;margin:0;padding:0 8px;border:0;background:transparent;
+    color:var(--muted);display:flex;align-items:center;justify-content:center;gap:6px;
+    font:inherit;font-size:11px;text-align:center}
+  .vm-slot:hover .vm-slot-ph{color:var(--accent)}
+  .vm-slot-ph .material-symbols-outlined{font-size:24px}
+  /* Fiche d'un visuel : aperçu en grand + toutes ses actions. */
+  .vs{z-index:70}
+  .cm-box.vs-box{max-width:620px;width:94%}
+  .vs-frame{position:relative;margin:0 auto;border-radius:12px;overflow:hidden;
+    border:1px solid var(--border);background:var(--bg);
+    display:flex;align-items:center;justify-content:center}
+  .vs-frame.empty{border-style:dashed}
+  .vs-frame img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+  .vs-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px}
+  /* L'action destructive n'est jamais collée à l'action principale (règle DA). */
+  .vs-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .vs-note{color:var(--muted);font-size:12px;margin:12px 0 0;max-width:70ch}
+  /* app.css donne margin-top:16px et padding:11px 16px à `button` : sans ce
+     reset, les <button> de la barre se posaient 8 px plus bas que le <a>. */
+  /* app.css donne margin-top:16px à tout `button` : reset systématique. */
+  .vm-act{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    height:38px;margin:0;padding:0 14px;box-sizing:border-box;border-radius:10px;
+    border:1px solid var(--border);background:var(--bg);color:var(--fg);
+    font:inherit;font-size:13px;cursor:pointer;text-decoration:none}
   .vm-act:hover{border-color:var(--accent);color:var(--accent)}
   .vm-act.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .vm-act.danger:hover{border-color:var(--like);color:var(--like)}
   .vm-act .material-symbols-outlined{font-size:18px}
+  .vm-act.danger{color:var(--like)}
+  .vm-hint{margin-left:auto;color:var(--muted);font-size:11px}
+  @media(max-width:640px){
+    .vm-slots{grid-template-columns:1fr}
+    .vm-dl-row{justify-content:stretch}
+    .vm-dl-mp4{flex:1;justify-content:center}
+  }
   .cr-tray-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
     padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
     color:var(--muted);cursor:pointer;font-family:inherit;
@@ -219,10 +283,6 @@
   .tcv2-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;align-items:center;justify-content:center}
   .tcv2-overlay.open{display:flex}
   /* Footer version */
-  .site-foot{margin:40px 0 18px;text-align:center;color:var(--muted);font-size:12px}
-  .site-foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
-    border:1px solid var(--border);border-radius:999px;background:var(--card)}
-  .site-foot .env-preprod{color:var(--run,#f59e0b);border-color:var(--run,#f59e0b)}
   .tcv2-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:14px;position:relative}
   .tcv2-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
   .tcv2-close .material-symbols-outlined{font-size:20px}
@@ -249,8 +309,32 @@
   .cm-close{position:absolute;top:12px;right:12px;z-index:2}
   .cm-top{display:grid;grid-template-columns:260px 1fr;gap:22px;align-items:start}
   @media(max-width:640px){.cm-top{grid-template-columns:1fr}}
-  .cm-art{display:flex;flex-direction:column;gap:10px}
-  .cm-art img{width:100%;border-radius:12px;border:1px solid var(--border);display:block;cursor:zoom-in}
+  .cm-art{display:flex;flex-direction:column;gap:16px}
+  .cm-slot{display:flex;flex-direction:column;gap:6px}
+  .cm-frame{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+  .cm-frame img{width:100%;display:block;cursor:zoom-in}
+  /* Emplacement tray card vide : toujours présent, au format d'un inlay de
+     boîtier CD (150×118 mm), et actionnable — c'est lui qui porte l'ajout,
+     il n'y a donc plus de bouton « Ajouter une tray card » dans la barre. */
+  .cm-frame.empty{border-style:dashed;aspect-ratio:150/118;background:var(--bg);
+    display:flex;align-items:center;justify-content:center}
+  /* app.css donne margin-top:16px et padding:11px à `button` : sans reset,
+     un bouton qui remplit un cadre en sort. */
+  .cm-empty,.cm-frame-act{margin:0;padding:0;border:0;font:inherit;background:transparent;
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .cm-empty{position:absolute;inset:0;flex-direction:column;color:var(--muted);
+    font-size:12px;text-align:center;cursor:pointer;transition:color .15s,background .15s}
+  .cm-empty:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+  .cm-empty .material-symbols-outlined{font-size:28px}
+  .cm-ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:6px;color:var(--muted);font-size:12px;text-align:center}
+  .cm-ph .material-symbols-outlined{font-size:28px}
+  /* Remplacer une tray card existante : overlay au survol du cadre. */
+  .cm-frame-act{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:8px 0;
+    background:linear-gradient(transparent,rgba(6,7,10,.85));color:#fff;font-size:12px;
+    font-weight:600;cursor:pointer;opacity:0;transition:opacity .15s}
+  .cm-frame:hover .cm-frame-act,.cm-frame-act:focus-visible{opacity:1}
+  .cm-frame-act .material-symbols-outlined{font-size:18px}
   /* Lightbox pour agrandir cover/traycard dans la modale */
   .lbx-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:2000;display:none;
     align-items:center;justify-content:center}
@@ -261,10 +345,9 @@
   .lbx-close{position:fixed;top:14px;right:14px;all:unset;cursor:pointer;padding:6px;
     border-radius:50%;background:rgba(255,255,255,.12);display:flex;z-index:2001}
   .lbx-close .material-symbols-outlined{font-size:28px;color:#fff}
-  .cm-art .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+  .cm-slot .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
     color:var(--muted);font-weight:700}
-  .cm-tray-embed{width:100%;height:200px;border-radius:12px;border:1px solid var(--border);
-    background:var(--bg)}
+  .cm-tray-embed{width:100%;height:200px;border:0;display:block;background:var(--bg)}
   .cm-caption{color:var(--fg);font-size:14px;margin:10px 0 0;line-height:1.45}
   .cm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
   .cm-comments{margin-top:22px;border-top:1px solid var(--border);padding-top:6px}
@@ -347,6 +430,15 @@
   <div class="cm-box vm-box">
     <button class="icon-btn icon-only cm-close" id="vm-close"><span class="material-symbols-outlined">close</span></button>
     <div id="vm-body"></div>
+  </div>
+</div>
+<!-- Fiche d'un visuel Jellyfin : aperçu en grand + ses actions (télécharger,
+     importer/remplacer, épingler, supprimer). S'ouvre PAR-DESSUS la fenêtre
+     « Vidéo du concert », qui reste en place derrière. -->
+<div id="vs" class="cm vs hidden">
+  <div class="cm-box vs-box">
+    <button class="icon-btn icon-only cm-close" id="vs-close"><span class="material-symbols-outlined">close</span></button>
+    <div id="vs-body"></div>
   </div>
 </div>
 <input type="file" id="vm-file" accept="image/jpeg,image/png,image/webp" style="display:none">
@@ -551,7 +643,7 @@ function renderAlbum(d){
       const tc=tcMap[tr.n];
       const canView=!!tc;
       const inner=tc
-        ?`<img class="tc-thumb" src="${tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
+        ?`<img class="tc-thumb" src="${tc.cover_thumb||tc.cover_url}" alt="${L2M.esc(tr.title)}" loading="lazy">`
         :`<span class="tc-thumb-ph"><span class="material-symbols-outlined">image</span></span>`;
       const hint=canView?`<div class="tc-view-hint"><span class="material-symbols-outlined">zoom_in</span></div>`:'';
       return `<li class="has-tc"><div class="tc-slot-wrap${canView?' can-view':''}" data-n="${tr.n}">${inner}${hint}</div><span class="n">${String(tr.n).padStart(2,'0')}</span><span class="tt">${L2M.esc(tr.title)}</span>${dl}</li>`;
@@ -711,6 +803,13 @@ async function initSocialActions(){
 // parcourent aussi bien les faces d'une pochette que les pochettes entre elles.
 let COVERS=[], SLIDES=[], IDX=0, COVER_AUTO=false;
 
+// Le badge « épinglée » n'a de sens qu'en concurrence : avec une seule
+// pochette, la gagnante est la seule candidate. L'afficher créait un écart
+// visuel arbitraire entre deux albums identiques, selon que la pochette était
+// venue de l'outil de gestion (pinned=1 d'office) ou du carrousel (pinned=0).
+// Le bouton Épingler/Désépingler, lui, reste toujours disponible.
+function showPinBadge(c){return !!(c&&c.pinned&&COVERS.length>1);}
+
 function buildSlides(){
   SLIDES=[];
   for(const c of COVERS){
@@ -736,7 +835,9 @@ async function loadCovers(hasCoverFallback,coverV){
     // v=cover_v : refetch immédiat après remplacement de la pochette par un
     // gestionnaire (sinon on garde l'ancienne image en cache disque navigateur).
     const v=coverV||0;
-    COVERS=[{id:0,cover_url:`/cover/${slug}?v=${v}`,has_traycard:false,
+    COVERS=[{id:0,cover_url:`/cover/${slug}?v=${v}`,
+             cover_thumb:`/cover/${slug}?v=${v}&w=320`,
+             cover_medium:`/cover/${slug}?v=${v}&w=640`,has_traycard:false,
              username:null,display_name:null,avatar:null,pinned:false,liked:false,likes:0}];
   }
   buildSlides();
@@ -764,7 +865,7 @@ function footerHtml(c,kind){
 // entier (contain) au lieu de la rogner comme une pochette.
 function faceHtml(c,kind){
   if(!c)return GENERIC_COVER;
-  if(kind!=='traycard')return `<img src="${c.cover_url}" alt="">`;
+  if(kind!=='traycard')return `<img src="${c.cover_medium||c.cover_url}" alt="">`;
   return c.traycard_kind==='pdf'
     ? `<iframe class="cr-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
     : `<img class="cr-fit" src="${c.traycard_url}" alt="${t('cv_tray')}">`;
@@ -783,7 +884,7 @@ function renderCarousel(){
   col.innerHTML=`
     <div class="cr">
       <div class="al-cover${kind==='traycard'?' is-tray':''}" id="cr-art">${faceHtml(c,kind)}</div>
-      ${c&&c.pinned&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
+      ${showPinBadge(c)&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
       ${multi?`<span class="cr-count">${IDX+1}/${SLIDES.length}</span>
         <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
         <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
@@ -836,72 +937,217 @@ async function toggleCoverLike(id){
 // Réutilise les endpoints /images/{kind} (mêmes tri auto / épinglage / suppression
 // que les covers). 3 types au niveau album : miniature, bannière, poster.
 const VLANG={
-  fr:{video_h:"Vidéo du concert",video_open:"Ouvrir la vidéo",
-      video_sub:"Concert complet + visuels Jellyfin (bannière, poster, miniature).",
-      dl_mp4:"Télécharger la vidéo (MP4)",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
-      imp:"Importer",impn:"Importer une image",dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",del:"Supprimer",
-      empty:"Aucune image — importez-en une",auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?"},
-  en:{video_h:"Concert video",video_open:"Open video",
-      video_sub:"Full concert + Jellyfin artwork (banner, poster, thumbnail).",
-      dl_mp4:"Download video (MP4)",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
-      imp:"Import",impn:"Import an image",dl:"Download",pin:"Pin",unpin:"Unpin",del:"Delete",
-      empty:"No image — import one",auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?"}
+  fr:{video_h:"Vidéo du concert",video_open:"Lire le concert",
+      video_sub:"Concert complet + visuels Jellyfin (pochette, miniature, bannière, poster).",
+      dl_mp4:"Télécharger la vidéo (MP4)",
+      k_cover:"Pochette",k_banner:"Bannière",k_poster:"Poster",k_thumbnail:"Miniature",
+      art_h:"Visuels Jellyfin",dl_all:"Tout télécharger",
+      dl_all_t:"Télécharger les visuels en ZIP (pochette, miniature, bannière, poster)",
+      art_sub:"Images utilisées par Jellyfin pour ce concert. Cliquez un visuel pour l'agrandir et le gérer.",
+      imp:"Importer",impn:"Importer une image",repl:"Remplacer l'image",
+      open_slot:n=>`Ouvrir ${n.toLowerCase()}`,dl:"Télécharger",pin:"Épingler",unpin:"Désépingler",
+      del:"Supprimer",zoom:"Agrandir",
+      empty:"Aucune image — importez-en une",empty_ro:"Aucune image",
+      cover_note:"Gérée dans le carrousel des pochettes de la fiche.",cover_hint:"Carrousel",
+      auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?",
+      noplay:"Lecture impossible dans ce navigateur. Téléchargez le fichier MP4.",
+      lockplay:"Connectez-vous pour regarder le concert"},
+  en:{video_h:"Concert video",video_open:"Play the concert",
+      video_sub:"Full concert + Jellyfin artwork (cover, thumbnail, banner, poster).",
+      dl_mp4:"Download video (MP4)",
+      k_cover:"Cover",k_banner:"Banner",k_poster:"Poster",k_thumbnail:"Thumbnail",
+      art_h:"Jellyfin artwork",dl_all:"Download all",
+      dl_all_t:"Download the artwork as a ZIP (cover, thumbnail, banner, poster)",
+      art_sub:"Images Jellyfin uses for this concert. Click one to enlarge and manage it.",
+      imp:"Import",impn:"Import an image",repl:"Replace image",
+      open_slot:n=>`Open ${n.toLowerCase()}`,dl:"Download",pin:"Pin",unpin:"Unpin",
+      del:"Delete",zoom:"Enlarge",
+      empty:"No image — import one",empty_ro:"No image",
+      cover_note:"Managed in the cover carousel on this page.",cover_hint:"Carousel",
+      auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?",
+      noplay:"Playback unsupported in this browser. Download the MP4 file instead.",
+      lockplay:"Log in to watch the concert"}
 };
 function VT(k){const l=(L2M.getLang?L2M.getLang():'fr');const d=VLANG[l]||VLANG.fr;return d[k]!==undefined?d[k]:VLANG.fr[k];}
-const VM_KINDS=['thumbnail','banner','poster'];
-const VM_ASPECT={thumbnail:'16/9',banner:'1000/185',poster:'2/3'};
+// `cover` (1:1) est en lecture seule ici : elle vit dans le carrousel de la fiche.
+// Les 3 autres sont les visuels Jellyfin gérés par /images/{kind}.
+const VM_KINDS=['cover','thumbnail','banner','poster'];
+const VM_IMG_KINDS=['thumbnail','banner','poster'];
+const VM_RATIO={cover:'1:1',thumbnail:'16:9',banner:'1000×185',poster:'2:3'};
+// Ratio numérique de la scène : elle prend la forme exacte du visuel attendu.
+// Au-delà de 3 (bannière), la scène est trop basse pour un libellé → icône seule.
+const VM_AR={cover:1,thumbnail:16/9,banner:1000/185,poster:2/3};
 let VM_DATA={},VM_UP_KIND=null;
 
 async function initVideo(d){
   const th=document.getElementById('vid-thumb');
   if(!th)return;
-  th.onclick=()=>openVideoModal();
+  th.onclick=()=>openVideoModal({play:true});
+  th.setAttribute('role','button');th.setAttribute('tabindex','0');
+  th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openVideoModal({play:true});}};
   try{const r=await fetch(`/api/social/albums/${slug}/images/thumbnail`).then(r=>r.json());
-    const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_url})`;}catch(e){}
+    const w=(r.covers||[])[0];if(w)th.style.backgroundImage=`url(${w.cover_thumb||w.cover_url})`;}catch(e){}
 }
 const vm=document.getElementById('vm');
 document.getElementById('vm-close').onclick=()=>closeVm();
 vm.onclick=e=>{if(e.target===vm)closeVm();};
-function closeVm(){vm.classList.remove('show');setTimeout(()=>vm.classList.add('hidden'),180);}
-async function openVideoModal(){await loadVmImages();paintVm();vm.classList.remove('hidden');requestAnimationFrame(()=>vm.classList.add('show'));}
-async function loadVmImages(){await Promise.all(VM_KINDS.map(async k=>{
+function closeVm(){
+  // Couper le flux : sans ça le MP4 continue de se télécharger en fond.
+  const v=document.getElementById('vm-video');
+  if(v){v.pause();v.removeAttribute('src');v.load();}
+  vm.classList.remove('show');setTimeout(()=>vm.classList.add('hidden'),180);
+}
+async function openVideoModal(opt){
+  await loadVmImages();paintVm(opt&&opt.play);
+  vm.classList.remove('hidden');requestAnimationFrame(()=>vm.classList.add('show'));
+}
+async function loadVmImages(){await Promise.all(VM_IMG_KINDS.map(async k=>{
   try{VM_DATA[k]=(await fetch(`/api/social/albums/${slug}/images/${k}`).then(r=>r.json())).covers||[];}catch(e){VM_DATA[k]=[];}}));}
+
+// Emplacement « pochette » : réutilise la gagnante du carrousel (COVERS[0]),
+// en lecture seule — un seul endroit gère les pochettes.
+function vmCoverWinner(){
+  const c=(COVERS||[])[0];
+  if(!c)return null;
+  return {id:c.id,cover_url:c.cover_url,cover_medium:c.cover_medium||c.cover_url,
+          dl:c.id?`/download/cover/${c.id}`:`/download/${slug}/cover`};
+}
+
 function vmSlotHtml(kind){
-  const list=VM_DATA[kind]||[],win=list[0]||null,g=ME.is_gestionnaire;
-  const img=win?`<img src="${win.cover_url}" alt="">`:`<span class="vm-slot-ph"><span class="material-symbols-outlined">image</span><span>${VT('empty')}</span></span>`;
-  const imp=ME.authenticated?`<button class="vm-slot-imp" data-imp="${kind}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${VT('imp')}</span></button>`:'';
-  const dl=win?`<a class="vm-act" href="/download/cover/${win.id}" title="${VT('dl')}"><span class="material-symbols-outlined">download</span></a>`:'';
-  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" data-pin="${win.id}" title="${win.pinned?VT('unpin'):VT('pin')}"><span class="material-symbols-outlined">push_pin</span></button>`:'';
-  const del=(win&&g)?`<button class="vm-act danger" data-del="${win.id}" title="${VT('del')}"><span class="material-symbols-outlined">delete</span></button>`:'';
-  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined">auto_awesome</span>${VT('auto')}</span>`:'';
+  const ro=(kind==='cover');
+  const list=ro?[]:(VM_DATA[kind]||[]);
+  const win=ro?vmCoverWinner():(list[0]||null);
+
+  const flat=VM_AR[kind]>3;  // bannière : pas la place d'un libellé
+  const stage=win
+    ?`<img src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}" loading="lazy" decoding="async">`
+    :`<span class="vm-slot-ph">
+        <span class="material-symbols-outlined" aria-hidden="true">${(!ro&&ME.authenticated)?'add_photo_alternate':'image'}</span>${
+        flat?'':`<span>${(!ro&&ME.authenticated)?VT('imp'):VT('empty_ro')}</span>`}</span>`;
+
+  const note=ro?`<span class="vm-hint" title="${VT('cover_note')}">${VT('cover_hint')}</span>`:'';
+  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
   const cnt=list.length>1?`<span class="vm-count">${VT('count')(list.length)}</span>`:'';
-  return `<div class="vm-slot"><div class="vm-slot-head"><b>${VT('k_'+kind)}</b>${badge}${cnt}</div>
-    <div class="vm-slot-art" style="aspect-ratio:${VM_ASPECT[kind]}">${img}${imp}</div>
-    <div class="vm-slot-actions">${dl}${pin}${del}</div></div>`;
+
+  return `<button class="vm-slot" data-slot="${kind}" title="${VT('open_slot')(VT('k_'+kind))}">
+    <div class="vm-slot-head"><b>${VT('k_'+kind)}</b><span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}${note}${cnt}</div>
+    <div class="vm-stage-wrap"><div class="vm-stage${win?' filled':''}"
+      style="aspect-ratio:${VM_AR[kind]};width:min(100%,calc(var(--vm-band) * ${VM_AR[kind]}))">${stage}</div></div>
+  </button>`;
 }
-function paintVm(){
+
+// « Tout télécharger » n'apparaît que s'il y a au moins un visuel à mettre dans
+// le ZIP : un bouton qui renverrait un 404 n'a rien à faire là.
+function vmSecHeadHtml(){
+  const anyArt=!!vmCoverWinner()||VM_IMG_KINDS.some(k=>(VM_DATA[k]||[]).length);
+  const dlAll=(ME.authenticated&&anyArt)
+    ?`<a class="vm-dl-all" href="/download/${slug}/artwork" title="${VT('dl_all_t')}">
+        <span class="material-symbols-outlined" aria-hidden="true">folder_zip</span>${VT('dl_all')}</a>`
+    :'';
+  return `<span class="material-symbols-outlined" aria-hidden="true">photo_library</span> ${VT('art_h')}${dlAll}`;
+}
+
+function paintVm(autoplay){
+  const thumb=(VM_DATA.thumbnail||[])[0];
+  const poster=thumb?(thumb.cover_medium||thumb.cover_url):'';
+  const player=ME.authenticated
+    ?`<div class="vm-player"><video id="vm-video" controls preload="metadata" playsinline
+         ${poster?`poster="${poster}"`:''} src="/download/${slug}/video/stream">
+         <p class="vm-player-err">${VT('noplay')}</p></video></div>`
+    :`<div class="vm-player"><a class="vm-player-err" href="${L2M.loginUrl()}">
+         <span class="material-symbols-outlined" aria-hidden="true">lock</span>${VT('lockplay')}</a></div>`;
   const dlBtn=ME.authenticated
-    ?`<a class="vm-dl-mp4" href="/download/${slug}/video"><span class="material-symbols-outlined">movie</span> ${VT('dl_mp4')}</a>`
-    :`<span class="lock-inline"><span class="material-symbols-outlined">lock</span>${t('lockdl')}</span>`;
+    ?`<a class="vm-dl-mp4" href="/download/${slug}/video"><span class="material-symbols-outlined" aria-hidden="true">download</span> ${VT('dl_mp4')}</a>`
+    :`<span class="lock-inline"><span class="material-symbols-outlined" aria-hidden="true">lock</span>${t('lockdl')}</span>`;
   document.getElementById('vm-body').innerHTML=`
-    <h3 class="vm-title"><span class="material-symbols-outlined">movie</span> ${VT('video_h')}</h3>
+    <h3 class="vm-title"><span class="material-symbols-outlined" aria-hidden="true">movie</span> ${VT('video_h')}</h3>
+    ${player}
     <div class="vm-dl-row">${dlBtn}</div>
+    <h4 class="vm-sec-h" id="vm-sec-h">${vmSecHeadHtml()}</h4>
+    <p class="vm-sec-sub">${VT('art_sub')}</p>
     <div class="vm-slots">${VM_KINDS.map(vmSlotHtml).join('')}</div>`;
-  document.querySelectorAll('#vm-body [data-imp]').forEach(b=>b.onclick=()=>{VM_UP_KIND=b.dataset.imp;document.getElementById('vm-file').click();});
-  document.querySelectorAll('#vm-body [data-pin]').forEach(b=>b.onclick=()=>vmPin(b.dataset.pin));
-  document.querySelectorAll('#vm-body [data-del]').forEach(b=>b.onclick=()=>vmDel(b.dataset.del));
-  document.querySelectorAll('#vm-body .vm-slot-art img').forEach(im=>{im.style.cursor='zoom-in';im.onclick=()=>openLbx('image',im.src);});
+  vmBindSlots();
+  if(autoplay){const v=document.getElementById('vm-video');if(v)v.play().catch(()=>{});}
 }
+function vmBindSlots(){
+  document.querySelectorAll('#vm-body [data-slot]').forEach(b=>b.onclick=()=>openVsSheet(b.dataset.slot));
+}
+// ── Fiche d'un visuel (par-dessus la fenêtre vidéo) ───────────────────────
+const vs=document.getElementById('vs');
+let VS_KIND=null;
+document.getElementById('vs-close').onclick=()=>closeVs();
+vs.onclick=e=>{if(e.target===vs)closeVs();};
+function closeVs(){VS_KIND=null;vs.classList.remove('show');setTimeout(()=>vs.classList.add('hidden'),180);}
+function openVsSheet(kind){
+  VS_KIND=kind;paintVs();
+  vs.classList.remove('hidden');requestAnimationFrame(()=>vs.classList.add('show'));
+}
+function paintVs(){
+  const kind=VS_KIND;if(!kind)return;
+  const ro=(kind==='cover');
+  const list=ro?[]:(VM_DATA[kind]||[]);
+  const win=ro?vmCoverWinner():(list[0]||null);
+  const g=ME.is_gestionnaire&&!ro;
+  const ar=VM_AR[kind];
+  // Cadre au ratio du visuel, borné pour ne pas sortir de la fiche.
+  const frame=`width:min(100%,calc(46vh * ${ar}));aspect-ratio:${ar}`;
+  const inner=win
+    ?`<img id="vs-img" src="${win.cover_medium||win.cover_url}" alt="${VT('k_'+kind)}">`
+    :`<span class="vm-slot-ph" style="position:absolute;inset:0">
+        <span class="material-symbols-outlined" aria-hidden="true">image</span>
+        <span>${(!ro&&ME.authenticated)?VT('empty'):VT('empty_ro')}</span></span>`;
+
+  const dl=(win&&ME.authenticated)
+    ?`<a class="vm-act" href="${ro?win.dl:`/download/cover/${win.id}`}">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>${VT('dl')}</a>`:'';
+  const imp=(!ro&&ME.authenticated)
+    ?`<button class="vm-act" id="vs-imp">
+        <span class="material-symbols-outlined" aria-hidden="true">add_photo_alternate</span>${win?VT('repl'):VT('impn')}</button>`:'';
+  const pin=(win&&g)?`<button class="vm-act${win.pinned?' on':''}" id="vs-pin">
+        <span class="material-symbols-outlined" aria-hidden="true">push_pin</span>${win.pinned?VT('unpin'):VT('pin')}</button>`:'';
+  const del=(win&&g)?`<button class="vm-act danger" id="vs-del">
+        <span class="material-symbols-outlined" aria-hidden="true">delete</span>${VT('del')}</button>`:'';
+  const badge=(win&&win.auto)?`<span class="vm-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${VT('auto')}</span>`:'';
+
+  document.getElementById('vs-body').innerHTML=`
+    <h3 class="vm-title"><span class="material-symbols-outlined" aria-hidden="true">image</span>
+      ${VT('k_'+kind)}<span class="vm-ratio">${VM_RATIO[kind]}</span>${badge}</h3>
+    <div class="vs-frame${win?'':' empty'}" style="${frame}">${inner}</div>
+    <div class="vs-actions">${dl}${imp}<span class="vs-right">${pin}${del}</span></div>
+    ${ro?`<p class="vs-note">${VT('cover_note')}</p>`:''}`;
+
+  const img=document.getElementById('vs-img');
+  if(img)img.onclick=()=>openLbx('image',win.cover_url||win.cover_medium);
+  const bi=document.getElementById('vs-imp');
+  if(bi)bi.onclick=()=>{VM_UP_KIND=kind;document.getElementById('vm-file').click();};
+  const bp=document.getElementById('vs-pin');
+  if(bp)bp.onclick=()=>vmPin(win.id);
+  const bd=document.getElementById('vs-del');
+  if(bd)bd.onclick=()=>vmDel(win.id);
+}
+
 document.getElementById('vm-file').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f||!VM_UP_KIND)return;
   const fd=new FormData();fd.append('cover',f);
   try{const r=await fetch(`/api/social/albums/${slug}/images/${VM_UP_KIND}`,{method:'POST',body:fd});
-    if(r.ok){VM_DATA[VM_UP_KIND]=(await r.json()).covers||[];paintVm();vmSyncThumb();}
+    if(r.ok){VM_DATA[VM_UP_KIND]=(await r.json()).covers||[];vmRepaintKeepPlayback();vmSyncThumb();}
     else alert('Erreur ('+r.status+')');}catch(e){alert('Erreur réseau');}
 };
-async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
-async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();paintVm();vmSyncThumb();}catch(e){}}
-function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_url})`:'';}
+async function vmPin(id){try{await fetch(`/api/social/covers/${id}/pin`,{method:'POST'});await loadVmImages();vmRepaintKeepPlayback();vmSyncThumb();}catch(e){}}
+async function vmDel(id){if(!confirm(VT('confirm_del')))return;try{await fetch(`/api/social/covers/${id}`,{method:'DELETE'});await loadVmImages();vmRepaintKeepPlayback();vmSyncThumb();}catch(e){}}
+// Gérer un visuel ne doit pas interrompre la lecture : on ne redessine que la
+// grille de visuels, jamais le <video> (le recréer relancerait le buffering).
+function vmRepaintKeepPlayback(){
+  if(VS_KIND)paintVs();
+  const grid=document.querySelector('#vm-body .vm-slots');
+  if(!grid){paintVm(false);return;}
+  grid.innerHTML=VM_KINDS.map(vmSlotHtml).join('');
+  // Le premier visuel importé fait apparaître « Tout télécharger ».
+  const head=document.getElementById('vm-sec-h');
+  if(head)head.innerHTML=vmSecHeadHtml();
+  vmBindSlots();
+}
+function vmSyncThumb(){const th=document.getElementById('vid-thumb');if(!th)return;const w=(VM_DATA.thumbnail||[])[0];th.style.backgroundImage=w?`url(${w.cover_thumb||w.cover_url})`:'';}
 
 // ── Modale d'une pochette ────────────────────────────────────────────────
 const cm=document.getElementById('cm');
@@ -923,24 +1169,45 @@ function openCoverModal(id){
 function paintModal(id){
   const c=COVERS.find(x=>x.id===id);
   if(!c)return;
-  const mine=ME.authenticated&&(c.username===ME.username||ME.is_gestionnaire);
-  const tray=c.has_traycard
-    ?`<div class="lbl">${t('cv_tray')}</div>${
-        c.traycard_kind==='pdf'
-          ?`<iframe class="cm-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
-          :`<img src="${c.traycard_url}" alt="${t('cv_tray')}">`}`
-    :`<div class="lbl" style="opacity:.5">${t('cv_no_tray')}</div>`;
+  // Une pochette « auto » (reprise du manifest) n'a pas d'auteur : elle est
+  // créditée comme telle, et n'est pas supprimable — elle serait recréée à la
+  // lecture suivante. Pour s'en débarrasser on en propose une vraie, qui passe
+  // devant (auto=0 gagne toujours).
+  const mine=ME.authenticated&&!c.auto&&(c.username===ME.username||ME.is_gestionnaire);
+  // La tray card a TOUJOURS son emplacement, même vide : c'est lui qui porte
+  // l'ajout (plus de bouton « Ajouter une tray card » dans la barre d'actions).
+  const trayInner=c.has_traycard
+    ?(c.traycard_kind==='pdf'
+        ?`<iframe class="cm-tray-embed" src="${c.traycard_url}" title="${t('cv_tray')}"></iframe>`
+        :`<img id="cm-tray-img" src="${c.traycard_url}" alt="${t('cv_tray')}">`)
+      +(mine?`<button class="cm-frame-act" id="cm-tray-rep">
+          <span class="material-symbols-outlined" aria-hidden="true">note_add</span>${t('cv_replace_tray')}</button>`:'')
+    :(mine
+        ?`<button class="cm-empty" id="cm-tray-add">
+            <span class="material-symbols-outlined" aria-hidden="true">note_add</span>
+            <span>${t('cv_add_tray')}</span></button>`
+        :`<span class="cm-ph"><span class="material-symbols-outlined" aria-hidden="true">description</span>
+            <span>${t('cv_no_tray')}</span></span>`);
+  const tray=`<div class="cm-slot">
+      <div class="lbl">${t('cv_tray')}</div>
+      <div class="cm-frame${c.has_traycard?'':' empty'}" id="cm-tray-frame">${trayInner}</div>
+    </div>`;
 
   document.getElementById('cm-body').innerHTML=`
     <div class="cm-top">
       <div class="cm-art">
-        <img src="${c.cover_url}" alt="">
+        <div class="cm-slot">
+          <div class="lbl">${t('cv_cover')}</div>
+          <div class="cm-frame"><img id="cm-cover-img" src="${c.cover_thumb||c.cover_url}"
+            alt="${t('cv_cover')}" loading="lazy" decoding="async"></div>
+        </div>
         ${tray}
       </div>
       <div>
-        <div class="cr-credit" style="margin-top:0">${L2M.poster(
-          {username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
-          ${c.pinned?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
+        <div class="cr-credit" style="margin-top:0">${c.auto
+          ?`<span class="cr-auto"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span>${t('cover_auto_badge')}</span>`
+          :L2M.poster({username:c.username,display_name:c.display_name,avatar:c.avatar},t('cv_by'))}
+          ${showPinBadge(c)?`<span class="cr-tray-badge"><span class="material-symbols-outlined">push_pin</span>${t('cv_pinned')}</span>`:''}
         </div>
         ${c.caption?`<p class="cm-caption">${L2M.esc(c.caption)}</p>`:''}
         <div class="social-actions" style="margin-top:12px">
@@ -953,9 +1220,6 @@ function paintModal(id){
         <div class="cm-actions">
           ${ME.authenticated?dlSplit('image',t('cv_dl_cover'),`/download/cover/${c.id}`,`/download/cover/${c.id}/pdf`):''}
           ${ME.authenticated&&c.has_traycard?dlSplit('description',t('cv_dl_tray'),`/download/traycard/${c.id}`,`/download/traycard/${c.id}/pdf`):''}
-          ${mine?`<button class="icon-btn" id="cm-tray">
-            <span class="material-symbols-outlined">note_add</span>
-            ${c.has_traycard?t('cv_replace_tray'):t('cv_add_tray')}</button>`:''}
           ${ME.is_gestionnaire?`<button class="icon-btn" id="cm-pin">
             <span class="material-symbols-outlined">push_pin</span>
             ${c.pinned?t('cv_unpin'):t('cv_pin')}</button>`:''}
@@ -965,14 +1229,20 @@ function paintModal(id){
       </div>
     </div>`;
 
-  // Click to enlarge cover
-  const cmCoverImg=document.querySelector('#cm-body .cm-art img:first-child');
+  // Agrandir la pochette
+  const cmCoverImg=document.getElementById('cm-cover-img');
   if(cmCoverImg)cmCoverImg.onclick=e=>{e.stopPropagation();openLbx('image',c.cover_url);};
-  // Click to enlarge traycard
-  const cmTrayImg=document.querySelector('#cm-body .cm-art img:not(:first-child)');
-  if(cmTrayImg){cmTrayImg.style.cursor='zoom-in';cmTrayImg.onclick=e=>{e.stopPropagation();openLbx('img',c.traycard_url);};}
+  // Agrandir la tray card (image, ou PDF : l'iframe ne reçoit pas le clic,
+  // c'est le cadre qui l'ouvre).
+  const cmTrayImg=document.getElementById('cm-tray-img');
+  if(cmTrayImg)cmTrayImg.onclick=e=>{e.stopPropagation();openLbx('img',c.traycard_url);};
   const cmTrayFrame=document.querySelector('#cm-body .cm-tray-embed');
-  if(cmTrayFrame){cmTrayFrame.style.cursor='zoom-in';cmTrayFrame.style.pointerEvents='none';cmTrayFrame.parentElement.style.cursor='zoom-in';cmTrayFrame.parentElement.onclick=e=>{e.stopPropagation();openLbx('pdf',c.traycard_url);};}
+  if(cmTrayFrame){
+    cmTrayFrame.style.pointerEvents='none';
+    const box=document.getElementById('cm-tray-frame');
+    box.style.cursor='zoom-in';
+    box.onclick=e=>{e.stopPropagation();openLbx('pdf',c.traycard_url);};
+  }
   document.getElementById('cm-like').onclick=()=>toggleCoverLike(c.id);
   // Dans la modale les commentaires sont déjà rendus plus bas : on y amène.
   document.getElementById('cm-comment').onclick=()=>
@@ -994,8 +1264,11 @@ function paintModal(id){
     COVERS=d.covers||[];buildSlides();IDX=0;
     closeModal();renderCarousel();
   };
-  const trayBtn=document.getElementById('cm-tray');
-  if(trayBtn)trayBtn.onclick=()=>openUpload(c.id);
+  // Ajout / remplacement de la tray card : porté par l'emplacement lui-même.
+  ['cm-tray-add','cm-tray-rep'].forEach(bid=>{
+    const b=document.getElementById(bid);
+    if(b)b.onclick=e=>{e.stopPropagation();openUpload(c.id);};
+  });
 }
 
 // ── Import d'une pochette / d'une tray card ──────────────────────────────
@@ -1154,17 +1427,7 @@ async function navAlbum(dir){
   _m.style.opacity='1';
 }
 
-async function loadVersion(){
-  try{
-    const v=await(await fetch("/api/version")).json();
-    const cls=v.env==="prod"?"":"env-preprod";
-    const commit=v.commit?` · ${v.commit}`:"";
-    const el=document.getElementById("site-foot");
-    if(el)el.innerHTML=`<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
-  }catch(e){}
-}
 loadPage();
-loadVersion();
 setTimeout(initAlbumNav, 0);
 window.addEventListener('popstate',async()=>{
   slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));
