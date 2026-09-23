@@ -362,13 +362,12 @@
     }
     document.getElementById("content").innerHTML = `
       <div class="card">
-        <div class="prof-roleline">${roleControl(p)}</div>
         <div class="prof-hero">
           <div class="prof-avatar-edit">${L2M.avatar({ username: p.username, display_name: p.display_name, avatar: p.avatar }, false)}
             ${DATA.is_self ? `<label class="cam" title="${t("change_photo")}"><span class="material-symbols-outlined">photo_camera</span>
               <input type="file" accept="image/*" id="avatar-input" hidden></label>` : ""}</div>
           <div class="prof-id">
-            <h1>${esc(p.display_name)}</h1>
+            <div class="prof-nameline"><h1>${esc(p.display_name)}</h1>${roleControl(p)}</div>
             <div class="handle">@${esc(p.username)}${since ? " · " + t("member_since") + " " + since : ""}</div>
             ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : ""}
             ${chips(p)}

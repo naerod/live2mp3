@@ -141,10 +141,6 @@
   .album .btns a .material-symbols-outlined{font-size:15px;line-height:1}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
-  .foot{margin:36px 0 14px;text-align:center;color:var(--muted);font-size:12px}
-  .foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
-    border-radius:999px;border:1px solid var(--border);font-variant-numeric:tabular-nums}
-  .foot .env-preprod{color:var(--run);border-color:var(--run)}
   /* Preview banner */
   .preview-banner{display:none;align-items:center;justify-content:center;gap:8px;
     padding:6px 14px;background:rgba(255,140,0,.12);border-bottom:1px solid rgba(255,140,0,.35);
@@ -455,7 +451,7 @@
     <span class="material-symbols-outlined">library_music</span>
     <div id="empty-msg">Aucun album pour le moment.</div>
   </div>
-  <div class="foot" id="foot"></div>
+  <div class="site-foot" id="foot"></div>
 </main>
 
 <!-- Barre d'actions en masse (mode sélection) -->
@@ -1058,15 +1054,6 @@ document.getElementById("albums").addEventListener("click",e=>{
 document.getElementById("select-btn").onclick=toggleSelectMode;
 
 // ── Version footer ────────────────────────────────────────────────────────
-async function loadVersion(){
-  try{
-    const v=await(await fetch("/api/version")).json();
-    const cls=v.env==="prod"?"":"env-preprod";
-    const commit=v.commit?` · ${v.commit}`:"";
-    document.getElementById("foot").innerHTML=
-      `<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
-  }catch(e){}
-}
 
 // ── View-as menu (dev tool) ───────────────────────────────────────────────
 const VIEW_MODES=[
@@ -1114,7 +1101,6 @@ async function load(){
   // Redirection legacy ?album=slug → page dédiée (avant tout chargement)
   const wanted=new URLSearchParams(location.search).get("album");
   if(wanted){location.replace(`/album/${encodeURIComponent(wanted)}`);return;}
-  loadVersion();
   // Restaurer le tri depuis localStorage
   const savedSort=localStorage.getItem("l2m-sort")||"date_import";
   currentSort=savedSort;

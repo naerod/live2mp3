@@ -283,10 +283,6 @@
   .tcv2-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1000;display:none;align-items:center;justify-content:center}
   .tcv2-overlay.open{display:flex}
   /* Footer version */
-  .site-foot{margin:40px 0 18px;text-align:center;color:var(--muted);font-size:12px}
-  .site-foot .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;
-    border:1px solid var(--border);border-radius:999px;background:var(--card)}
-  .site-foot .env-preprod{color:var(--run,#f59e0b);border-color:var(--run,#f59e0b)}
   .tcv2-box{background:var(--card);border-radius:16px;padding:20px;max-width:520px;width:90%;display:flex;flex-direction:column;gap:14px;position:relative}
   .tcv2-close{position:absolute;top:12px;right:12px;all:unset;cursor:pointer;padding:4px;border-radius:50%;background:var(--border);display:flex}
   .tcv2-close .material-symbols-outlined{font-size:20px}
@@ -1431,17 +1427,7 @@ async function navAlbum(dir){
   _m.style.opacity='1';
 }
 
-async function loadVersion(){
-  try{
-    const v=await(await fetch("/api/version")).json();
-    const cls=v.env==="prod"?"":"env-preprod";
-    const commit=v.commit?` · ${v.commit}`:"";
-    const el=document.getElementById("site-foot");
-    if(el)el.innerHTML=`<a href="/changelog" class="badge ${cls}">v${v.version} · ${v.env}${commit}</a>`;
-  }catch(e){}
-}
 loadPage();
-loadVersion();
 setTimeout(initAlbumNav, 0);
 window.addEventListener('popstate',async()=>{
   slug=decodeURIComponent((location.pathname.split('/album/')[1]||'').replace(/\/$/,''));

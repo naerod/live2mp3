@@ -323,6 +323,29 @@ const L2M = (function () {
   }
 
   /* ---------------- Header unifié ---------------- */
+  /* ---------------- Pied de page (badge de version) ----------------
+     Une seule implémentation pour tout le site : appelée par initHeader, donc
+     présente sur chaque page, y compris le profil et le centre de
+     notifications. Les pages n'ont plus à recoder ni styler ce bloc. */
+  async function initFooter() {
+    // Une page peut déjà porter son propre conteneur (#foot / #site-foot).
+    let el = document.getElementById("site-foot") || document.getElementById("foot");
+    if (!el) {
+      el = document.createElement("footer");
+      el.id = "site-foot";
+      el.className = "site-foot";
+      document.body.appendChild(el);
+    }
+    el.classList.add("site-foot");
+    try {
+      const v = await (await fetch("/api/version")).json();
+      const cls = v.env === "prod" ? "" : "env-preprod";
+      const commit = v.commit ? ` \u00b7 ${v.commit}` : "";
+      el.innerHTML = `<a href="/changelog" class="badge ${cls}">v${v.version} \u00b7 ${v.env}${commit}</a>`;
+      return v;
+    } catch (e) { return null; }
+  }
+
   async function initHeader(opts) {
     opts = opts || {};
     installSpeculationRules();
@@ -458,6 +481,9 @@ const L2M = (function () {
       loginEl.href = loginUrl();
       loginEl.style.display = "";
     }
+
+    // Pied de page : même bloc sur toutes les pages (cf. initFooter).
+    if (opts.footer !== false) initFooter();
 
     return meData;
   }
@@ -1270,6 +1296,6 @@ const L2M = (function () {
     t, esc, avatar, userLink, poster, profiles, timeAgo, loginUrl, me,
     likeButton, followButton, roleBadge, entityHref, comments, userMenu,
     notifBell, notifItem, loadArtistThumbs, autocomplete, LANG,
-    getTheme, applyTheme, getLang, applyLang, initHeader,
+    getTheme, applyTheme, getLang, applyLang, initHeader, initFooter,
   };
 })();
