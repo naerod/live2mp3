@@ -52,6 +52,31 @@ def _cover_slugs() -> set[str]:
         return set()
 
 
+def _cover_winners() -> dict[str, str]:
+    """{slug: chemin relatif de la pochette gagnante} — une seule requête.
+    Classement aligné sur `covers.rank_covers` (cf. `_traycard_slugs`).
+    """
+    try:
+        with get_conn() as conn:
+            return {
+                r["slug"]: f"artwork/covers/{r['file_key']}_cover{r['cover_ext']}"
+                for r in conn.execute(
+                    "SELECT slug, file_key, cover_ext FROM ("
+                    "  SELECT c.slug, c.file_key, c.cover_ext, ROW_NUMBER() OVER ("
+                    "    PARTITION BY c.slug"
+                    "    ORDER BY c.pinned DESC, c.auto ASC, COUNT(l.cover_id) DESC,"
+                    "             c.created_at ASC, c.id ASC"
+                    "  ) AS rn"
+                    "  FROM covers c LEFT JOIN cover_likes l ON l.cover_id = c.id"
+                    "  WHERE c.kind = 'cover'"
+                    "  GROUP BY c.id"
+                    ") WHERE rn=1"
+                )
+            }
+    except Exception:
+        return {}
+
+
 def _traycard_slugs() -> set[str]:
     """Slugs dont la pochette *gagnante* porte une tray card.
 
@@ -69,7 +94,7 @@ def _traycard_slugs() -> set[str]:
                     "SELECT slug, traycard_ext FROM ("
                     "  SELECT c.slug, c.traycard_ext, ROW_NUMBER() OVER ("
                     "    PARTITION BY c.slug"
-                    "    ORDER BY c.pinned DESC, COUNT(l.cover_id) DESC,"
+                    "    ORDER BY c.pinned DESC, c.auto ASC, COUNT(l.cover_id) DESC,"
                     "             c.created_at ASC, c.id ASC"
                     "  ) AS rn"
                     "  FROM covers c LEFT JOIN cover_likes l ON l.cover_id = c.id"
@@ -173,6 +198,7 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         return albums
     cover_slugs = _cover_slugs()
     tray_slugs = _traycard_slugs()
+    cover_winners = _cover_winners()
     for pdir in sorted(PROJECTS_DIR.iterdir()):
         manifest = pdir / "manifest.yaml"
         if not manifest.is_file():
@@ -207,9 +233,12 @@ def list_albums(sort: str = "date_concert", include_drafts: bool = False) -> lis
         # dès qu'un gestionnaire remplace la cover (sinon la vitrine affiche
         # l'ancienne image tant que le fichier a le même nom).
         cover_v = 0
-        if cover_rel:
+        # Même fichier que celui servi par /cover/{slug} : la gagnante en base,
+        # sinon le pointeur du manifest.
+        cover_src = cover_winners.get(pdir.name) or cover_rel
+        if cover_src:
             try:
-                cover_v = int((pdir / cover_rel).stat().st_mtime)
+                cover_v = int((pdir / cover_src).stat().st_mtime)
             except OSError:
                 cover_v = 0
         has_traycard = pdir.name in tray_slugs

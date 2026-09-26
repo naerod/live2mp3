@@ -29,7 +29,7 @@ from fastapi.responses import FileResponse, Response
 from mutagen.id3 import ID3
 from .albumfiles import MIME_EXT, _file_track_n
 from .auth import current_identity, require_gestionnaire, require_user
-from .db import get_conn
+from .db import _APP_ENV as APP_ENV, get_conn
 from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
 from . import thumbs
@@ -108,6 +108,16 @@ def rank_covers(conn: sqlite3.Connection, slug: str,
     ).fetchall()
 
 
+def owns_shared_files(data: dict) -> bool:
+    """Cet environnement peut-il écrire les fichiers partagés de l'album ?
+
+    La prod possède tous les albums sauf ceux créés en preprod et pas encore
+    poussés (`origin_env`) ; la preprod ne possède que ces derniers.
+    """
+    origin = data.get("origin_env") or "prod"
+    return origin == APP_ENV
+
+
 def top_cover(conn: sqlite3.Connection, slug: str,
               kind: str = "cover") -> sqlite3.Row | None:
     rows = rank_covers(conn, slug, kind)
@@ -137,9 +147,16 @@ def _on_covers_changed(slug: str, *, kind: str = "cover",
         return
     from .manifest import Manifest
 
+    m = Manifest.load(mpath)
+    if not owns_shared_files(m.data):
+        # Manifest et médias sont PARTAGÉS entre prod et preprod, la base
+        # sociale ne l'est pas : un like ou un import en preprod réécrivait
+        # le manifest (et les APIC) de la prod avec la gagnante *preprod*,
+        # d'où vitrine ≠ fiche en prod (incident 2026-09-26). Chaque
+        # environnement lit désormais sa gagnante en base (`/cover/{slug}`).
+        return
     with get_conn() as conn:
         win = top_cover(conn, slug, kind)
-    m = Manifest.load(mpath)
     album = m.data.setdefault("album", {})
     # Pointeur legacy dans le manifest : `album.cover` pour la pochette,
     # `album.banner`/`poster`/`thumbnail` pour les visuels Jellyfin. Permet aux

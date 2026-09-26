@@ -2,6 +2,20 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.27",
+      "date": "2026-09-26",
+      "title": {
+        "fr": "Pochettes cohérentes",
+        "en": "Consistent covers"
+      },
+      "fr": [
+        "Pochettes : le catalogue et la fiche d'un album affichent toujours la même pochette."
+      ],
+      "en": [
+        "Covers: the catalogue and an album's page always show the same cover."
+      ]
+    },
+    {
       "v": "1.26",
       "date": "2026-09-23",
       "title": {

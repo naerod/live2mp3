@@ -676,3 +676,42 @@ def test_zip_des_visuels(client):
 
     # Anonyme : refusé comme les autres téléchargements.
     assert c.get(f"/download/{slug}/artwork").status_code in (401, 403)
+
+
+def test_vitrine_sert_la_gagnante_en_base_pas_le_manifest(client):
+    """`/cover/{slug}` (vitrine) et la fiche doivent montrer la même image,
+    même si le manifest partagé pointe ailleurs (réécrit par l'autre
+    environnement). Incident 2026-09-26 : Falling In Reverse."""
+    c, projects = client
+    slug = _album(c)
+    r = _post_cover(c, slug, USER, color=(0, 0, 255))
+    win = r.json()["covers"][0]
+    # L'autre environnement repointe le manifest partagé sur une autre image.
+    art = projects / slug / "artwork"
+    (art / "autre.png").write_bytes(_png((0, 255, 0)))
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    m = Manifest.load(mpath)
+    m.data["album"]["cover"] = "artwork/autre.png"
+    m.save()
+    assert (c.get(f"/cover/{slug}", headers=USER).content
+            == c.get(f"/cover-img/{win['id']}").content)
+
+
+def test_preprod_ne_reecrit_pas_le_manifest_partage(client, monkeypatch):
+    """Un album de prod n'est jamais repointé depuis la preprod."""
+    c, projects = client
+    slug = _album(c)
+    from backend import covers
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    before = Manifest.load(mpath).data.get("album", {}).get("cover")
+    monkeypatch.setattr(covers, "APP_ENV", "preprod")
+    _post_cover(c, slug, USER)
+    assert Manifest.load(mpath).data.get("album", {}).get("cover") == before
+    # Un album créé en preprod reste, lui, piloté par la preprod.
+    m = Manifest.load(mpath)
+    m.data["origin_env"] = "preprod"
+    m.save()
+    _post_cover(c, slug, USER, color=(0, 255, 0))
+    assert Manifest.load(mpath).data["album"]["cover"].startswith("artwork/covers/")

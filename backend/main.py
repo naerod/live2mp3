@@ -487,10 +487,19 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 def get_cover(slug: str, identity: dict = Depends(roles),
               w: int = 0, v: str = "") -> FileResponse:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    if not cover_rel:
-        raise HTTPException(404, "pas de pochette")
-    cover = PROJECTS_DIR / slug / cover_rel
+    # Même source que la fiche (`/cover-img/{id}`) : la gagnante de la base
+    # sociale de CET environnement. Le manifest, partagé avec l'autre
+    # environnement, ne sert que de repli (albums sans ligne `covers`).
+    cover = None
+    with get_conn() as conn:
+        win = top_cover(conn, slug, "cover")
+    if win:
+        cover = cover_file(slug, win["file_key"], win["cover_ext"])
+    if cover is None or not cover.exists():
+        cover_rel = m.data.get("album", {}).get("cover")
+        if not cover_rel:
+            raise HTTPException(404, "pas de pochette")
+        cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
     # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
