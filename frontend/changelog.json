@@ -15,7 +15,7 @@
         "Ajout de pistes à un album existant : il se fait depuis la fenêtre « Importer », et non plus depuis un encadré de la page de gestion.",
         "Pochettes : les anciennes pochettes ne sont plus présentées comme « automatiques » ; leur auteur est affiché quand il est connu.",
         "Fiche album : le bouton de choix du format de téléchargement a retrouvé sa bordure droite.",
-        "Catalogue : espacements revus autour de la barre de tri et de recherche ; sur mobile, le bouton « Sélectionner » ne masque plus le nombre d'albums."
+        "Catalogue : espacements revus au-dessus et autour de la barre de tri et de recherche ; sur mobile, le bouton « Sélectionner » ne masque plus le nombre d'albums."
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
@@ -24,7 +24,7 @@
         "Adding tracks to an existing album now happens in the “Import” window instead of a panel on the management page.",
         "Covers: older covers are no longer shown as “automatic”; their author is displayed when known.",
         "Album page: the download format button has its right border back.",
-        "Catalogue: revised spacing around the sort and search bar; on mobile, the “Select” button no longer hides the album count."
+        "Catalogue: revised spacing above and around the sort and search bar; on mobile, the “Select” button no longer hides the album count."
       ]
     },
     {

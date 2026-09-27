@@ -17,7 +17,7 @@
   .hero h1{font-size:30px;margin:0 0 6px}
   .hero p{color:var(--muted);margin:0}
   /* Écarts choisis par Dorian (2026-09-27) : 24 px sous-titre → barre,
-     24 px entre les deux lignes de la barre, 4 px barre → albums. */
+     24 px entre les deux lignes de la barre, 8 px barre → albums. */
   .toolbar{margin:24px 0 0;display:flex;flex-direction:column;gap:24px}
   .toolbar-main{display:flex;align-items:center;gap:10px}
   .sort-block{display:flex;align-items:center;gap:7px;flex-shrink:0}
@@ -45,11 +45,11 @@
   /* Vue par artiste */
   .artist-group{margin-bottom:28px}
   .artist-sep{display:flex;align-items:center;gap:14px;margin:36px 0 14px}
-  .artist-group:first-child .artist-sep{margin-top:4px}
+  .artist-group:first-child .artist-sep{margin-top:8px}
   .artist-bar{flex:1;height:3px;background:var(--accent);border-radius:2px;opacity:.65}
   .artist-name{font-size:20px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--fg)}
   .albums{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
-    gap:18px;margin-top:4px}
+    gap:18px;margin-top:8px}
   .album{position:relative;background:var(--card);border:1px solid var(--border);
     border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
     transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
