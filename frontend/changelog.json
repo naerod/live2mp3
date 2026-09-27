@@ -14,7 +14,8 @@
         "Import : le choix « Importer des fichiers » distingue désormais l'audio (MP3) de la vidéo.",
         "Ajout de pistes à un album existant : il se fait depuis la fenêtre « Importer », et non plus depuis un encadré de la page de gestion.",
         "Pochettes : les anciennes pochettes ne sont plus présentées comme « automatiques » ; leur auteur est affiché quand il est connu.",
-        "Fiche album : le bouton de choix du format de téléchargement a retrouvé sa bordure droite."
+        "Fiche album : le bouton de choix du format de téléchargement a retrouvé sa bordure droite.",
+        "Catalogue : espacements réguliers entre le sous-titre, la barre de tri et de recherche, et les albums."
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
@@ -22,7 +23,8 @@
         "Import: “Import files” now separates audio (MP3) from video.",
         "Adding tracks to an existing album now happens in the “Import” window instead of a panel on the management page.",
         "Covers: older covers are no longer shown as “automatic”; their author is displayed when known.",
-        "Album page: the download format button has its right border back."
+        "Album page: the download format button has its right border back.",
+        "Catalogue: even spacing between the subtitle, the sort and search bar, and the albums."
       ]
     },
     {
