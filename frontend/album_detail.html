@@ -199,7 +199,9 @@
   .vi-bar>div{height:100%;width:0;background:var(--accent);transition:width .2s}
   .vi-msg{font-size:13.5px;margin:0 0 16px;line-height:1.45}
   .vi-msg.err{color:var(--down)}
-  .vi-actions{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .vi-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+  .vi-actions>*{margin:0}
+  .vi-actions>.primary{margin-left:auto}   /* avancer = à droite, même replié */
   .vi-actions .primary,.vi-actions .icon-btn{min-height:44px}
   @media(prefers-reduced-motion:reduce){.vi-bar>div{transition:none}}
   .cm-box.vm-box{max-width:980px;width:96%;--vm-band:150px}
