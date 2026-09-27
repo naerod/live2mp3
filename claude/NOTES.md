@@ -1474,3 +1474,27 @@ Mesures (preprod, `coldplay-2009`) : 2 798 188 o → **9 374 o** en w=320
 `naerod/preprod-live2mp3` (remote local **`preprod-origin`**), pas depuis
 `origin` (= `naerod/live2mp3`). Pousser sur `origin/preprod` ne déploie rien et
 fait diverger les deux dépôts. Toujours `git push preprod-origin preprod`.
+
+2026-09-27 : **Vidéo sur un album existant + pochettes « automatiques » à tort** (preprod v1.26.6, PROD PAS ENCORE).
+- `POST /api/albums/{slug}/video` (`backend/albumvideo.py`), fichier via l'upload chunké
+  de l'import. `keep` : `source.video_attached` rendue **en entière** en MP4 concert complet
+  (`render.run` la préfère au master, sans timecodes), MP3 intacts. `recut` : nouveau master,
+  coupes effacées (titres gardés), `rerender_pending` force le rendu suivant (noms de MP3
+  identiques → sinon idempotent), front → `/app#slug` (préparation + éditeur).
+  Refus 409 si l'album appartient à l'autre env (`owns_shared_files`) : en preprod, les
+  albums de prod affichent « importez depuis l'autre environnement ».
+  Limite : `recut` refusé si l'album a des pistes externes (ajoutées depuis un lien).
+- Fiche album : îlot vidéo visible par les gestionnaires même sans vidéo ; « Remplacer la vidéo ».
+- Fenêtre Importer : Importer des fichiers → Audio / Vidéo → nouvel / existant.
+  Vidéo + existant → `/album/<slug>?video=import`. L'encadré « ajout de pistes » de la page
+  de gestion n'est plus affiché : fenêtre ouverte seulement via `?add=link|file`.
+- Pochettes : voir `workspace/debugging/2026-09-27_live2mp3-pochettes-automatiques-a-tort.md`.
+  Données prod corrigées ; la prod affiche « Pochette par ? » pour les auteurs inconnus
+  jusqu'à la promotion.
+- Recette E2E via le navigateur (proxy de rôle gestionnaire) : parcours import → fiche,
+  keep (MP4 150 s entier, MP3 inchangés), recut (éditeur, MP3 refaits), ?add=file|link,
+  clair/sombre, FR/EN, 320 px. 321 tests verts.
+- ⚠️ Promotion prod : **nginx n'a rien à changer** (`/api/albums` et `/api/import` déjà dans
+  la regex forward-auth).
+- ⚠️ `deploy-preprod` pousse un commit `Release` : **toujours `git pull --rebase` avant de
+  pousser** ; et le changelog-guard exige une modif du changelog à chaque push preprod.
