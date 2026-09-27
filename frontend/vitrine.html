@@ -315,6 +315,9 @@
     #sort-select{flex:1;height:44px;font-size:15px;min-width:0}
     .sort-label{font-size:13px}
     .chip{height:42px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
+    /* Largeur selon le contenu : à parts égales (flex-basis 0), « Sélectionner »
+       débordait sur le compteur d'albums. Trop étroit → la ligne se replie. */
+    .tr-left,.tr-right{flex:1 1 auto}
     .chip .material-symbols-outlined{font-size:19px}
     .count{font-size:14px}
     .filter-group{flex:1 1 100%;min-width:0}
