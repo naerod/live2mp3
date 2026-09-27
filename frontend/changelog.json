@@ -10,7 +10,7 @@
       },
       "fr": [
         "Pochettes : le catalogue et la fiche d'un album affichent toujours la même pochette.",
-        "Vidéo : chaque album peut recevoir la vidéo de son concert, depuis sa fiche. On garde les MP3 existants, ou on les redécoupe depuis la vidéo si elle a un meilleur son.",
+        "Vidéo : chaque album peut recevoir la vidéo de son concert, depuis sa fiche. On garde les MP3 existants, ou on les redécoupe depuis la vidéo si elle a un meilleur son. L'envoi, même de plusieurs Go, reprend tout seul après une coupure réseau.",
         "Import : le choix « Importer des fichiers » distingue désormais l'audio (MP3) de la vidéo.",
         "Ajout de pistes à un album existant : il se fait depuis la fenêtre « Importer », et non plus depuis un encadré de la page de gestion.",
         "Pochettes : les anciennes pochettes ne sont plus présentées comme « automatiques » ; leur auteur est affiché quand il est connu.",
@@ -18,7 +18,7 @@
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
-        "Video: every album can now receive its concert video, from its page. Keep the existing MP3s, or re-cut them from the video if it sounds better.",
+        "Video: every album can now receive its concert video, from its page. Keep the existing MP3s, or re-cut them from the video if it sounds better. Uploads, even of several GB, resume on their own after a network drop.",
         "Import: “Import files” now separates audio (MP3) from video.",
         "Adding tracks to an existing album now happens in the “Import” window instead of a panel on the management page.",
         "Covers: older covers are no longer shown as “automatic”; their author is displayed when known.",
