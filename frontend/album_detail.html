@@ -167,6 +167,41 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
+  /* Îlot sans vidéo (gestionnaires) : même gabarit 16:9 que la miniature,
+     pour que l'arrivée de la vidéo ne décale rien. */
+  .vid-empty{aspect-ratio:16/9;max-width:640px;border:1px dashed var(--border);border-radius:12px;
+    background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:16px;text-align:center}
+  .vid-empty>.material-symbols-outlined{font-size:40px;color:var(--muted)}
+  .vid-empty p{margin:0;color:var(--muted);font-size:14px;max-width:48ch}
+  .vid-actions{display:flex;justify-content:flex-end;gap:8px;max-width:640px;margin-top:8px}
+  .vid-busy{display:flex;align-items:center;gap:8px;color:var(--run);font-size:14px}
+  .vi-box{max-width:640px}
+  .vi-box h2{display:flex;align-items:center;gap:8px;margin:0 0 4px;padding-right:48px;font-size:19px}
+  .vi-album{color:var(--muted);font-size:13.5px;margin:0 0 16px}
+  .vi-modes{display:grid;gap:8px;margin:0 0 16px}
+  .vi-mode{display:grid;grid-template-columns:24px 1fr;gap:4px 12px;align-items:start;padding:12px 16px;
+    border:1px solid var(--border);border-radius:12px;cursor:pointer;background:var(--bg)}
+  .vi-mode:has(input:checked){border-color:var(--accent)}
+  .vi-mode:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+  .vi-mode input{position:absolute;opacity:0;pointer-events:none}
+  .vi-mode .material-symbols-outlined{grid-row:span 2;color:var(--accent);margin-top:2px}
+  .vi-mode b{font-size:14.5px}
+  .vi-mode small{color:var(--muted);font-size:13px;line-height:1.45}
+  .vi-warn{display:flex;gap:8px;align-items:flex-start;padding:12px 16px;border-radius:12px;margin:0 0 16px;
+    border:1px solid var(--run);color:var(--fg);font-size:13.5px;line-height:1.45}
+  .vi-warn .material-symbols-outlined{color:var(--run)}
+  .vi-hint{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+  .vi-progress{margin:0 0 16px}
+  .vi-progress-row{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+  .vi-progress-row span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vi-bar{height:6px;border-radius:4px;background:var(--border);overflow:hidden;margin-top:8px}
+  .vi-bar>div{height:100%;width:0;background:var(--accent);transition:width .2s}
+  .vi-msg{font-size:13.5px;margin:0 0 16px;line-height:1.45}
+  .vi-msg.err{color:var(--down)}
+  .vi-actions{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .vi-actions .primary,.vi-actions .icon-btn{min-height:44px}
+  @media(prefers-reduced-motion:reduce){.vi-bar>div{transition:none}}
   .cm-box.vm-box{max-width:980px;width:96%;--vm-band:150px}
   .vm-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding-right:40px}
   /* Lecteur : gros mais borné, jamais plein écran. */
@@ -443,6 +478,15 @@
   </div>
 </div>
 <input type="file" id="vm-file" accept="image/jpeg,image/png,image/webp" style="display:none">
+<!-- Import d'une vidéo sur un album existant (gestionnaires) : garder les MP3
+     ou redécouper depuis la vidéo. Upload chunké partagé avec l'import. -->
+<div id="vi" class="cm hidden" role="dialog" aria-modal="true" aria-labelledby="vi-title">
+  <div class="cm-box vi-box">
+    <button class="icon-btn icon-only cm-close" id="vi-close" data-vt-aria="vi_close"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+    <div id="vi-body"></div>
+  </div>
+</div>
+<input type="file" id="vi-file" accept=".mp4,.mov,.mkv,.webm,.m4v,video/*" style="display:none">
 
 <!-- Import d'une pochette (+ tray card optionnelle) -->
 <input type="file" id="tcv2-file" accept="image/jpeg,image/png,image/webp" style="display:none">
@@ -556,6 +600,7 @@ function setLang(l){
   document.getElementById('t-back').textContent=t('back');
   const mg=document.getElementById('t-manage');if(mg)mg.textContent=t('manage');
   document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
+  document.querySelectorAll('[data-vt]').forEach(el=>el.textContent=VT(el.dataset.vt));
   if(window.applyI18n)applyI18n(l);
 }
 
@@ -714,9 +759,7 @@ function renderAlbum(d){
       </div>
     </div>
     ${dlHtml?`<div class="sec sec-dl"><h3>${t('downloads')}</h3>${dlHtml}</div>`:''}
-    ${d.has_video_full?`<div class="sec sec-video"><h3><span class="material-symbols-outlined">movie</span> ${VT('video_h')}</h3>
-      <div class="vid-thumb" id="vid-thumb" title="${VT('video_open')}"><span class="vid-play"><span class="material-symbols-outlined">play_circle</span></span></div>
-      <p class="vid-sub">${VT('video_sub')}</p></div>`:''}
+    ${videoSectionHtml(d)}
     <div class="sec">
       <h3>${t('setlist')}</h3>
       <ul class="setlist">${set||'<li style="color:var(--muted)">—</li>'}</ul>
@@ -729,6 +772,7 @@ function renderAlbum(d){
   initSocialActions();
   renderCarousel();
   if(d.has_video_full)initVideo(d);
+  initVideoImport(d);
   L2M.comments(document.getElementById('sec-comments'),slug);
   if(d.per_track_covers)initTrackCoverInteract(slug,d.track_covers||[]);
 }
@@ -953,7 +997,23 @@ const VLANG={
       cover_note:"Gérée dans le carrousel des pochettes de la fiche.",cover_hint:"Carrousel",
       auto:"Automatique",count:n=>`${n} images`,confirm_del:"Supprimer cette image ?",
       noplay:"Lecture impossible dans ce navigateur. Téléchargez le fichier MP4.",
-      lockplay:"Connectez-vous pour regarder le concert"},
+      lockplay:"Connectez-vous pour regarder le concert",
+      vi_none:"Pas de vidéo pour ce concert.",vi_import:"Importer une vidéo",vi_replace:"Remplacer la vidéo",
+      vi_other_env:"Cet album est géré par l'autre environnement : importez la vidéo depuis celui-ci.",
+      vi_busy:"Vidéo en cours d'encodage — elle apparaîtra ici une fois prête.",
+      vi_title:"Importer une vidéo",vi_title_repl:"Remplacer la vidéo",
+      vi_keep:"Garder les MP3",vi_keep_d:"La vidéo est ajoutée comme concert complet. Les pistes MP3 ne changent pas.",
+      vi_recut:"Redécouper les MP3 depuis cette vidéo",
+      vi_recut_d:"Si la vidéo a un meilleur son que la source actuelle : l'audio de l'album est remplacé par celui de la vidéo.",
+      vi_warn:"Attention : les découpes existantes vont être supprimées. Les titres des pistes sont conservés ; vous replacerez les coupes dans l'éditeur, puis les MP3 seront refaits.",
+      vi_hint:"MP4, MOV, MKV, WebM ou M4V, jusqu'à 16 Go. Gardez cette page ouverte pendant l'envoi : il reprend tout seul après une coupure réseau.",
+      vi_cancel:"Annuler",vi_close:"Fermer",vi_pick:"Choisir la vidéo",vi_pick_recut:"Choisir la vidéo et redécouper",
+      vi_sending:"Envoi en cours…",vi_stop:"Interrompre l'envoi",vi_saving:"Enregistrement de la vidéo…",
+      vi_done_keep:"Vidéo ajoutée. L'encodage du concert complet a démarré dans la file de rendu (quelques minutes à plus d'une heure selon la durée).",
+      vi_queue:"Voir la file de rendu",vi_to_editor:"Ouverture de l'éditeur…",
+      vi_err_up:"Impossible d'envoyer la vidéo, connexion perdue. Réessayez : l'envoi reprendra là où il s'est arrêté.",
+      vi_err_auth:"Session expirée. Reconnectez-vous puis réessayez.",
+      vi_err:"Impossible d'enregistrer la vidéo : ",vi_leave:"L'envoi de la vidéo sera interrompu."},
   en:{video_h:"Concert video",video_open:"Play the concert",
       video_sub:"Full concert + Jellyfin artwork (cover, thumbnail, banner, poster).",
       dl_mp4:"Download video (MP4)",
@@ -968,7 +1028,23 @@ const VLANG={
       cover_note:"Managed in the cover carousel on this page.",cover_hint:"Carousel",
       auto:"Automatic",count:n=>`${n} images`,confirm_del:"Delete this image?",
       noplay:"Playback unsupported in this browser. Download the MP4 file instead.",
-      lockplay:"Log in to watch the concert"}
+      lockplay:"Log in to watch the concert",
+      vi_none:"No video for this concert.",vi_import:"Import a video",vi_replace:"Replace the video",
+      vi_other_env:"This album is managed by the other environment: import the video from there.",
+      vi_busy:"Video being encoded — it will show up here once ready.",
+      vi_title:"Import a video",vi_title_repl:"Replace the video",
+      vi_keep:"Keep the MP3s",vi_keep_d:"The video is added as the full concert. The MP3 tracks stay as they are.",
+      vi_recut:"Re-cut the MP3s from this video",
+      vi_recut_d:"If the video sounds better than the current source: the album audio is replaced with the video's.",
+      vi_warn:"Warning: the existing cuts will be deleted. Track titles are kept; you will place the cuts again in the editor, then the MP3s will be rebuilt.",
+      vi_hint:"MP4, MOV, MKV, WebM or M4V, up to 16 GB. Keep this page open during the upload: it resumes on its own after a network drop.",
+      vi_cancel:"Cancel",vi_close:"Close",vi_pick:"Choose the video",vi_pick_recut:"Choose the video and re-cut",
+      vi_sending:"Uploading…",vi_stop:"Stop the upload",vi_saving:"Saving the video…",
+      vi_done_keep:"Video added. Encoding of the full concert has started in the render queue (a few minutes to over an hour depending on length).",
+      vi_queue:"Open the render queue",vi_to_editor:"Opening the editor…",
+      vi_err_up:"Couldn't upload the video, connection lost. Try again: the upload will resume where it stopped.",
+      vi_err_auth:"Session expired. Log in again, then retry.",
+      vi_err:"Couldn't save the video: ",vi_leave:"The video upload will be interrupted."}
 };
 function VT(k){const l=(L2M.getLang?L2M.getLang():'fr');const d=VLANG[l]||VLANG.fr;return d[k]!==undefined?d[k]:VLANG.fr[k];}
 // `cover` (1:1) est en lecture seule ici : elle vit dans le carrousel de la fiche.
@@ -980,6 +1056,178 @@ const VM_RATIO={cover:'1:1',thumbnail:'16:9',banner:'1000×185',poster:'2:3'};
 // Au-delà de 3 (bannière), la scène est trop basse pour un libellé → icône seule.
 const VM_AR={cover:1,thumbnail:16/9,banner:1000/185,poster:2/3};
 let VM_DATA={},VM_UP_KIND=null;
+
+// ── Îlot vidéo : lecture, ou import par un gestionnaire ─────────────────────
+// Visible par tous quand la vidéo existe ; sans vidéo, seuls les gestionnaires
+// voient l'îlot (un visiteur n'y pourrait rien faire).
+function videoSectionHtml(d){
+  const head=`<h3><span class="material-symbols-outlined" aria-hidden="true">movie</span> <span data-vt="video_h">${VT('video_h')}</span></h3>`;
+  const can=ME.is_gestionnaire&&d.video_can_import;
+  const busy=ME.is_gestionnaire&&d.video_job;
+  if(d.has_video_full){
+    return `<div class="sec sec-video">${head}
+      <div class="vid-thumb" id="vid-thumb" title="${VT('video_open')}"><span class="vid-play"><span class="material-symbols-outlined">play_circle</span></span></div>
+      <p class="vid-sub" data-vt="video_sub">${VT('video_sub')}</p>
+      ${busy?`<p class="vid-busy"><span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><span data-vt="vi_busy">${VT('vi_busy')}</span></p>`
+        :can?`<div class="vid-actions"><button class="icon-btn" id="vi-open" data-replace="1"><span class="material-symbols-outlined" aria-hidden="true">video_file</span><span data-vt="vi_replace">${VT('vi_replace')}</span></button></div>`:''}
+    </div>`;
+  }
+  if(!ME.is_gestionnaire)return '';
+  let body;
+  if(busy)body=`<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><p data-vt="vi_busy">${VT('vi_busy')}</p>`;
+  else if(!can)body=`<span class="material-symbols-outlined" aria-hidden="true">videocam_off</span><p data-vt="vi_none">${VT('vi_none')}</p><p data-vt="vi_other_env">${VT('vi_other_env')}</p>`;
+  else body=`<span class="material-symbols-outlined" aria-hidden="true">videocam_off</span><p data-vt="vi_none">${VT('vi_none')}</p>
+    <button class="primary" id="vi-open"><span class="material-symbols-outlined" aria-hidden="true">video_call</span><span data-vt="vi_import">${VT('vi_import')}</span></button>`;
+  return `<div class="sec sec-video">${head}<div class="vid-empty">${body}</div></div>`;
+}
+
+const VI={d:null,mode:'keep',replace:false,abort:false,busy:false};
+function initVideoImport(d){
+  VI.d=d;
+  const b=document.getElementById('vi-open');
+  if(b)b.onclick=()=>openVideoImport(!!b.dataset.replace);
+  // Arrivée depuis « Importer → Vidéo → Album existant » : fenêtre ouverte d'office.
+  const q=new URLSearchParams(location.search);
+  if(q.get('video')==='import'&&b){
+    history.replaceState(null,'',location.pathname);
+    openVideoImport(!!b.dataset.replace);
+  }
+}
+function viShow(on){
+  const el=document.getElementById('vi');
+  if(on){el.classList.remove('hidden');requestAnimationFrame(()=>el.classList.add('show'));}
+  else{el.classList.remove('show');setTimeout(()=>el.classList.add('hidden'),180);}
+}
+function openVideoImport(replace){
+  VI.replace=replace;VI.mode='keep';VI.abort=false;
+  paintVideoImport();viShow(true);
+  document.querySelector('#vi input[name=vi-mode]')?.focus();
+}
+function closeVideoImport(){
+  if(VI.busy){if(!confirm(VT('vi_leave')))return;VI.abort=true;}
+  viShow(false);
+}
+document.getElementById('vi-close').onclick=closeVideoImport;
+document.getElementById('vi').onclick=e=>{if(e.target.id==='vi')closeVideoImport();};
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!document.getElementById('vi').classList.contains('hidden'))closeVideoImport();
+});
+window.addEventListener('beforeunload',e=>{if(VI.busy){e.preventDefault();e.returnValue='';}});
+
+function paintVideoImport(state){
+  const a=VI.d.album||{};
+  const albumLine=[a.artist,a.title].filter(Boolean).join(' — ');
+  const body=document.getElementById('vi-body');
+  document.getElementById('vi-close').setAttribute('aria-label',VT('vi_close'));
+  const head=`<h2 id="vi-title"><span class="material-symbols-outlined" aria-hidden="true">video_call</span>${VT(VI.replace?'vi_title_repl':'vi_title')}</h2>
+    <p class="vi-album">${L2M.esc(albumLine)}</p>`;
+  if(state&&state.phase){
+    const pct=Math.round((state.frac||0)*100);
+    body.innerHTML=head+`
+      <div class="vi-progress" aria-live="polite">
+        <div class="vi-progress-row"><span>${L2M.esc(state.name||'')}</span><span>${state.phase==='send'?pct+' %':''}</span></div>
+        <div class="vi-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div style="width:${state.phase==='send'?pct:100}%"></div></div>
+      </div>
+      <p class="vi-msg${state.err?' err':''}">${L2M.esc(state.msg||'')}</p>
+      <div class="vi-actions">${state.actions||''}</div>`;
+    return;
+  }
+  const recut=VI.mode==='recut';
+  body.innerHTML=head+`
+    <div class="vi-modes" role="radiogroup">
+      <label class="vi-mode"><input type="radio" name="vi-mode" value="keep"${recut?'':' checked'}>
+        <span class="material-symbols-outlined" aria-hidden="true">library_music</span><b>${VT('vi_keep')}</b><small>${VT('vi_keep_d')}</small></label>
+      <label class="vi-mode"><input type="radio" name="vi-mode" value="recut"${recut?' checked':''}>
+        <span class="material-symbols-outlined" aria-hidden="true">content_cut</span><b>${VT('vi_recut')}</b><small>${VT('vi_recut_d')}</small></label>
+    </div>
+    ${recut?`<div class="vi-warn" role="alert"><span class="material-symbols-outlined" aria-hidden="true">warning</span><span>${VT('vi_warn')}</span></div>`:''}
+    <p class="vi-hint">${VT('vi_hint')}</p>
+    <div class="vi-actions">
+      <button class="icon-btn" id="vi-cancel">${VT('vi_cancel')}</button>
+      <button class="primary" id="vi-pick"><span class="material-symbols-outlined" aria-hidden="true">upload</span>${VT(recut?'vi_pick_recut':'vi_pick')}</button>
+    </div>`;
+  body.querySelectorAll('input[name=vi-mode]').forEach(r=>r.onchange=()=>{
+    VI.mode=r.value;paintVideoImport();
+    body.querySelector(`input[value=${VI.mode}]`)?.focus();
+  });
+  document.getElementById('vi-cancel').onclick=closeVideoImport;
+  document.getElementById('vi-pick').onclick=()=>document.getElementById('vi-file').click();
+}
+
+document.getElementById('vi-file').addEventListener('change',async e=>{
+  const f=e.target.files[0];e.target.value='';
+  if(!f)return;
+  VI.busy=true;VI.abort=false;
+  const stopBtn=`<button class="icon-btn" id="vi-stop">${VT('vi_stop')}</button>`;
+  const prog=frac=>{
+    paintVideoImport({phase:'send',name:f.name,frac,msg:VT('vi_sending'),actions:stopBtn});
+    document.getElementById('vi-stop').onclick=()=>{VI.abort=true;};
+  };
+  try{
+    const up=await viUpload(f,prog);
+    paintVideoImport({phase:'save',name:f.name,msg:VT('vi_saving')});
+    const r=await fetch(`/api/albums/${encodeURIComponent(slug)}/video`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token:up.token,file:up.file,mode:VI.mode})});
+    if(!r.ok){
+      const detail=(await r.json().catch(()=>({}))).detail||('HTTP '+r.status);
+      throw Object.assign(new Error(VT('vi_err')+detail),{status:r.status,server:true});
+    }
+    VI.busy=false;
+    if(VI.mode==='recut'){
+      paintVideoImport({phase:'save',name:f.name,msg:VT('vi_to_editor')});
+      location.href=`/app#${encodeURIComponent(slug)}`;
+      return;
+    }
+    paintVideoImport({phase:'done',name:f.name,msg:VT('vi_done_keep'),
+      actions:`<button class="icon-btn" id="vi-done-close">${VT('vi_close')}</button>
+               <a class="primary" href="/app/drafts"><span class="material-symbols-outlined" aria-hidden="true">queue_play_next</span>${VT('vi_queue')}</a>`});
+    document.getElementById('vi-done-close').onclick=()=>location.reload();
+  }catch(err){
+    VI.busy=false;
+    if(err.aborted){viShow(false);return;}
+    const msg=err.status===401||err.status===403?VT('vi_err_auth'):err.server?err.message:VT('vi_err_up');
+    paintVideoImport({phase:'error',name:f.name,frac:0,err:true,msg,
+      actions:`<button class="icon-btn" id="vi-back">${VT('vi_cancel')}</button>`});
+    document.getElementById('vi-back').onclick=()=>paintVideoImport();
+  }
+});
+
+// Upload chunké (~8 Mo, sous la limite Cloudflare de 100 Mo), repris après
+// une coupure réseau — même protocole que l'import (`/api/import/upload`).
+async function viUpload(file,onProgress){
+  const CHUNK=8*1024*1024;
+  onProgress(0);
+  let r=await fetch('/api/import/upload/init',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({filename:file.name,size:file.size})});
+  if(!r.ok)throw Object.assign(new Error((await r.json().catch(()=>({}))).detail||'init'),
+    {status:r.status,server:r.status!==401&&r.status!==403});
+  const {token,file_id}=await r.json();
+  const base=`/api/import/upload/${token}/${file_id}`;
+  let off=0,fails=0;
+  while(off<file.size){
+    if(VI.abort)throw Object.assign(new Error('abort'),{aborted:true});
+    const buf=await file.slice(off,off+CHUNK).arrayBuffer();
+    try{
+      const pr=await fetch(base,{method:'PUT',headers:{'X-Chunk-Offset':String(off)},body:buf});
+      if(pr.status===409){off=((await pr.json()).detail||{}).received||off;continue;}
+      if(pr.status===401||pr.status===403)throw Object.assign(new Error('auth'),{status:pr.status,fatal:true});
+      if(!pr.ok)throw new Error('HTTP '+pr.status);
+      off=(await pr.json()).received;
+      onProgress(off/file.size);
+      fails=0;
+    }catch(e){
+      if(e.fatal||++fails>8)throw e;
+      await new Promise(res=>setTimeout(res,1500));
+      try{off=(await(await fetch(base)).json()).received;}catch(_){}
+    }
+  }
+  r=await fetch(`${base}/finish`,{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify({size:file.size})});
+  if(!r.ok)throw Object.assign(new Error((await r.json().catch(()=>({}))).detail||'finish'),{status:r.status,server:true});
+  return {token,file:(await r.json()).file};
+}
 
 async function initVideo(d){
   const th=document.getElementById('vid-thumb');

@@ -207,21 +207,43 @@ const L2M = (function () {
         b.onclick = () => {
           const act = b.dataset.act;
           if (act === "drafts") { close(); location.href = "/app/drafts"; }
-          else stepTarget(act);
+          else if (act === "manual") stepKind();
+          else stepTarget(act, "audio");
         };
       });
     }
 
-    /* Étape 2 — album neuf, ou piste ajoutée à un album existant. */
-    function stepTarget(mode) {
-      const isTool = mode === "tool";
-      box.innerHTML = chrome(isTool ? tx.tool_t : tx.manual_t, `
-        <p class="imp-choice-sub">${tx.target_sub}</p>
+    /* Étape 1 bis (import manuel) — audio ou vidéo : les deux n'aboutissent
+       pas au même endroit sur un album existant (pistes MP3 ajoutées à la
+       tracklist, ou vidéo du concert complet rattachée à l'album). */
+    function stepKind() {
+      box.innerHTML = chrome(tx.manual_t, `
+        <p class="imp-choice-sub">${tx.kind_sub}</p>
         <div class="imp-choice-grid imp-grid-big">
-          ${card("new", "library_music", tx.new_t, isTool ? tx.new_d_tool : tx.new_d_manual)}
-          ${card("existing", "playlist_add", tx.exist_t, isTool ? tx.exist_d_tool : tx.exist_d_manual)}
+          ${card("audio", "library_music", tx.audio_t, tx.audio_d)}
+          ${card("video", "movie", tx.video_t, tx.video_d)}
         </div>`, stepSource);
       wire(stepSource);
+      box.querySelectorAll(".imp-card").forEach(b => {
+        b.onclick = () => stepTarget("manual", b.dataset.act);
+      });
+    }
+
+    /* Étape 2 — album neuf, ou ajout à un album existant. */
+    function stepTarget(mode, kind) {
+      const isTool = mode === "tool";
+      const isVideo = kind === "video";
+      const back = isTool ? stepSource : stepKind;
+      const title = isTool ? tx.tool_t : (isVideo ? tx.video_t : tx.audio_t);
+      box.innerHTML = chrome(title, `
+        <p class="imp-choice-sub">${isVideo ? tx.target_sub_video : tx.target_sub}</p>
+        <div class="imp-choice-grid imp-grid-big">
+          ${card("new", isVideo ? "video_library" : "library_music", tx.new_t,
+                 isTool ? tx.new_d_tool : (isVideo ? tx.new_d_video : tx.new_d_manual))}
+          ${card("existing", isVideo ? "video_call" : "playlist_add", tx.exist_t,
+                 isTool ? tx.exist_d_tool : (isVideo ? tx.exist_d_video : tx.exist_d_manual))}
+        </div>`, back);
+      wire(back);
       box.querySelectorAll(".imp-card").forEach(b => {
         b.onclick = () => {
           if (b.dataset.act === "new") {
@@ -229,24 +251,25 @@ const L2M = (function () {
             if (isTool) location.href = "/app";
             else (opts.onImport || (() => { location.href = "/?import=1"; }))();
           } else {
-            stepPick(mode);
+            stepPick(mode, kind);
           }
         };
       });
     }
 
     /* Étape 3 — choix de l'album de destination. */
-    async function stepPick(mode) {
+    async function stepPick(mode, kind) {
+      const isVideo = kind === "video";
       box.innerHTML = chrome(tx.pick_t, `
-        <p class="imp-choice-sub">${tx.pick_sub}</p>
+        <p class="imp-choice-sub">${isVideo ? tx.pick_sub_video : tx.pick_sub}</p>
         <div class="imp-pick-search">
           <span class="material-symbols-outlined">search</span>
           <input id="imp-pick-q" type="search" placeholder="${tx.pick_ph}" autocomplete="off">
         </div>
         <div class="imp-pick-list" id="imp-pick-list">
           <p class="imp-pick-empty">${tx.loading}</p>
-        </div>`, () => stepTarget(mode));
-      wire(() => stepTarget(mode));
+        </div>`, () => stepTarget(mode, kind));
+      wire(() => stepTarget(mode, kind));
       const list = box.querySelector("#imp-pick-list");
       let albums = [];
       try {
@@ -275,10 +298,12 @@ const L2M = (function () {
         list.querySelectorAll(".imp-pick-row").forEach(r => {
           r.onclick = () => {
             close();
-            // La page de gestion sait ouvrir le bon panneau d'ajout : tout se
-            // termine là, plutôt que de dupliquer le formulaire ici.
-            location.href = `/app/album/${encodeURIComponent(r.dataset.slug)}`
-              + `?add=${mode === "tool" ? "link" : "file"}`;
+            // Vidéo : la fiche album ouvre sa fenêtre d'import vidéo. Pistes :
+            // la page de gestion ouvre sa fenêtre d'ajout (lien ou MP3). Tout
+            // se termine là, plutôt que de dupliquer les formulaires ici.
+            const s = encodeURIComponent(r.dataset.slug);
+            location.href = isVideo ? `/album/${s}?video=import`
+              : `/app/album/${s}?add=${mode === "tool" ? "link" : "file"}`;
           };
         });
       };
@@ -376,7 +401,7 @@ const L2M = (function () {
         new_d_manual: "Un album complet à partir des fichiers déposés.",
         new_d_tool: "Un concert entier, découpé piste par piste depuis le lien.",
         exist_t: "Ajouter à un album existant",
-        exist_d_manual: "Pistes individuelles ajoutées à la suite d'un album ou d'une compilation.",
+        exist_d_manual: "Pistes MP3 ajoutées à la suite d'un album ou d'une compilation.",
         exist_d_tool: "Un morceau isolé (featuring, invité) ajouté à une compilation existante.",
         pick_t: "Choisir l'album de destination",
         pick_sub: "La ou les pistes seront ajoutées à la fin de sa tracklist.",
@@ -384,8 +409,17 @@ const L2M = (function () {
         pick_none: "Aucun album ne correspond.",
         pick_err: "Impossible de charger la liste des albums.",
         tracks_s: "piste", tracks_p: "pistes", unpublished: "Dépublié",
-        manual_t: "Importer les MP3/MP4 manuellement",
-        manual_d: "Pistes déjà découpées (MP3/MP4) ou un ZIP — vous complétez les informations.",
+        manual_t: "Importer des fichiers",
+        manual_d: "Pistes MP3 déjà découpées, ZIP ou vidéo — vous complétez les informations.",
+        kind_sub: "Quel type de fichier importez-vous ?",
+        audio_t: "Audio (MP3)",
+        audio_d: "Des pistes MP3 déjà découpées, ou un ZIP.",
+        video_t: "Vidéo (MP4, MOV…)",
+        video_d: "La vidéo d'un concert, pour un nouvel album ou un album déjà en ligne.",
+        target_sub_video: "Cette vidéo forme-t-elle un nouvel album, ou rejoint-elle un album déjà en ligne ?",
+        new_d_video: "Des clips déjà découpés, un fichier par piste. Pour un concert complet à découper, utilisez « Découpe par l'IA ».",
+        exist_d_video: "Le concert complet ajouté à un album existant : ses MP3 sont gardés, ou redécoupés depuis la vidéo.",
+        pick_sub_video: "La vidéo sera ajoutée à cet album. Vous choisirez ensuite de garder ou de redécouper ses MP3.",
         tool_t: "Découpe par l'IA (lien ou fichier)",
         tool_d: "Collez un lien de captation OU téléversez un fichier complet : découpe, titres et métadonnées proposés par l'IA (setlist.fm).",
         drafts_t: "Brouillons",
@@ -403,7 +437,7 @@ const L2M = (function () {
         new_d_manual: "A complete album from the files you upload.",
         new_d_tool: "A whole concert, split track by track from the link.",
         exist_t: "Add to an existing album",
-        exist_d_manual: "Individual tracks appended to an album or a compilation.",
+        exist_d_manual: "MP3 tracks appended to an album or a compilation.",
         exist_d_tool: "A single song (feature, guest) appended to an existing compilation.",
         pick_t: "Choose the destination album",
         pick_sub: "The track(s) will be appended to the end of its tracklist.",
@@ -411,8 +445,17 @@ const L2M = (function () {
         pick_none: "No album matches.",
         pick_err: "Could not load the album list.",
         tracks_s: "track", tracks_p: "tracks", unpublished: "Unpublished",
-        manual_t: "Import MP3/MP4 manually",
-        manual_d: "Already-split tracks (MP3/MP4) or a ZIP — you fill in the details.",
+        manual_t: "Import files",
+        manual_d: "Already-split MP3 tracks, a ZIP or a video — you fill in the details.",
+        kind_sub: "What kind of file are you importing?",
+        audio_t: "Audio (MP3)",
+        audio_d: "Already-split MP3 tracks, or a ZIP.",
+        video_t: "Video (MP4, MOV…)",
+        video_d: "A concert video, for a new album or an album that is already online.",
+        target_sub_video: "Does this video make a new album, or does it join an album that is already online?",
+        new_d_video: "Already-split clips, one file per track. For a full concert to split, use “AI splitting”.",
+        exist_d_video: "The full concert added to an existing album: its MP3s are kept, or re-cut from the video.",
+        pick_sub_video: "The video will be added to this album. You will then choose to keep or re-cut its MP3s.",
         tool_t: "AI splitting (link or file)",
         tool_d: "Paste a concert link OR upload a full file: splitting, titles and metadata proposed by AI (setlist.fm).",
         drafts_t: "Drafts",

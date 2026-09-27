@@ -127,7 +127,10 @@
   .add-track-row{display:flex;gap:8px}
   .add-track-row input{flex:1;margin:0;padding:6px 10px;font-size:13px}
   /* Ajout d'une piste depuis un lien vidéo (albums-compilations). */
-  .from-url{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+  .from-url{margin:0}
+  .at-box{max-width:720px;padding:24px}
+  .at-box h3{padding-right:48px;font-size:17px}
+  .at-close{position:absolute;top:12px;right:12px;width:44px;height:44px;margin:0}
   .fu-actions{display:flex;flex-wrap:wrap;gap:8px}
   .fu-actions .icon-btn{margin:0}
   .fx-panel{margin-top:10px;display:flex;flex-direction:column;gap:10px;
@@ -388,8 +391,15 @@
           <button class="icon-btn" id="add-track" style="margin:0;height:34px"><span class="material-symbols-outlined">add</span></button>
         </div>
 
-        <!-- Ajout d'une piste depuis un lien vidéo : le morceau est téléchargé,
-             rogné et encodé côté serveur, puis rattaché à cet album. -->
+        <!-- Ajout de pistes (lien vidéo ou MP3) : fenêtre ouverte uniquement
+             depuis « Importer → Audio → Album existant » (?add=link|file).
+             Plus d'îlot permanent sur la page (demande du 2026-09-27) : il
+             brouillait l'import d'une vidéo, qui passe par la fiche album. -->
+        <div class="rc-overlay at-overlay" id="at-overlay">
+        <div class="rc-box at-box" role="dialog" aria-modal="true" aria-labelledby="t-at-title">
+          <button class="icon-btn icon-only at-close" id="at-close" type="button"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <h3 id="t-at-title"></h3>
+          <p class="rc-sub" id="at-album"></p>
         <div class="from-url">
           <div class="fu-actions">
             <button class="icon-btn" id="fu-toggle" type="button">
@@ -430,6 +440,8 @@
             </div>
             <p class="fu-status hidden" id="fu-status"></p>
           </div>
+        </div>
+        </div>
         </div>
       </div>
 
@@ -488,6 +500,7 @@ const TT={
       open_editor_hint:"Rouvrir l'éditeur de coupes (Peaks.js) sur le master conservé de cet album",
       open_editor_no_source:"Indisponible : fichier source non conservé pour cet album (import manuel)",
       fu_toggle:"Ajouter une piste depuis un lien",
+      at_title:"Ajouter des pistes à cet album",at_close:"Fermer",
       fu_hint:"Le morceau est téléchargé, rogné puis encodé en MP3 et rattaché à cet album. Mettez l'artiste dans le titre de la piste (« Coldplay (ft. Ed Sheeran) - Fix You ») : sur une compilation, l'artiste change à chaque piste.",
       fu_analyze:"Analyser",
       fu_title:"Titre de la piste",
@@ -565,6 +578,7 @@ const TT={
       open_editor_hint:"Reopen the cut editor (Peaks.js) on this album's retained master",
       open_editor_no_source:"Unavailable: no source file kept for this album (manual import)",
       fu_toggle:"Add a track from a link",
+      at_title:"Add tracks to this album",at_close:"Close",
       fu_hint:"The song is downloaded, trimmed, encoded to MP3 and attached to this album. Put the artist in the track title (“Coldplay (ft. Ed Sheeran) - Fix You”): on a compilation the artist changes with every track.",
       fu_analyze:"Analyse",
       fu_title:"Track title",
@@ -663,6 +677,8 @@ function applyLang(){
   document.getElementById("newlabel").placeholder=t.add_label;
   document.getElementById("t-btn-open-editor").textContent=t.open_editor;
   document.getElementById("t-fu-toggle").textContent=t.fu_toggle;
+  document.getElementById("t-at-title").textContent=t.at_title;
+  document.getElementById("at-close").setAttribute("aria-label",t.at_close);
   document.getElementById("t-fu-hint").textContent=t.fu_hint;
   document.getElementById("t-fu-analyze").textContent=t.fu_analyze;
   document.getElementById("t-fu-title").textContent=t.fu_title;
@@ -1174,12 +1190,21 @@ fuEl("fx-file").onchange=async()=>{
 
 // Arrivée depuis la fenêtre « Importer » : ?add=link | ?add=file ouvre
 // directement le bon panneau, la destination ayant déjà été choisie là-bas.
+function closeAtModal(){document.getElementById("at-overlay").classList.remove("open");}
+document.getElementById("at-close").onclick=closeAtModal;
+document.getElementById("at-overlay").onclick=e=>{if(e.target.id==="at-overlay")closeAtModal();};
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&document.getElementById("at-overlay").classList.contains("open"))closeAtModal();
+});
 function openRequestedPanel(){
   const add=new URLSearchParams(location.search).get("add");
   if(add!=="link"&&add!=="file")return;
   const panel=fuEl(add==="link"?"fu-panel":"fx-panel");
+  fuEl(add==="link"?"fx-panel":"fu-panel").classList.add("hidden");
   panel.classList.remove("hidden");
-  panel.scrollIntoView({behavior:"smooth",block:"center"});
+  const a=(DATA&&DATA.album)||{};
+  document.getElementById("at-album").textContent=[a.artist,a.title].filter(Boolean).join(" — ");
+  document.getElementById("at-overlay").classList.add("open");
   if(add==="link")setTimeout(()=>fuEl("fu-url").focus(),300);
   // L'URL est nettoyée : un rechargement ne doit pas rouvrir le panneau
   // indéfiniment, et le lien copié depuis la barre d'adresse reste propre.
