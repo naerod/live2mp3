@@ -450,6 +450,8 @@
     .album{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
     .album .pick{pointer-events:none}
     .album.picked .pick{opacity:1}
+    [data-density="cozy"] .album .pick{opacity:1;pointer-events:auto}
+    [data-density="cozy"] .album .new-badge{top:42px}
     .album.picked .cover{position:relative}
     .album.picked .cover::after{content:"";position:absolute;inset:0;
       background:color-mix(in srgb,var(--accent) 28%,transparent);pointer-events:none}
