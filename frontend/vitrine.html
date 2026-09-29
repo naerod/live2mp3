@@ -69,6 +69,7 @@
     background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
   .new-badge .material-symbols-outlined{font-size:12px}
+  .new-badge .ic-check{display:none}
   /* Mise à jour récente : même gabarit que « Nouveau », teinte neutre pour ne
      pas concurrencer la nouveauté (et contraste AA sur fond clair et sombre). */
   .new-badge.upd-badge{background:var(--card);color:var(--fg);
@@ -381,34 +382,44 @@
   [data-density="tiny"] .new-badge,
   [data-density="tiny"] .status-badge{font-size:0;gap:0;padding:2px;border-radius:6px}
   [data-density="tiny"] .new-badge{top:4px;left:4px}
-  [data-density="tiny"] .album:hover .new-badge,
-  [data-density="tiny"] .album:focus-within .new-badge,
-  body.select-mode [data-density="tiny"] .album .new-badge{top:28px}
-  @media(hover:none){[data-density="tiny"] .album .new-badge{top:28px}}
+  @media(hover:hover){
+    [data-density="tiny"] .album:hover .new-badge,
+    [data-density="tiny"] .album:focus-within .new-badge,
+    body.select-mode [data-density="tiny"] .album .new-badge{top:28px}
+  }
+  @media(hover:none){[data-density="tiny"] .album.picked .new-badge{top:28px}}
   [data-density="tiny"] .status-badge{top:4px;right:4px}
   [data-density="tiny"] .status-badge.has-video{right:28px}
   [data-density="tiny"] .video-badge{top:4px;right:4px;width:20px;height:20px}
   [data-density="tiny"] .video-badge .material-symbols-outlined{font-size:12px}
   /* Liste : une ligne par album, pochette à gauche, actions à droite. */
-  [data-density="list"] .album{display:grid;grid-auto-flow:column;grid-template-columns:72px minmax(0,1fr);
-    grid-auto-columns:auto;align-items:center;column-gap:12px;min-height:72px;border-radius:12px}
+  [data-density="list"] .album{display:grid;grid-auto-flow:column;grid-template-columns:96px minmax(0,1fr);
+    grid-auto-columns:auto;align-items:center;column-gap:12px;min-height:96px;border-radius:12px}
   [data-density="list"] .album:hover{transform:none}
   [data-density="list"] .album .album-open{border-radius:12px}
-  [data-density="list"] .album .cover{order:0;width:72px;height:72px;aspect-ratio:auto}
+  [data-density="list"] .album .cover{order:0;width:96px;height:96px;aspect-ratio:auto}
   [data-density="list"] .album .body{order:1;flex-direction:row;flex-wrap:wrap;align-items:center;
     gap:2px 12px;padding:8px 0}
   [data-density="list"] .album .al-poster{display:none}
-  [data-density="list"] .badges{order:2;display:flex;align-items:center;gap:8px}
+  [data-density="list"] .badges{order:2;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
   [data-density="list"] .badges:empty{display:none}
   [data-density="list"] .badges > *{position:static}
+  [data-density="list"] .new-badge{font-size:0;gap:0;width:24px;height:24px;padding:0;
+    border-radius:50%;justify-content:center;pointer-events:auto}
+  [data-density="list"] .new-badge .ic-new{display:none}
+  [data-density="list"] .new-badge .ic-check{display:inline;font-size:16px}
+  [data-density="list"] .new-badge.upd-badge .ic-new{display:inline;font-size:16px}
+  [data-density="list"] .new-badge.upd-badge .ic-check{display:none}
+  [data-density="list"] .video-badge{width:24px;height:24px}
+  [data-density="list"] .video-badge .material-symbols-outlined{font-size:14px}
   [data-density="list"] .album .al-social{order:3;padding:0}
   [data-density="list"] .album .al-social:empty{display:none}
   [data-density="list"] .album .btns{order:4;padding:0 12px 0 0}
   [data-density="list"] .album .btns a{flex:0 0 auto;padding:0 12px}
   [data-density="list"] .album .pick{top:4px;left:4px;width:22px;height:22px}
   @media(max-width:700px){
-    [data-density="list"] .album{grid-template-columns:56px minmax(0,1fr);column-gap:10px;min-height:56px}
-    [data-density="list"] .album .cover{width:56px;height:56px}
+    [data-density="list"] .album{grid-template-columns:76px minmax(0,1fr);column-gap:10px;min-height:76px}
+    [data-density="list"] .album .cover{width:76px;height:76px}
     [data-density="list"] .album .al-social,
     [data-density="list"] .album .btns{display:none}
     [data-density="list"] .badges{padding-right:10px}
@@ -431,17 +442,30 @@
     margin:0;padding:0;border-radius:8px;border:2px solid var(--border);background:rgba(10,10,10,.75);
     display:flex;align-items:center;justify-content:center;color:transparent;cursor:pointer;
     backdrop-filter:blur(2px);opacity:0;transition:opacity .12s,background .12s}
-  .album:hover .pick,.album:focus-within .pick,.album .pick:focus-visible,
-  body.select-mode .album .pick{opacity:1}
+  @media(hover:hover){
+    .album:hover .pick,.album:focus-within .pick,.album .pick:focus-visible,
+    body.select-mode .album .pick{opacity:1}
+  }
   .album .pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  @media(hover:none){.album .pick{opacity:1}}
+  /* Tactile : pas de case à l'écran. Appui long = sélection (<nrd-longpress>) ;
+     une fiche cochée se reconnaît à son liseré, son voile et sa coche. */
+  @media(hover:none){
+    .album{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    .album .pick{pointer-events:none}
+    .album.picked .pick{opacity:1}
+    .album.picked .cover{position:relative}
+    .album.picked .cover::after{content:"";position:absolute;inset:0;
+      background:color-mix(in srgb,var(--accent) 28%,transparent);pointer-events:none}
+  }
   /* La case occupe le coin haut-gauche, là où se posent « Nouveau » / « Mis à
      jour » : quand elle est visible, le badge passe SOUS elle (empilé, donc
      indépendant de la largeur de la carte). Aucun recouvrement toléré. */
   .new-badge{transition:top .12s}
-  .album:hover .new-badge,.album:focus-within .new-badge,
-  body.select-mode .album .new-badge{top:42px}
-  @media(hover:none){.album .new-badge{top:42px}}
+  @media(hover:hover){
+    .album:hover .new-badge,.album:focus-within .new-badge,
+    body.select-mode .album .new-badge{top:42px}
+  }
+  @media(hover:none){.album.picked .new-badge{top:42px}}
   .album .pick .material-symbols-outlined{font-size:18px;line-height:1}
   .album.picked{outline:2px solid var(--accent);outline-offset:2px}
   .album.picked .pick{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -507,6 +531,7 @@
       <span class="count" id="count"></span>
       <div class="tr-right">
         <nrd-density target="#albums" storage-key="l2m-density"></nrd-density>
+        <nrd-longpress target="#albums" item=".album"></nrd-longpress>
       </div>
     </div>
     <div id="filter-panel" class="filter-panel">
@@ -851,7 +876,7 @@ function albumCard(a){
     }
   }
   const newBadge=isNew(a)
-    ?`<span class="new-badge"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
+    ?`<span class="new-badge" title="${T[L()].badge_new}"><span class="material-symbols-outlined ic-new">auto_awesome</span><span class="material-symbols-outlined ic-check" aria-hidden="true">check</span>${T[L()].badge_new}</span>`
     :(isUpdated(a)
       ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
   // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
@@ -1122,6 +1147,14 @@ document.getElementById("sort-select").addEventListener("change",async e=>{
 });
 
 document.getElementById("q").addEventListener("input",()=>{render();updateCount();if(selectMode)updateBulkBar();});
+
+// Appui long (tactile) : sélectionne la fiche et bascule en mode sélection.
+document.addEventListener("nrd-longpress",e=>{
+  const slug=e.detail.item?.dataset?.slug;
+  if(!slug||picked.has(slug)) return;
+  if(!selectMode) enterSelectMode();
+  togglePick(slug);
+});
 
 // ── Navigation vers la page album ─────────────────────────────────────────
 document.getElementById("albums").addEventListener("click",e=>{

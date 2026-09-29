@@ -17,7 +17,9 @@
         "Fiche album : le bouton de choix du format de téléchargement a retrouvé sa bordure droite.",
         "Catalogue : espacements revus au-dessus et autour de la barre de tri et de recherche ; sur mobile, le bouton « Sélectionner » ne masque plus le nombre d'albums.",
         "Catalogue : nouveau sélecteur de taille d'affichage — grandes vignettes, vignettes moyennes, miniatures (pochettes seules, une dizaine par ligne) ou liste. Le choix est mémorisé.",
-        "Sélection : le bouton « Sélectionner » disparaît. Une case apparaît au survol d'un album ; la cocher active le mode sélection."
+        "Sélection : le bouton « Sélectionner » disparaît. Une case apparaît au survol d'un album ; la cocher active le mode sélection.",
+        "Mobile : la taille des vignettes suit la largeur de l'écran (3 par ligne en moyen, 5 en miniatures) ; la sélection se fait par appui long, sans case à l'écran.",
+        "Liste : pochettes plus grandes ; le badge « Nouveau » devient une pastille avec une coche, empilée au-dessus de l'icône vidéo."
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
@@ -28,7 +30,9 @@
         "Album page: the download format button has its right border back.",
         "Catalogue: revised spacing above and around the sort and search bar; on mobile, the “Select” button no longer hides the album count.",
         "Catalogue: new display size selector — large thumbnails, medium thumbnails, small thumbnails (covers only, about ten per row) or list. Your choice is remembered.",
-        "Selection: the “Select” button is gone. A checkbox appears when hovering an album; ticking it turns on selection mode."
+        "Selection: the “Select” button is gone. A checkbox appears when hovering an album; ticking it turns on selection mode.",
+        "Mobile: thumbnail size follows the screen width (3 per row in medium, 5 in small); selection is done with a long press, with no checkbox on screen.",
+        "List: larger covers; the “New” badge becomes a check-mark dot stacked above the video icon."
       ]
     },
     {
