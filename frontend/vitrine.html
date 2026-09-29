@@ -317,7 +317,7 @@
     .sort-block{gap:8px}
     #sort-select{flex:1;height:44px;font-size:15px;min-width:0}
     .sort-label{font-size:13px}
-    .chip{height:42px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
+    .chip{height:44px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
     /* Largeur selon le contenu : à parts égales (flex-basis 0), « Sélectionner »
        débordait sur le compteur d'albums. Trop étroit → la ligne se replie. */
     .tr-left,.tr-right{flex:1 1 auto}
@@ -352,6 +352,10 @@
      Le module pose data-density sur #albums et publie --nrd-col-min/--nrd-gap ;
      ici, seulement ce que chaque mode masque ou réarrange. */
   .badges{display:contents}
+  /* Le groupe de tailles a la même hauteur que le bouton « Filtres » (30 px ; 44 px sur
+     mobile) : groupe = bouton + 6 px de bordure et de marge interne. */
+  nrd-density{--nrd-density-btn:24px;--nrd-density-icon:18px}
+  @media(max-width:700px){nrd-density{--nrd-density-btn:38px;--nrd-density-icon:22px}}
   .album .body .al-title{overflow-wrap:anywhere}
   /* Moyen : pochette + artiste + titre. Le reste est sur la fiche. */
   [data-density="compact"] .album{border-radius:12px}

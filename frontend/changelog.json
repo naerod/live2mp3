@@ -19,6 +19,7 @@
         "Catalogue : nouveau sélecteur de taille d'affichage — grandes vignettes, vignettes moyennes, miniatures (pochettes seules, une dizaine par ligne) ou liste. Le choix est mémorisé.",
         "Sélection : le bouton « Sélectionner » disparaît. Une case apparaît au survol d'un album ; la cocher active le mode sélection.",
         "Mobile : la taille des vignettes suit la largeur de l'écran (3 par ligne en moyen, 5 en miniatures) ; la sélection se fait par appui long, la case à cocher reste visible uniquement en grandes vignettes.",
+        "Catalogue : le sélecteur de taille a désormais la même hauteur que le bouton « Filtres » et ne change plus de taille selon le type de pointeur.",
         "Liste : pochettes plus grandes ; le badge « Nouveau » devient une pastille avec ses étincelles, empilée au-dessus de l'icône vidéo. Sur mobile, le texte ne touche plus le bord droit."
       ],
       "en": [
@@ -32,6 +33,7 @@
         "Catalogue: new display size selector — large thumbnails, medium thumbnails, small thumbnails (covers only, about ten per row) or list. Your choice is remembered.",
         "Selection: the “Select” button is gone. A checkbox appears when hovering an album; ticking it turns on selection mode.",
         "Mobile: thumbnail size follows the screen width (3 per row in medium, 5 in small); selection is done with a long press, the checkbox stays visible in large thumbnails only.",
+        "Catalogue: the size selector now matches the height of the “Filters” button and no longer changes size depending on the pointer type.",
         "List: larger covers; the “New” badge becomes a sparkle dot stacked above the video icon. On mobile, the text no longer touches the right edge."
       ]
     },
