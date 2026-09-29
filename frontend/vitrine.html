@@ -69,7 +69,6 @@
     background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
     letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
   .new-badge .material-symbols-outlined{font-size:12px}
-  .new-badge .ic-check{display:none}
   /* Mise à jour récente : même gabarit que « Nouveau », teinte neutre pour ne
      pas concurrencer la nouveauté (et contraste AA sur fond clair et sombre). */
   .new-badge.upd-badge{background:var(--card);color:var(--fg);
@@ -406,10 +405,7 @@
   [data-density="list"] .badges > *{position:static}
   [data-density="list"] .new-badge{font-size:0;gap:0;width:24px;height:24px;padding:0;
     border-radius:50%;justify-content:center;pointer-events:auto}
-  [data-density="list"] .new-badge .ic-new{display:none}
-  [data-density="list"] .new-badge .ic-check{display:inline;font-size:16px}
-  [data-density="list"] .new-badge.upd-badge .ic-new{display:inline;font-size:16px}
-  [data-density="list"] .new-badge.upd-badge .ic-check{display:none}
+  [data-density="list"] .new-badge .material-symbols-outlined{font-size:16px}
   [data-density="list"] .video-badge{width:24px;height:24px}
   [data-density="list"] .video-badge .material-symbols-outlined{font-size:14px}
   [data-density="list"] .album .al-social{order:3;padding:0}
@@ -877,7 +873,7 @@ function albumCard(a){
     }
   }
   const newBadge=isNew(a)
-    ?`<span class="new-badge" title="${T[L()].badge_new}"><span class="material-symbols-outlined ic-new">auto_awesome</span><span class="material-symbols-outlined ic-check" aria-hidden="true">check</span>${T[L()].badge_new}</span>`
+    ?`<span class="new-badge" title="${T[L()].badge_new}"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
     :(isUpdated(a)
       ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
   // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
