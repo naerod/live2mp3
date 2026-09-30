@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="/static/shared/naerod-social.css">
 <script type="module" src="https://static.dorianjulien.com/ui/header/v1.js"></script>
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/albums.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   .hero{padding:30px 0 0}
@@ -21,17 +22,17 @@
      24 px entre les deux lignes de la barre, 8 px barre → albums. */
   .toolbar{margin:24px 0 0;display:flex;flex-direction:column;gap:24px}
   .toolbar-main{display:flex;align-items:center;gap:10px}
-  .sort-block{display:flex;align-items:center;gap:7px;flex-shrink:0}
   .search{position:relative;flex:1}
   .search .material-symbols-outlined{position:absolute;left:12px;top:50%;
     transform:translateY(-50%);color:var(--muted);font-size:20px;pointer-events:none}
   .search input{width:100%;height:38px;padding:0 14px 0 42px;font-size:14px}
   .toolbar-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  /* Le groupe de tailles a la même hauteur que le bouton « Filtres » (30 px ; 44 px sur
+     mobile) : groupe = bouton + 6 px de bordure et de marge interne. */
+  nrd-density{--nrd-density-btn:24px;--nrd-density-icon:18px}
+  @media(max-width:700px){nrd-density{--nrd-density-btn:38px;--nrd-density-icon:22px}}
   .tr-left,.tr-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1 1 0;min-width:0}
   .tr-right{justify-content:flex-end}
-  .sort-label{color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap;
-    display:flex;align-items:center;gap:5px}
-  .sort-label .material-symbols-outlined{font-size:15px}
   /* margin:0 obligatoire : `button` (app.css) impose margin-top:16px, qui
      descendait les chips sous la ligne du compteur d'albums. */
   .chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;margin:0;
@@ -42,108 +43,6 @@
   .chip.active{background:var(--accent);color:#0d0f13;border-color:var(--accent)}
   .sep{width:1px;height:18px;background:var(--border);margin:0 2px}
   .count{color:var(--muted);font-size:14.5px;flex:0 0 auto;text-align:center;white-space:nowrap}
-  #sort-select{height:38px;padding:0 10px;font-size:14px;cursor:pointer;border-radius:8px;min-width:160px}
-  /* Vue par artiste */
-  .artist-group{margin-bottom:28px}
-  .artist-sep{display:flex;align-items:center;gap:14px;margin:36px 0 14px}
-  .artist-group:first-child .artist-sep{margin-top:8px}
-  .artist-bar{flex:1;height:3px;background:var(--accent);border-radius:2px;opacity:.65}
-  .artist-name{font-size:20px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;color:var(--fg)}
-  .albums{display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(min(100%,var(--nrd-col-min,250px)),1fr));
-    gap:var(--nrd-gap,18px);margin-top:8px}
-  .album{position:relative;background:var(--card);border:1px solid var(--border);
-    border-radius:16px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;
-    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-  /* Lien réel couvrant la carte : rend possible clic-molette / Ctrl+clic
-     (ouverture dans un nouvel onglet), impossible avec un simple handler JS. */
-  .album .album-open{position:absolute;inset:0;z-index:1;border-radius:16px}
-  .album .body a,.album .al-social,.album .btns,.album .al-poster{position:relative;z-index:2}
-  body.select-mode .album .album-open{pointer-events:none}
-  .album:hover{transform:translateY(-6px);border-color:var(--accent);
-    box-shadow:0 14px 30px -14px rgba(0,0,0,.6)}
-  .album:hover .cover-img{transform:scale(1.03)}
-  .cover-img{transition:transform .25s ease}
-  .new-badge{position:absolute;top:10px;left:10px;z-index:2;display:flex;align-items:center;
-    gap:3px;padding:3px 8px 3px 5px;border-radius:7px;
-    background:var(--accent);color:#0d0f13;font-size:10.5px;font-weight:700;
-    letter-spacing:.03em;text-transform:uppercase;pointer-events:none}
-  .new-badge .material-symbols-outlined{font-size:12px}
-  /* Mise à jour récente : même gabarit que « Nouveau », teinte neutre pour ne
-     pas concurrencer la nouveauté (et contraste AA sur fond clair et sombre). */
-  .new-badge.upd-badge{background:var(--card);color:var(--fg);
-    border:1px solid var(--border)}
-  .draft-badge{position:absolute;top:10px;right:48px;z-index:2;display:flex;align-items:center;
-    gap:3px;padding:3px 8px 3px 5px;border-radius:7px;
-    background:rgba(220,60,60,.85);color:#fff;font-size:10.5px;font-weight:700;
-    letter-spacing:.03em;text-transform:uppercase;pointer-events:none;
-    backdrop-filter:blur(3px)}
-  .draft-badge .material-symbols-outlined{font-size:12px}
-  /* Badge de statut — draft/non-publié seulement (alertes sur la cover) */
-  .status-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
-    gap:3px;padding:3px 8px 3px 5px;border-radius:7px;color:#fff;font-size:10.5px;font-weight:700;
-    letter-spacing:.03em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(3px)}
-  .status-badge .material-symbols-outlined{font-size:12px}
-  .status-badge.st-draft{background:rgba(220,60,60,.88)}
-  .status-badge.st-unpublished{background:rgba(214,158,46,.9)}
-  /* L'icône vidéo tient le coin haut-droit : le badge de statut se décale. */
-  .status-badge.has-video{right:46px}
-  .video-badge{position:absolute;top:10px;right:10px;z-index:2;display:flex;align-items:center;
-    justify-content:center;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);
-    color:#fff;backdrop-filter:blur(2px)}
-  .video-badge .material-symbols-outlined{font-size:16px}
-  .album.unpublished{opacity:.6;outline:2px dashed rgba(220,60,60,.5);outline-offset:2px}
-  .cover{aspect-ratio:1;overflow:hidden;background:#0a0a0a}
-  /* Squelette animé sous la vignette tant qu'elle n'est pas peinte — la grille
-     de carrés noirs figés faisait croire à une page cassée (2026-09-15).
-     La pochette est opaque et couvre tout : elle masque le motif en arrivant. */
-  .cover.is-load{background-image:linear-gradient(100deg,
-    #0a0a0a 30%,#1c1f27 48%,#0a0a0a 66%);background-size:250% 100%;
-    animation:l2m-shimmer 1.4s linear infinite}
-  @keyframes l2m-shimmer{from{background-position:180% 0}to{background-position:-80% 0}}
-  .cover-img{width:100%;height:100%;object-fit:cover;display:block;
-    opacity:0;transition:opacity .2s ease}
-  .cover-img.rdy{opacity:1}
-  @media (prefers-reduced-motion:reduce){.cover.is-load{animation:none}
-    .cover-img{transition:none}}
-  .cover-generic{width:100%;height:100%;display:flex;align-items:center;
-    justify-content:center;background:#0a0a0a}
-  .cover-generic svg{width:65%;height:65%;opacity:.6}
-  /* flex:1 : le corps absorbe la hauteur variable du texte, les rangées
-     sociales + téléchargement restent épinglées en bas → cartes alignées. */
-  .album .body{padding:10px 12px 4px;display:flex;flex-direction:column;gap:3px;flex:1}
-  .album .al-artist{color:var(--accent);font-size:14px;font-weight:700;line-height:1.15}
-  .album .al-title{font-weight:600;font-size:13px;line-height:1.2;color:var(--fg)}
-  .album .al-line{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:11.5px}
-  .album .al-line .material-symbols-outlined{font-size:13px;color:var(--muted)}
-  .album .al-line.muted-placeholder{opacity:.45;font-style:italic}
-  .album .al-poster{margin-top:5px}
-  /* Rangées de boutons des cartes : hauteur pilotée par height + line-height:1,
-     jamais par les métriques de police. `margin:0` neutralise le margin-top:16px
-     du sélecteur global `button,.primary` (app.css), destiné aux formulaires. */
-  .album .al-social{display:flex;align-items:center;gap:4px;padding:6px 12px}
-  .soc-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;
-    height:30px;margin:0;padding:0 10px;border:1px solid;border-radius:999px;
-    font-size:12px;font-weight:600;line-height:1;cursor:pointer;
-    transition:color .15s,background .15s,border-color .15s}
-  .soc-btn.is-like{color:var(--like);border-color:color-mix(in srgb,var(--like) 45%,transparent);
-    background:color-mix(in srgb,var(--like) 12%,var(--card))}
-  .soc-btn.is-like:hover{background:color-mix(in srgb,var(--like) 22%,var(--card));border-color:var(--like)}
-  .soc-btn.is-like.liked{background:var(--like);border-color:var(--like);color:#fff}
-  .soc-btn.is-like.liked .material-symbols-outlined{font-variation-settings:'FILL' 1}
-  .soc-btn.is-comment{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);
-    background:color-mix(in srgb,var(--accent) 12%,var(--card))}
-  .soc-btn.is-comment:hover{background:color-mix(in srgb,var(--accent) 22%,var(--card));border-color:var(--accent)}
-  .soc-btn .material-symbols-outlined{font-size:15px;line-height:1}
-  .album .meta{color:var(--muted);font-size:11px}
-  .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:999px;
-    background:var(--bg);border:1px solid var(--border);color:var(--muted)}
-  /* display:flex : l'ancre devient un flex item, ce qui supprime la ligne de base
-     inline et l'espace fantôme qu'elle réservait sous le bouton. */
-  .album .btns{display:flex;align-items:center;padding:2px 12px 8px}
-  .album .btns a{flex:1;margin:0;justify-content:center;height:30px;
-    font-size:12px;line-height:1}
-  .album .btns a .material-symbols-outlined{font-size:15px;line-height:1}
   .empty{margin-top:40px;text-align:center;color:var(--muted)}
   .empty .material-symbols-outlined{font-size:52px;display:block;margin-bottom:10px}
   /* Preview banner */
@@ -314,9 +213,6 @@
     .toolbar-main{flex-direction:column-reverse;align-items:stretch;gap:8px}
     .search input{height:48px;font-size:16px;padding-left:46px;border-radius:12px}
     .search .material-symbols-outlined{font-size:22px;left:14px}
-    .sort-block{gap:8px}
-    #sort-select{flex:1;height:44px;font-size:15px;min-width:0}
-    .sort-label{font-size:13px}
     .chip{height:44px;padding:0 16px;font-size:14px;gap:7px;border-radius:999px}
     /* Largeur selon le contenu : à parts égales (flex-basis 0), « Sélectionner »
        débordait sur le compteur d'albums. Trop étroit → la ligne se replie. */
@@ -326,16 +222,6 @@
     .filter-group{flex:1 1 100%;min-width:0}
     .filter-group select{height:44px;font-size:15px}
     .filter-clear{margin-left:0;width:100%;justify-content:center}
-    [data-density="cozy"] .albums{grid-template-columns:1fr 1fr;gap:12px}
-    /* Sous ~400 px, deux colonnes donnent des cartes de ~135 px : titre illisible
-       et les badges des deux coins se rejoignent. Une colonne. */
-    @media(max-width:400px){[data-density="cozy"] .albums{grid-template-columns:1fr}}
-    .album .body{padding:9px 10px 3px}
-    .album .btns{padding:2px 10px 8px}
-    .album .btns a{height:auto;min-height:34px;padding:6px 8px;font-size:11.5px;
-      white-space:normal;text-align:center;line-height:1.25}
-    .album .al-social{padding:6px 10px}
-    .soc-btn{height:32px}
     .overlay{padding:20px 10px}
     /* Sous-menu "Voir en tant que…" : accordéon sous l'entrée (pas de place à gauche) */
     .um-viewas-pop{position:static;min-width:0;box-shadow:none;border:none;
@@ -348,130 +234,7 @@
     .bulkbar button.bb-icon{flex:0 0 auto;min-width:44px;width:44px}
   }
 
-  /* ── Densité d'affichage (<nrd-density>, naerod-ui) ───────────────────────
-     Le module pose data-density sur #albums et publie --nrd-col-min/--nrd-gap ;
-     ici, seulement ce que chaque mode masque ou réarrange. */
-  .badges{display:contents}
-  /* Le groupe de tailles a la même hauteur que le bouton « Filtres » (30 px ; 44 px sur
-     mobile) : groupe = bouton + 6 px de bordure et de marge interne. */
-  nrd-density{--nrd-density-btn:24px;--nrd-density-icon:18px}
-  @media(max-width:700px){nrd-density{--nrd-density-btn:38px;--nrd-density-icon:22px}}
-  .album .body .al-title{overflow-wrap:anywhere}
-  /* Moyen : pochette + artiste + titre. Le reste est sur la fiche. */
-  [data-density="compact"] .album{border-radius:12px}
-  [data-density="compact"] .album .album-open{border-radius:12px}
-  [data-density="compact"] .album .al-line,
-  [data-density="compact"] .album .al-poster,
-  [data-density="compact"] .album .al-social,
-  [data-density="compact"] .album .btns{display:none}
-  [data-density="compact"] .album .body{padding:8px 8px 10px;gap:2px}
-  [data-density="compact"] .album .al-artist{font-size:12.5px}
-  [data-density="compact"] .album .al-title{font-size:12px}
-  [data-density="compact"] .album .al-artist,
-  [data-density="compact"] .album .al-title{display:-webkit-box;-webkit-box-orient:vertical;
-    -webkit-line-clamp:2;overflow:hidden}
-  [data-density="compact"] .new-badge{font-size:9.5px;padding:2px 6px 2px 4px}
-  /* Miniatures : pochettes seules. Le texte reste pour les lecteurs d'écran et
-     dans l'infobulle (title de la carte). */
-  [data-density="tiny"] .album{border-radius:8px}
-  [data-density="tiny"] .album .album-open{border-radius:8px}
-  [data-density="tiny"] .album:hover{transform:translateY(-3px)}
-  [data-density="tiny"] .album .body{position:absolute;width:1px;height:1px;padding:0;
-    overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-  [data-density="tiny"] .album .al-social,
-  [data-density="tiny"] .album .btns{display:none}
-  [data-density="tiny"] .album .pick{top:4px;left:4px;width:20px;height:20px;border-radius:6px;border-width:1.5px}
-  [data-density="tiny"] .album .pick .material-symbols-outlined{font-size:14px}
-  [data-density="tiny"] .new-badge,
-  [data-density="tiny"] .status-badge{font-size:0;gap:0;padding:2px;border-radius:6px}
-  [data-density="tiny"] .new-badge{top:4px;left:4px}
-  @media(hover:hover){
-    [data-density="tiny"] .album:hover .new-badge,
-    [data-density="tiny"] .album:focus-within .new-badge,
-    body.select-mode [data-density="tiny"] .album .new-badge{top:28px}
-  }
-  @media(hover:none){[data-density="tiny"] .album.picked .new-badge{top:28px}}
-  [data-density="tiny"] .status-badge{top:4px;right:4px}
-  [data-density="tiny"] .status-badge.has-video{right:28px}
-  [data-density="tiny"] .video-badge{top:4px;right:4px;width:20px;height:20px}
-  [data-density="tiny"] .video-badge .material-symbols-outlined{font-size:12px}
-  /* Liste : une ligne par album, pochette à gauche, actions à droite. */
-  [data-density="list"] .album{display:grid;grid-auto-flow:column;grid-template-columns:96px minmax(0,1fr);
-    grid-auto-columns:auto;align-items:center;column-gap:12px;min-height:96px;border-radius:12px}
-  [data-density="list"] .album:hover{transform:none}
-  [data-density="list"] .album .album-open{border-radius:12px}
-  [data-density="list"] .album .cover{order:0;width:96px;height:96px;aspect-ratio:auto}
-  [data-density="list"] .album .body{order:1;flex-direction:row;flex-wrap:wrap;align-items:center;
-    gap:2px 12px;padding:8px 0}
-  [data-density="list"] .album .al-poster{display:none}
-  [data-density="list"] .badges{order:2;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
-  [data-density="list"] .badges:empty{display:none}
-  [data-density="list"] .badges > *{position:static}
-  [data-density="list"] .new-badge{font-size:0;gap:0;width:24px;height:24px;padding:0;
-    border-radius:50%;justify-content:center;pointer-events:auto}
-  [data-density="list"] .new-badge .material-symbols-outlined{font-size:16px}
-  [data-density="list"] .video-badge{width:24px;height:24px}
-  [data-density="list"] .video-badge .material-symbols-outlined{font-size:14px}
-  [data-density="list"] .album .al-social{order:3;padding:0}
-  [data-density="list"] .album .al-social:empty{display:none}
-  [data-density="list"] .album .btns{order:4;padding:0 12px 0 0}
-  [data-density="list"] .album .btns a{flex:0 0 auto;padding:0 12px}
-  [data-density="list"] .album .pick{top:4px;left:4px;width:22px;height:22px}
-  @media(max-width:700px){
-    [data-density="list"] .album{grid-template-columns:76px minmax(0,1fr);column-gap:10px;min-height:76px}
-    [data-density="list"] .album .cover{width:76px;height:76px}
-    [data-density="list"] .album .al-social,
-    [data-density="list"] .album .btns{display:none}
-    [data-density="list"] .badges{padding-right:10px}
-    [data-density="list"] .album .body{padding-right:10px}
-    [data-density="list"] .album .pick{width:26px;height:26px}
-  }
 
-  /* ── Sélection multiple ──────────────────────────────────────────────── */
-  /* En mode sélection la carte entière devient cliquable pour cocher : on
-     neutralise les liens internes (téléchargement, entités). */
-  body.select-mode .album{cursor:pointer}
-  body.select-mode .album .btns a,
-  body.select-mode .album .al-social,
-  body.select-mode .album .al-artist a,
-  body.select-mode .album .al-line a,
-  body.select-mode .album .al-poster{pointer-events:none}
-  /* Case à cocher : cachée, elle apparaît au survol (ou au focus clavier) de la
-     carte ; sur écran tactile, sans survol possible, elle reste visible. La cocher
-     bascule la page en mode sélection (cf. .pick dans le gestionnaire de clic). */
-  .album .pick{position:absolute;top:8px;left:8px;z-index:4;width:26px;height:26px;
-    margin:0;padding:0;border-radius:8px;border:2px solid var(--border);background:rgba(10,10,10,.75);
-    display:flex;align-items:center;justify-content:center;color:transparent;cursor:pointer;
-    backdrop-filter:blur(2px);opacity:0;transition:opacity .12s,background .12s}
-  @media(hover:hover){
-    .album:hover .pick,.album:focus-within .pick,.album .pick:focus-visible,
-    body.select-mode .album .pick{opacity:1}
-  }
-  .album .pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-  /* Tactile : pas de case à l'écran. Appui long = sélection (<nrd-longpress>) ;
-     une fiche cochée se reconnaît à son liseré, son voile et sa coche. */
-  @media(hover:none){
-    .album{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-    .album .pick{pointer-events:none}
-    .album.picked .pick{opacity:1}
-    [data-density="cozy"] .album .pick{opacity:1;pointer-events:auto}
-    [data-density="cozy"] .album .new-badge{top:42px}
-    .album.picked .cover{position:relative}
-    .album.picked .cover::after{content:"";position:absolute;inset:0;
-      background:color-mix(in srgb,var(--accent) 28%,transparent);pointer-events:none}
-  }
-  /* La case occupe le coin haut-gauche, là où se posent « Nouveau » / « Mis à
-     jour » : quand elle est visible, le badge passe SOUS elle (empilé, donc
-     indépendant de la largeur de la carte). Aucun recouvrement toléré. */
-  .new-badge{transition:top .12s}
-  @media(hover:hover){
-    .album:hover .new-badge,.album:focus-within .new-badge,
-    body.select-mode .album .new-badge{top:42px}
-  }
-  @media(hover:none){.album.picked .new-badge{top:42px}}
-  .album .pick .material-symbols-outlined{font-size:18px;line-height:1}
-  .album.picked{outline:2px solid var(--accent);outline-offset:2px}
-  .album.picked .pick{background:var(--accent);border-color:var(--accent);color:#fff}
   .bulkbar{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;
     display:none;align-items:center;gap:14px;padding:10px 16px;border-radius:14px;
     background:var(--card);border:1px solid var(--border);
@@ -513,7 +276,7 @@
     <div class="toolbar-main">
       <div class="sort-block">
         <span class="sort-label"><span class="material-symbols-outlined">sort</span><span data-i18n="sort_by">Trier par</span></span>
-        <select id="sort-select">
+        <select id="sort-select" class="sort-select">
           <option value="date_import" data-i18n="sort_new">Nouveauté</option>
           <option value="date_concert" data-i18n="sort_date">Date</option>
           <option value="title" data-i18n="sort_title">Titre</option>
@@ -591,6 +354,7 @@
 
 <script src="/static/i18n.js"></script>
 <script src="/static/social.js"></script>
+<script src="/static/albums.js"></script>
 <script>
 // Thème appliqué dans le <head> ; toggles gérés par le header unifié (L2M.initHeader).
 
@@ -609,26 +373,21 @@ function setLang(l){localStorage.setItem("l2m-lang",l);
   if(ALBUMS.length)buildFilters();render();updateCount();
   document.dispatchEvent(new Event("naerod:langchange"));
   if(selectMode)updateBulkBar();}
-// Les composants naerod-ui (<nrd-density>) demandent d'abord au site ses libellés.
-document.addEventListener("naerod:i18n",e=>{
-  const v=(T[L()]||{})[e.detail.key];if(typeof v==="string")e.detail.text=v;});
+// Libellés des composants naerod-ui (<nrd-density>) : portés par albums.js.
 
 const T={
   fr:{empty:"Aucun album pour le moment.",noresult:"Aucun résultat.",titres:"titres",
       ph:"Rechercher par titre, artiste, lieu, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Pochette",traycard:"Tray card",manage:"Gérer cet album",
       setlist:"Setlist",downloads:"Téléchargements",full:"Album complet (MP3)",
-      quickdl:"Téléchargement rapide",
-      dltrack:"Télécharger cette piste",lockdl:"Se connecter pour télécharger",login:"Connexion",
+      dltrack:"Télécharger cette piste",login:"Connexion",
       imported_by:(u,d)=>`Importé par ${u}${d?" le "+d:""}`,
       sort_by:"Trier par",sort_date:"Date",sort_new:"Nouveauté",
-      badge_new:"Nouveau",badge_updated:"Mis à jour",
       sort_artist:"Artiste",sort_title:"Titre",
       logout:"Déconnexion",source:"Source",profile:"Mon profil",comments:"Commentaires",
       hero_title:"Nos albums",hero_sub:"Captations de concerts découpées, taguées et prêtes à écouter.",
       filter:"Filtres",f_artist:"Artiste",f_year:"Année",f_labels:"Étiquettes",
       clear:"Effacer",all_artists:"Tous les artistes",all_years:"Toutes les années",
-      date_unknown:"Date inconnue",venue_unknown:"Lieu inconnu",
       preview_visitor:"Vue visiteur",preview_user:"Vue utilisateur",preview_gestionnaire:"Vue gestionnaire",
       preview_banner:"Prévisualisation visiteur",preview_normal:"Vue standard",preview_exit:"Quitter",
       view_as:"Voir en tant que…",
@@ -649,8 +408,7 @@ const T={
       imp_req:"Artiste et titre de l'album sont obligatoires.",
       imp_done:n=>`Album importé — ${n} piste${n>1?"s":""}.`,
       imp_see:"Voir l'album",
-      sel_start:"Sélectionner",sel_done:"Terminer",
-      nrd_density_label:"Taille d'affichage",nrd_density_cozy:"Grandes vignettes",nrd_density_compact:"Vignettes moyennes",nrd_density_tiny:"Miniatures",nrd_density_list:"Liste",
+      sel_done:"Terminer",
       sel_all:"Tout sélectionner",sel_none:"Tout désélectionner",
       sel_count:n=>`${n} sélectionné${n>1?"s":""}`,
       sel_dl_mp3:"Télécharger",sel_dl_mp4:"Télécharger MP4",
@@ -659,7 +417,6 @@ const T={
       // inachevé (cf. page /app/drafts), un album non publié est fini mais
       // masqué au public. Deux états distincts, deux mots distincts.
       unpublished_badge:"Non publié",
-      status_draft:"Brouillon",status_unpublished:"Non publié",
       status_published_audio:"Publié (MP3)",status_published_av:"Publié (MP3 + MP4)",
       sel_preparing:"Préparation du téléchargement…",
       sel_dl_empty:"Aucun média téléchargeable dans la sélection.",
@@ -671,17 +428,14 @@ const T={
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
       cover:"Cover",traycard:"Tray card",manage:"Manage this album",
       setlist:"Setlist",downloads:"Downloads",full:"Full album (MP3)",
-      quickdl:"Quick download",
-      dltrack:"Download this track",lockdl:"Log in to download",login:"Log in",
+      dltrack:"Download this track",login:"Log in",
       imported_by:(u,d)=>`Imported by ${u}${d?" on "+d:""}`,
       sort_by:"Sort by",sort_date:"Date",sort_new:"Latest",
-      badge_new:"New",badge_updated:"Updated",
       sort_artist:"Artist",sort_title:"Title",
       logout:"Log out",source:"Source",profile:"My profile",comments:"Comments",
       hero_title:"Our albums",hero_sub:"Concert recordings, edited, tagged, and ready to play.",
       filter:"Filters",f_artist:"Artist",f_year:"Year",f_labels:"Tags",
       clear:"Clear",all_artists:"All artists",all_years:"All years",
-      date_unknown:"Unknown date",venue_unknown:"Unknown venue",
       preview_visitor:"Visitor view",preview_user:"User view",preview_gestionnaire:"Manager view",
       preview_banner:"Visitor preview",preview_normal:"Standard view",preview_exit:"Exit",
       view_as:"View as…",
@@ -702,14 +456,12 @@ const T={
       imp_req:"Artist and album title are required.",
       imp_done:n=>`Album imported — ${n} track${n>1?"s":""}.`,
       imp_see:"View album",
-      sel_start:"Select",sel_done:"Done",
-      nrd_density_label:"Display size",nrd_density_cozy:"Large thumbnails",nrd_density_compact:"Medium thumbnails",nrd_density_tiny:"Small thumbnails",nrd_density_list:"List",
+      sel_done:"Done",
       sel_all:"Select all",sel_none:"Deselect all",
       sel_count:n=>`${n} selected`,
       sel_dl_mp3:"Download",sel_dl_mp4:"Download MP4",
       sel_publish:"Publish",sel_unpublish:"Unpublish",
       unpublished_badge:"Unpublished",
-      status_draft:"Draft",status_unpublished:"Unpublished",
       status_published_audio:"Published (MP3)",status_published_av:"Published (MP3 + MP4)",
       sel_preparing:"Preparing download…",
       sel_dl_empty:"No downloadable media in the selection.",
@@ -721,6 +473,7 @@ const T={
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 
 let ALBUMS=[], selected=new Set(), ME={authenticated:false,is_gestionnaire:false};
+L2MAlbums.init({me:()=>ME});   // identité réelle (« j'aime ») pour les fiches partagées
 let VIEW_AS="normal";
 const VIEW_PROFILES={
   normal:()=>ME,
@@ -773,42 +526,6 @@ let filterArtist="", filterYear="";
 // Sélection multiple (actions groupées). `picked` = slugs cochés.
 let selectMode=false, picked=new Set();
 
-// ── Cover générique SVG ───────────────────────────────────────────────────
-const GENERIC_COVER=`<div class="cover-generic">
-  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="50" cy="50" r="44" fill="#2a2d38"/>
-    <circle cx="50" cy="50" r="43" fill="none" stroke="#4a4d5a" stroke-width="1.5" opacity=".5"/>
-    <circle cx="50" cy="50" r="38" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".4"/>
-    <circle cx="50" cy="50" r="33" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".3"/>
-    <circle cx="50" cy="50" r="26" fill="none" stroke="#4a4d5a" stroke-width="0.8" opacity=".25"/>
-    <circle cx="50" cy="50" r="20" fill="#1a1c22"/>
-    <circle cx="50" cy="50" r="19" fill="none" stroke="#4a4d5a" stroke-width="1" opacity=".4"/>
-    <circle cx="50" cy="50" r="5" fill="#0a0a0a"/>
-  </svg>
-</div>`;
-
-function coverHtml(a,size){
-  if(a.has_cover){
-    const sz=size?`width="${size}" height="${size}"`:"";
-    // ?v=<mtime> : dès qu'un gestionnaire remplace la pochette, l'URL change et
-    // le navigateur refetch — sans ce param, la vitrine sert l'ancienne image
-    // depuis son cache disque (le nom de fichier ne change pas).
-    const v=a.cover_v||0;
-    // w=320 : vignette WebP dérivée (~20 Ko) au lieu de la pochette d'origine
-    // (jusqu'à 5 Mo). La pleine résolution reste servie sans `w` (fiche album,
-    // lightbox, téléchargement).
-    const w=size&&size>320?640:320;
-    // srcset 1x/2x : un écran haute densité prend la version 640 sans imposer
-    // son poids aux autres.
-    const w2=w===320?640:1024;
-    const u=n=>`/cover/${a.slug}?v=${v}&w=${n}`;
-    return `<img class="cover-img" src="${u(w)}" srcset="${u(w)} 1x, ${u(w2)} 2x" alt="" loading="lazy" decoding="async" ${sz}
-      onload="this.classList.add('rdy');this.parentNode.classList.remove('is-load')"
-      onerror="this.classList.add('rdy');this.parentNode.classList.remove('is-load')">`;
-  }
-  return GENERIC_COVER;
-}
-
 function formatImportDate(iso){
   if(!iso) return "";
   try{
@@ -820,11 +537,7 @@ function formatImportDate(iso){
 function norm(s){return(s||"").toString().toLowerCase()
   .normalize("NFD").replace(/[̀-ͯ]/g,"");}
 
-function extractYear(date){
-  if(!date) return "";
-  const m=String(date).match(/\d{4}/);
-  return m?m[0]:"";
-}
+const extractYear=L2MAlbums.year;   // partagé avec le profil (albums.js)
 
 function matches(a){
   const q=norm(document.getElementById("q").value);
@@ -838,121 +551,8 @@ function matches(a){
   return true;
 }
 
-const NEW_DAYS=21;
-const UPDATED_DAYS=30;
-function daysSince(ref){
-  if(!ref) return Infinity;
-  const t=new Date(ref).getTime();
-  if(isNaN(t)) return Infinity;
-  return (Date.now()-t)/864e5;
-}
-// « Nouveau » = mise en ligne récente, pas import récent : un album importé il y
-// a des mois mais publié aujourd'hui est une nouveauté. Repli sur l'import pour
-// les albums sans date de publication (brouillons, vue gestionnaire).
-function isNew(a){
-  return daysSince(a.first_published_at||a.imported_at)<=NEW_DAYS;
-}
-// « Mis à jour » = manifest réécrit récemment (pistes, titres, pochette…) sur un
-// album qui n'est plus une nouveauté — les deux badges ne coexistent jamais.
-function isUpdated(a){
-  return !isNew(a)&&daysSince(a.updated_at)<=UPDATED_DAYS;
-}
-
-// Nom d'entité cliquable vers sa page auto (artiste/lieu/festival), comme sur la
-// fiche album. L'id exact vient de a.entities ; à défaut, texte simple.
-function entLink(a,type,label){
-  if(!label) return "";
-  const e=(a.entities||[]).find(x=>x.type===type&&x.label===label);
-  return e?`<a class="entity-link" href="/${type}/${encodeURIComponent(e.id)}">${L2M.esc(label)}</a>`:L2M.esc(label);
-}
-
-function albumCard(a){
-  const md=meDisplay();
-  const hasDownloadable=a.has_mp3||a.has_mp4||a.has_cover||a.has_traycard;
-  let dlBtn="";
-  if(hasDownloadable){
-    if(md.authenticated){
-      const dlHref=a.has_mp3?`/download/${a.slug}/mp3`:`/download/${a.slug}/mp4`;
-      dlBtn=`<a class="primary" href="${dlHref}"><span class="material-symbols-outlined">download</span>${T[L()].quickdl}</a>`;
-    } else {
-      dlBtn=`<a class="icon-btn" href="/outpost.goauthentik.io/start?rd=/"><span class="material-symbols-outlined">lock</span>${T[L()].lockdl}</a>`;
-    }
-  }
-  const newBadge=isNew(a)
-    ?`<span class="new-badge" title="${T[L()].badge_new}"><span class="material-symbols-outlined">auto_awesome</span>${T[L()].badge_new}</span>`
-    :(isUpdated(a)
-      ?`<span class="new-badge upd-badge"><span class="material-symbols-outlined">update</span>${T[L()].badge_updated}</span>`:"");
-  // Badge de statut — gestionnaire seulement, draft/non-publié uniquement (alertes).
-  const ST_IC={draft:"draft",unpublished:"visibility_off"};
-  const hasVideoBadge=!!a.has_video_full;
-  const statusBadge=md.is_gestionnaire&&a.status&&ST_IC[a.status]
-    ?`<span class="status-badge st-${a.status}${hasVideoBadge?" has-video":""}"><span class="material-symbols-outlined">${ST_IC[a.status]}</span>${T[L()]["status_"+a.status]}</span>`:"";
-  // Tout le catalogue est en MP3 (c'est l'objet du site) : seule la vidéo est une
-  // information — même icône pour tout le monde, gestionnaire compris.
-  const videoBadge=hasVideoBadge
-    ?`<span class="video-badge" title="${L()==="fr"?"Concert complet en vidéo":"Full concert video"}"><span class="material-symbols-outlined">movie</span></span>`:"";
-  const showArtist=currentSort!=="artist";
-  const posterHtml=posterFor(a.imported_by);
-  const cardTitle=L2M.esc([a.artist,a.title||a.slug].filter(Boolean).join(" — "));
-  const pick=`<button type="button" class="pick" role="checkbox" aria-checked="${picked.has(a.slug)}" aria-label="${T[L()].sel_start}"><span class="material-symbols-outlined" aria-hidden="true">check</span></button>`;
-  return `<div class="album${a.published===false?" unpublished":""}${picked.has(a.slug)?" picked":""}" data-slug="${a.slug}" title="${cardTitle}">
-    <a class="album-open" draggable="false" href="/album/${a.slug}" aria-label="${cardTitle}"></a>
-    ${pick}
-    <div class="badges">${statusBadge}${newBadge}${videoBadge}</div>
-    <div class="cover${a.has_cover?' is-load':''}">${coverHtml(a)}</div>
-    <div class="body">
-      ${showArtist&&a.artist?`<div class="al-artist">${entLink(a,'artist',a.artist)}</div>`:""}
-      <div class="al-title">${a.title||a.slug}</div>
-      <div class="al-line${a.date?"":" muted-placeholder"}"><span class="material-symbols-outlined">calendar_month</span>${a.date||T[L()].date_unknown}</div>
-      <div class="al-line${a.venue?"":" muted-placeholder"}"><span class="material-symbols-outlined">location_on</span>${a.venue?entLink(a,'venue',a.venue):T[L()].venue_unknown}</div>
-      ${a.festival?`<div class="al-line"><span class="material-symbols-outlined">festival</span>${entLink(a,'festival',a.festival)}</div>`:""}
-      ${posterHtml?`<div class="al-poster">${posterHtml}</div>`:""}
-    </div>
-    <div class="al-social"></div>
-    ${dlBtn?`<div class="btns">${dlBtn}</div>`:""}
-  </div>`;
-}
-
 // Avatar + pseudo du posteur (imported_by), résolu via POSTERS.
 let POSTERS={};
-let SOC_CACHE={};
-let MY_LIKES=new Set();
-function patchSocialCounts(){
-  document.querySelectorAll(".al-social").forEach(el=>{
-    const slug=el.closest(".album")?.dataset.slug;
-    if(!slug) return;
-    const s=SOC_CACHE[slug]||{likes:0,comments:0};
-    const liked=MY_LIKES.has(slug);
-    el.innerHTML=
-      `<button class="soc-btn is-like${liked?" liked":""}" onclick="handleLike(event,'${slug}')"><span class="material-symbols-outlined">favorite</span>${s.likes}</button>`+
-      `<button class="soc-btn is-comment" onclick="handleComment(event,'${slug}')"><span class="material-symbols-outlined">chat_bubble</span>${s.comments}</button>`;
-  });
-}
-async function handleLike(e,slug){
-  e.stopPropagation();
-  if(!ME.authenticated){location.href="/outpost.goauthentik.io/start?rd=/";return;}
-  try{
-    const res=await(await fetch(`/api/social/albums/${slug}/like`,{method:"POST"})).json();
-    SOC_CACHE[slug]={likes:res.likes,comments:res.comments};
-    if(res.liked) MY_LIKES.add(slug); else MY_LIKES.delete(slug);
-    patchSocialCounts();
-  }catch(e){}
-}
-function handleComment(e,slug){
-  e.stopPropagation();
-  location.href=`/album/${slug}#comments`;
-}
-async function loadSocialCounts(){
-  try{
-    const [counts,liked]=await Promise.all([
-      fetch("/api/social/counts").then(r=>r.json()),
-      ME.authenticated?fetch("/api/social/my-likes").then(r=>r.json()):Promise.resolve([])
-    ]);
-    SOC_CACHE=counts;
-    MY_LIKES=new Set(liked);
-    patchSocialCounts();
-  }catch(e){}
-}
 function posterFor(username){
   if(!username) return "";
   const p=POSTERS[username]||{};
@@ -970,31 +570,10 @@ function render(){
     document.getElementById("empty-msg").textContent=T[L()].noresult;wrap.innerHTML="";}
   else empty.classList.add("hidden");
 
-  if(currentSort==="artist"){
-    wrap.className="";
-    // Regroupe par artiste (ordre alphabétique) ; dans chaque groupe, tri par date
-    const groups=new Map();
-    shown.forEach(a=>{
-      const key=a.artist||"—";
-      if(!groups.has(key)) groups.set(key,[]);
-      groups.get(key).push(a);
-    });
-    const sorted=[...groups.entries()].sort(([a],[b])=>
-      a.localeCompare(b,undefined,{sensitivity:"base"}));
-    wrap.innerHTML=sorted.map(([artist,albums])=>`
-      <div class="artist-group">
-        <div class="artist-sep">
-          <span class="artist-bar"></span>
-          <span class="artist-name">${artist}</span>
-          <span class="artist-bar"></span>
-        </div>
-        <div class="albums">${albums.map(albumCard).join("")}</div>
-      </div>`).join("");
-  } else {
-    wrap.className="albums";
-    wrap.innerHTML=shown.map(albumCard).join("");
-  }
-  patchSocialCounts();
+  // Fiches, grille et regroupement (artiste / année) : albums.js, partagé avec le profil.
+  const md=meDisplay();
+  L2MAlbums.render(wrap,shown,{sort:currentSort,
+    card:a=>L2MAlbums.card(a,{user:md,pick:true,picked:picked.has(a.slug),poster:posterFor(a.imported_by)})});
 }
 
 // ── Sélection multiple & actions groupées ──────────────────────────────────
@@ -1246,7 +825,7 @@ async function load(){
   POSTERS=await L2M.profiles(ALBUMS.map(a=>a.imported_by));
   buildFilters();
   setLang(localStorage.getItem("l2m-lang")||"fr");
-  loadSocialCounts();
+  L2MAlbums.loadSocial(ME.authenticated);
   if(new URLSearchParams(location.search).get("import")==="1"&&(ME.is_gestionnaire||ME.is_admin)){
     history.replaceState(null,"",location.pathname);
     openImport();

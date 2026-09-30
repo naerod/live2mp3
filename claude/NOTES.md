@@ -1498,3 +1498,20 @@ fait diverger les deux dépôts. Toujours `git push preprod-origin preprod`.
   la regex forward-auth).
 - ⚠️ `deploy-preprod` pousse un commit `Release` : **toujours `git pull --rebase` avant de
   pousser** ; et le changelog-guard exige une modif du changelog à chaque push preprod.
+
+2026-09-30 : **Fiches partagées vitrine/profil, page de gestion, vidéo compacte** (preprod, PROD PAS ENCORE).
+- `frontend/albums.js` + `albums.css` = source unique d'une fiche d'album, de la grille, de la
+  densité (`<nrd-density>`) et du regroupement : la vitrine ET le profil (`/u/…`, onglets
+  Publications et Likes) les consomment. Tri par artiste → groupes par artiste ; tri par date →
+  groupes par année (séparateur `.artist-sep` identique). Pas de copie dans `vitrine.html`.
+- L'artiste est **toujours** affiché sur la fiche (ligne `.al-artist`, icône `artist`, lien vers
+  `/artist/<id>` si l'album a un id Deezer). Il ne disparaissait que sous le tri « Artiste »
+  (`showArtist=currentSort!=="artist"`, v1.1.0 du 2026-07-10) et en miniatures (texte masqué).
+- `backend/titles.py` : le titre suggéré n'a plus de préfixe « Artiste - » ; lieu = ville, sinon
+  lieu, sinon festival. Miroir JS : `composeConcertTitle()` (album.html).
+- Labels : l'UI de la page de gestion est retirée ; **`album.labels` sert toujours** aux filtres
+  « Étiquettes » de la vitrine, aux pastilles de la fiche publique et aux étiquettes dérivées
+  (audio/vidéo). La portée prod/preprod n'est PAS une étiquette : c'est `origin_env` dans le manifest.
+  `PUT /api/albums/{slug}/labels` et `all_labels`/`derived_labels` restent côté API (non supprimés).
+- Test local sans déployer : proxy Python servant `frontend/` depuis le working tree et relayant
+  l'API vers le tunnel de la preprod (injection des en-têtes Authentik par port).

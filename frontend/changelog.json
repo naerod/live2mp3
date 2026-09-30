@@ -20,7 +20,14 @@
         "Sélection : le bouton « Sélectionner » disparaît. Une case apparaît au survol d'un album ; la cocher active le mode sélection.",
         "Mobile : la taille des vignettes suit la largeur de l'écran (3 par ligne en moyen, 5 en miniatures) ; la sélection se fait par appui long, la case à cocher reste visible uniquement en grandes vignettes.",
         "Catalogue : le sélecteur de taille a désormais la même hauteur que le bouton « Filtres » et ne change plus de taille selon le type de pointeur.",
-        "Liste : pochettes plus grandes ; le badge « Nouveau » devient une pastille avec ses étincelles, empilée au-dessus de l'icône vidéo. Sur mobile, le texte ne touche plus le bord droit."
+        "Liste : pochettes plus grandes ; le badge « Nouveau » devient une pastille avec ses étincelles, empilée au-dessus de l'icône vidéo. Sur mobile, le texte ne touche plus le bord droit.",
+        "Catalogue : le tri par date regroupe les albums par année, avec le même séparateur que le tri par artiste ; le nom de l'artiste dans ce séparateur est un peu plus petit.",
+        "Fiches d'albums : le nom de l'artiste est de nouveau affiché sur chaque fiche, même sous un séparateur d'artiste, avec une icône, et cliquable vers sa page.",
+        "Profil : les publications et les likes ont le même sélecteur de taille que le catalogue, et le même tri — par artiste (regroupé par artiste) ou par date (regroupé par année).",
+        "Mobile : en vignettes moyennes, les badges « Nouveau » et « Mis à jour » passent en icône seule et ne chevauchent plus l'icône vidéo.",
+        "Gestion d'un album : le bouton « Suggérer » a la hauteur du champ titre (icône seule sur petit écran) ; l'aide au format du titre est lisible et corrigée, sans l'artiste (« Live in Ville/lieu/festival AAAA (Tournée - bonus) ») ; la suggestion ne préfixe plus le nom de l'artiste.",
+        "Gestion d'un album : la section « Publication » est refaite (état en pastille avec icône, une seule action principale) et la section « Labels » est retirée ; les boutons de téléchargement indiquent qu'ils livrent un ZIP ; plus de débordement horizontal à 320 px.",
+        "Fiche album : sans vidéo, l'emplacement se réduit à un bandeau d'une ligne."
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
@@ -34,7 +41,14 @@
         "Selection: the “Select” button is gone. A checkbox appears when hovering an album; ticking it turns on selection mode.",
         "Mobile: thumbnail size follows the screen width (3 per row in medium, 5 in small); selection is done with a long press, the checkbox stays visible in large thumbnails only.",
         "Catalogue: the size selector now matches the height of the “Filters” button and no longer changes size depending on the pointer type.",
-        "List: larger covers; the “New” badge becomes a sparkle dot stacked above the video icon. On mobile, the text no longer touches the right edge."
+        "List: larger covers; the “New” badge becomes a sparkle dot stacked above the video icon. On mobile, the text no longer touches the right edge.",
+        "Catalogue: sorting by date now groups albums by year, with the same separator as sorting by artist; the artist name in that separator is a bit smaller.",
+        "Album cards: the artist name is shown again on every card, even under an artist separator, with an icon, and links to the artist page.",
+        "Profile: publications and likes get the same size selector as the catalogue, and the same sorting — by artist (grouped by artist) or by date (grouped by year).",
+        "Mobile: in medium thumbnails, the “New” and “Updated” badges become icon-only and no longer overlap the video icon.",
+        "Album management: the “Suggest” button is as tall as the title field (icon-only on small screens); the title format help is readable and corrected, without the artist (“Live in City/venue/festival YYYY (Tour - bonus)”); the suggestion no longer prefixes the artist name.",
+        "Album management: the “Publication” section is redesigned (status pill with icon, a single primary action) and the “Labels” section is removed; download buttons say they deliver a ZIP; no more horizontal overflow at 320 px.",
+        "Album page: with no video, the slot shrinks to a one-line banner."
       ]
     },
     {

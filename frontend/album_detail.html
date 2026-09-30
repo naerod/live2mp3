@@ -167,13 +167,27 @@
   .vid-thumb:hover .vid-play{background:rgba(0,0,0,.45)}
   .vid-thumb .vid-play .material-symbols-outlined{font-size:64px;color:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
   .vid-sub{color:var(--muted);font-size:12.5px;margin:8px 0 0}
-  /* Îlot sans vidéo (gestionnaires) : même gabarit 16:9 que la miniature,
-     pour que l'arrivée de la vidéo ne décale rien. */
-  .vid-empty{aspect-ratio:16/9;max-width:640px;border:1px dashed var(--border);border-radius:12px;
-    background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:12px;padding:16px;text-align:center}
-  .vid-empty>.material-symbols-outlined{font-size:40px;color:var(--muted)}
-  .vid-empty p{margin:0;color:var(--muted);font-size:14px;max-width:48ch}
+  /* Sans vidéo (gestionnaires) : simple bandeau d'une ligne — icône, message court, et
+     l'action « Importer » à droite si elle est permise. Plus de zone 16:9 vide : la
+     vidéo, en arrivant, agrandit la section (le bandeau est en pointillés, comme un
+     emplacement libre). Le titre de section reste pour les lecteurs d'écran. */
+  .sec-video-empty{display:flex;align-items:center;gap:12px;padding:8px 16px;
+    border-style:dashed;background:var(--bg)}
+  .sec-video-empty>.material-symbols-outlined{flex:none;font-size:22px;color:var(--muted)}
+  .sec-video-empty .vid-msg{flex:1 1 200px;min-width:0;margin:0;color:var(--muted);
+    font-size:13.5px;line-height:1.4}
+  .sec-video-empty .vid-note{margin-left:4px}
+  .sec-video-empty .vid-busy{flex:1 1 200px;margin:0}
+  .sec-video-empty.is-busy>.material-symbols-outlined{color:var(--run)}
+  .sec-video-empty button{flex:none;margin:0;height:34px;padding:0 14px;border-radius:10px;
+    font-size:13px;line-height:1}
+  .sec-video-empty button .material-symbols-outlined{font-size:18px}
+  .vid-h-sr{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;
+    clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  @media(max-width:700px){
+    .sec-video-empty{padding:8px 12px;flex-wrap:wrap}
+    .sec-video-empty button{min-height:44px}
+  }
   .vid-actions{display:flex;justify-content:flex-end;gap:8px;max-width:640px;margin-top:8px}
   .vid-busy{display:flex;align-items:center;gap:8px;color:var(--run);font-size:14px}
   .vi-box{max-width:640px}
@@ -1001,7 +1015,7 @@ const VLANG={
       noplay:"Lecture impossible dans ce navigateur. Téléchargez le fichier MP4.",
       lockplay:"Connectez-vous pour regarder le concert",
       vi_none:"Pas de vidéo pour ce concert.",vi_import:"Importer une vidéo",vi_replace:"Remplacer la vidéo",
-      vi_other_env:"Cet album est géré par l'autre environnement : importez la vidéo depuis celui-ci.",
+      vi_other_env:"Album géré par l'autre environnement : importez la vidéo depuis celui-ci.",
       vi_busy:"Vidéo en cours d'encodage — elle apparaîtra ici une fois prête.",
       vi_title:"Importer une vidéo",vi_title_repl:"Remplacer la vidéo",
       vi_keep:"Garder les MP3",vi_keep_d:"La vidéo est ajoutée comme concert complet. Les pistes MP3 ne changent pas.",
@@ -1032,7 +1046,7 @@ const VLANG={
       noplay:"Playback unsupported in this browser. Download the MP4 file instead.",
       lockplay:"Log in to watch the concert",
       vi_none:"No video for this concert.",vi_import:"Import a video",vi_replace:"Replace the video",
-      vi_other_env:"This album is managed by the other environment: import the video from there.",
+      vi_other_env:"Managed by the other environment: import the video from there.",
       vi_busy:"Video being encoded — it will show up here once ready.",
       vi_title:"Import a video",vi_title_repl:"Replace the video",
       vi_keep:"Keep the MP3s",vi_keep_d:"The video is added as the full concert. The MP3 tracks stay as they are.",
@@ -1075,12 +1089,21 @@ function videoSectionHtml(d){
     </div>`;
   }
   if(!ME.is_gestionnaire)return '';
-  let body;
-  if(busy)body=`<span class="material-symbols-outlined" aria-hidden="true">hourglass_top</span><p data-vt="vi_busy">${VT('vi_busy')}</p>`;
-  else if(!can)body=`<span class="material-symbols-outlined" aria-hidden="true">videocam_off</span><p data-vt="vi_none">${VT('vi_none')}</p><p data-vt="vi_other_env">${VT('vi_other_env')}</p>`;
-  else body=`<span class="material-symbols-outlined" aria-hidden="true">videocam_off</span><p data-vt="vi_none">${VT('vi_none')}</p>
-    <button class="primary" id="vi-open"><span class="material-symbols-outlined" aria-hidden="true">video_call</span><span data-vt="vi_import">${VT('vi_import')}</span></button>`;
-  return `<div class="sec sec-video">${head}<div class="vid-empty">${body}</div></div>`;
+  // Bandeau compact (une ligne) : icône + message, action à droite si permise.
+  const srHead=`<h3 class="vid-h-sr" data-vt="video_h">${VT('video_h')}</h3>`;
+  let icon,msg,act='';
+  if(busy){
+    icon='hourglass_top';
+    msg=`<p class="vid-busy"><span data-vt="vi_busy">${VT('vi_busy')}</span></p>`;
+  }else if(!can){
+    icon='videocam_off';
+    msg=`<p class="vid-msg"><span data-vt="vi_none">${VT('vi_none')}</span><span class="vid-note" data-vt="vi_other_env">${VT('vi_other_env')}</span></p>`;
+  }else{
+    icon='videocam_off';
+    msg=`<p class="vid-msg"><span data-vt="vi_none">${VT('vi_none')}</span></p>`;
+    act=`<button class="primary" id="vi-open"><span class="material-symbols-outlined" aria-hidden="true">video_call</span><span data-vt="vi_import">${VT('vi_import')}</span></button>`;
+  }
+  return `<div class="sec sec-video sec-video-empty${busy?' is-busy':''}">${srHead}<span class="material-symbols-outlined" aria-hidden="true">${icon}</span>${msg}${act}</div>`;
 }
 
 const VI={d:null,mode:'keep',replace:false,abort:false,busy:false};

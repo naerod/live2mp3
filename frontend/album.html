@@ -9,12 +9,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:wght@400..600&display=swap">
 <link rel="stylesheet" href="/static/shared/naerod-social.css">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   .layout{display:grid;grid-template-columns:280px 1fr;gap:20px;margin-top:16px}
   @media(max-width:760px){.layout{grid-template-columns:1fr}}
+  /* Les colonnes de la grille peuvent rétrécir sous la largeur de leur contenu (champs,
+     pistes) : sans ça, la page dépassait de 40 px à 320 px de large. */
+  .layout>*{min-width:0}
   .visual{display:flex;flex-direction:column;gap:12px}
     .cover-wrap{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#0a0a0a;
     aspect-ratio:1;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -88,16 +92,40 @@
   .date-field #e-date.date-invalid{border-color:#e5484d}
   .date-hint{color:#e5484d;font-size:11.5px;margin-top:3px;display:none}
   .date-hint.show{display:block}
+  /* Titre + « Suggérer » : le bouton s'étire à la hauteur exacte du champ (align-items
+     stretch) et prend son rayon. `margin:0` neutralise le margin-top:16px du sélecteur
+     global `button` (app.css), qui le décalait et le rendait plus bas que le champ. */
   .title-row{display:flex;gap:8px;align-items:stretch}
-  .title-row input{flex:1}
-  .suggest-btn{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border:1px solid var(--border);
-    border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap;font-size:13px}
+  .title-row input{flex:1;min-width:0}
+  .suggest-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    margin:0;padding:0 14px;border:1px solid var(--border);border-radius:10px;
+    background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap;
+    font-size:13px;font-weight:500;line-height:1;flex:0 0 auto;
+    transition:background .15s,border-color .15s,color .15s}
   .suggest-btn:hover{border-color:var(--accent);color:var(--accent)}
   .suggest-btn .material-symbols-outlined{font-size:18px}
-  .naming-hint{margin-top:8px;display:flex;gap:8px;padding:9px 11px;border-radius:8px;
-    background:var(--card);border:1px solid var(--border);font-size:12.5px;line-height:1.5;color:var(--muted)}
-  .naming-hint::before{content:"info";font-family:"Material Symbols Outlined";font-size:18px;flex-shrink:0;line-height:1.4}
-  .naming-hint code{background:var(--border);padding:1px 5px;border-radius:4px;font-size:11.5px}
+  /* Étroit (≤ 560 px, 320 px compris) : icône seule, carré de 44 px comme cible tactile ;
+     le libellé reste lu (aria-label + title posés par applyLang). */
+  @media(max-width:560px){
+    .title-row input,.suggest-btn{min-height:44px}
+    .suggest-btn{width:44px;padding:0}
+    .suggest-btn #t-suggest{display:none}
+  }
+  /* Aide au format du titre : icône à gauche, texte en blocs aérés à droite (avant, le
+     texte, le <code> et l'<em> étaient autant d'éléments flex côte à côte : illisible). */
+  .naming-hint{margin-top:8px;display:flex;align-items:flex-start;gap:12px;padding:12px 16px;
+    border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+  .naming-hint>.material-symbols-outlined{flex:none;font-size:20px;color:var(--accent)}
+  .nh-body{flex:1;min-width:0;max-width:70ch;font-size:13px;line-height:1.5}
+  .nh-body p{margin:0 0 8px}
+  .nh-body p:last-child{margin-bottom:0}
+  .nh-lead{color:var(--fg);font-weight:600}
+  .nh-body code{display:inline-block;max-width:100%;padding:8px 12px;border-radius:8px;
+    background:var(--card);border:1px solid var(--border);color:var(--fg);
+    font-family:"Google Sans Code",ui-monospace,monospace;font-size:13px;line-height:1.5;
+    overflow-wrap:anywhere}
+  .nh-body code var{font-style:normal;color:var(--accent);font-weight:600}
+  .nh-body em{color:var(--fg);font-style:normal;font-weight:500}
   .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   @media(max-width:540px){.field-grid{grid-template-columns:1fr}}
   .field-grid .full{grid-column:1/-1}
@@ -115,7 +143,9 @@
   .tracks-list .drag-handle:active{cursor:grabbing}
   .tracks-list .drag-handle .n{color:var(--accent);font-size:12px;font-variant-numeric:tabular-nums;min-width:20px;font-weight:600}
   .tracks-list li.drag-over{border-top:2px solid var(--accent);padding-top:2px}
-  .tracks-list input{flex:1;margin:0;padding:4px 8px;font-size:13px;height:30px}
+  /* min-width:0 : sans lui la largeur intrinsèque d'un <input> (~150 px) empêche la ligne de
+     rétrécir et fait déborder la page sous 360 px. */
+  .tracks-list input{flex:1;min-width:0;margin:0;padding:4px 8px;font-size:13px;height:30px}
   .del-btn{all:unset;cursor:pointer;color:var(--muted);display:flex;padding:3px;border-radius:5px}
   .del-btn:hover{color:#e57373;background:rgba(229,115,115,.12)}
   .del-btn .material-symbols-outlined{font-size:15px}
@@ -125,7 +155,7 @@
   #btn-open-editor[disabled]{opacity:.5;cursor:not-allowed}
   #btn-open-editor[disabled]:hover{background:transparent;border-color:var(--border)}
   .add-track-row{display:flex;gap:8px}
-  .add-track-row input{flex:1;margin:0;padding:6px 10px;font-size:13px}
+  .add-track-row input{flex:1;min-width:0;margin:0;padding:6px 10px;font-size:13px}
   /* Ajout d'une piste depuis un lien vidéo (albums-compilations). */
   .from-url{margin:0}
   .at-box{max-width:720px;padding:24px}
@@ -157,21 +187,37 @@
   /* Repère « piste venue d'un lien » dans la liste des pistes. */
   .track-src{color:var(--muted);font-size:15px;cursor:help;flex:none}
   @media(max-width:560px){.fu-trim{grid-template-columns:1fr}}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
-  .lchip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 12px;
-    border-radius:999px;border:1px solid var(--border);background:var(--card);
-    font-size:12.5px;font-weight:500}
-  .lchip button{all:unset;cursor:pointer;display:flex;color:var(--muted);border-radius:50%}
-  .lchip button:hover{color:var(--fg)}
-  .lchip .material-symbols-outlined{font-size:15px}
-  .lchip.derived{color:var(--muted);opacity:.85}
-  .addrow{display:flex;gap:8px}
-  .addrow input{flex:1;margin:0}
   .dl{display:flex;flex-wrap:wrap;gap:8px}
   .dl a{margin:0;height:34px;font-size:12.5px}
   .save-row{display:flex;gap:8px;align-items:center;margin-top:12px}
-  .publish-row{display:flex;gap:12px;align-items:center;margin-top:12px}
-  .publish-status{font-size:12.5px;color:var(--muted);flex:1}
+  /* Publication : deux lignes « libellé + état (pastille icône + texte) + action ».
+     Étroit (colonne de 280 px, mobile) : l'action passe sous l'état, pleine largeur ;
+     dès que le bloc a la place (≥ 400 px), elle se range à droite. */
+  .pub{container-type:inline-size}
+  .pub-row{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+  .pub-row+.pub-row{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+  .pub-info{display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0;flex:1}
+  .pub-label{font-size:11.5px;font-weight:500;color:var(--muted)}
+  .pub-pill{display:inline-flex;align-items:flex-start;gap:8px;max-width:100%;padding:4px 12px 4px 8px;
+    border:1px solid var(--border);border-radius:999px;background:var(--bg);color:var(--fg);
+    font-size:12.5px;font-weight:600;line-height:1.4}
+  .pub-pill .material-symbols-outlined{flex:none;font-size:18px;color:var(--muted)}
+  .pub-pill>span:last-child{min-width:0;overflow-wrap:anywhere}
+  .pub-pill[data-state="on"]{border-color:color-mix(in srgb,var(--ok) 55%,var(--border));
+    background:color-mix(in srgb,var(--ok) 10%,var(--card))}
+  .pub-pill[data-state="on"] .material-symbols-outlined{color:var(--ok)}
+  .pub-pill[data-state="off"]{border-style:dashed}
+  /* Même gabarit pour toutes les actions (secondaire = .icon-btn, primaire = .primary) :
+     hauteur, rayon et marge fixés ici (le sélecteur global `button` impose margin-top:16px). */
+  .pub-act{justify-content:center;flex:none;height:38px;margin:0;padding:0 16px;
+    border-radius:10px;font-size:13px;font-weight:600;line-height:1;white-space:nowrap}
+  .pub-act .material-symbols-outlined{font-size:18px}
+  .pub-act:disabled{opacity:.55;cursor:default}
+  @container (min-width:400px){
+    .pub-row{flex-direction:row;align-items:center;justify-content:space-between}
+    .pub-act{margin-left:auto}
+  }
+  @media(max-width:700px){.pub-act{min-height:44px}}
   .save-row button{margin:0}
   @keyframes disk-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
   @keyframes check-pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
@@ -308,18 +354,31 @@
       <div class="dl" id="dl"></div>
       <!-- Publication : sous les pochettes, la visibilité vitrine est une
            propriété du visuel de l'album autant qu'une action d'édition. -->
-      <div class="sec">
+      <div class="sec pub">
         <h2 id="t-publish-h">Publication</h2>
-        <div class="publish-row">
-          <span class="publish-status" id="publish-status"></span>
-          <button id="btn-publish"><span class="material-symbols-outlined">visibility</span><span id="t-btn-publish">Publier</span></button>
+        <div class="pub-row" id="publish-row">
+          <div class="pub-info">
+            <span class="pub-label" id="t-publish-label">Visibilité</span>
+            <span class="pub-pill" id="publish-pill" data-state="on">
+              <span class="material-symbols-outlined" id="publish-icon" aria-hidden="true">visibility</span>
+              <span class="publish-status" id="publish-status"></span>
+            </span>
+          </div>
+          <button id="btn-publish" class="pub-act icon-btn" type="button"><span class="material-symbols-outlined" aria-hidden="true">visibility_off</span><span id="t-btn-publish">Dépublier</span></button>
         </div>
         <!-- Portée : prod et preprod partagent le même stockage d'albums. Un
-             album créé en preprod porte une étiquette qui le masque du
-             catalogue prod ; la « pousser en prod » ne fait que la retirer. -->
-        <div class="publish-row hidden" id="scope-row" style="margin-top:12px">
-          <span class="publish-status" id="scope-status"></span>
-          <button id="btn-promote"><span class="material-symbols-outlined">rocket_launch</span><span id="t-btn-promote">Pousser en prod</span></button>
+             album créé en preprod porte `origin_env: preprod` dans son manifest
+             (pas une étiquette) : la prod le masque du catalogue ; le « pousser
+             en prod » ne fait que retirer cette marque. -->
+        <div class="pub-row hidden" id="scope-row">
+          <div class="pub-info">
+            <span class="pub-label" id="t-scope-label">Environnement</span>
+            <span class="pub-pill" id="scope-pill" data-state="on">
+              <span class="material-symbols-outlined" id="scope-icon" aria-hidden="true">public</span>
+              <span class="publish-status" id="scope-status"></span>
+            </span>
+          </div>
+          <button id="btn-promote" class="pub-act icon-btn" type="button"><span class="material-symbols-outlined" aria-hidden="true">rocket_launch</span><span id="t-btn-promote">Pousser en prod</span></button>
         </div>
       </div>
     </div>
@@ -332,8 +391,8 @@
         <p class="meta-legend"><span class="material-symbols-outlined">sell</span><span id="t-meta-legend"></span></p>
         <div class="field-grid">
           <div class="fg full"><span class="fg-head"><label id="t-f-title">Titre</label><span class="meta-badge material-symbols-outlined">sell</span></span>
-            <div class="title-row"><input id="e-title" type="text"><button type="button" class="suggest-btn" id="btn-suggest-title"><span class="material-symbols-outlined">auto_fix_high</span><span id="t-suggest">Suggérer</span></button></div>
-            <div class="naming-hint" id="naming-hint"></div></div>
+            <div class="title-row"><input id="e-title" type="text"><button type="button" class="suggest-btn" id="btn-suggest-title"><span class="material-symbols-outlined" aria-hidden="true">auto_fix_high</span><span id="t-suggest">Suggérer</span></button></div>
+            <div class="naming-hint" id="naming-hint"><span class="material-symbols-outlined" aria-hidden="true">info</span><div class="nh-body" id="naming-hint-body"></div></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-artist">Artiste</label><span class="meta-badge material-symbols-outlined">sell</span></span><div id="e-artist"></div></div>
           <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
             <div class="date-field">
@@ -444,17 +503,6 @@
         </div>
         </div>
       </div>
-
-      <!-- Labels -->
-      <div class="sec">
-        <h2 id="t-labels">Labels</h2>
-        <div class="chips" id="chips"></div>
-        <div class="addrow">
-          <input id="newlabel" list="suggest" placeholder="Ajouter un label…">
-          <datalist id="suggest"></datalist>
-          <button class="primary" id="add-label" style="margin:0"><span class="material-symbols-outlined">add</span></button>
-        </div>
-      </div>
     </div>
   </div>
 </main>
@@ -469,7 +517,7 @@ L2M.initHeader({onLangChange:l=>{localStorage.setItem("l2m-lang",l);applyLang();
 const TT={
   fr:{back:"Retour",meta:"Informations",f_title:"Titre",f_artist:"Artiste",f_date:"Date",
       f_venue:"Lieu",f_city:"Ville",f_festival:"Festival",f_tour:"Tournée",f_subtitle:"Sous-titre (bonus)",suggest:"Suggérer",
-      naming_hint:'Format conseillé pour un concert : <code>Artiste - Live in Ville AAAA (Tournée - bonus)</code>. Ex. : <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Renseigne Ville, Tournée et le sous-titre, puis « Suggérer ». Les plateaux TV / compilations gardent un titre libre.',
+      naming_hint:'<p class="nh-lead">Format conseillé pour un concert</p><p><code>Live in <var>Ville/lieu/festival</var> <var>AAAA</var> (<var>Tournée</var> - <var>texte bonus optionnel</var>)</code></p><p>Exemple : <em>Live in Mexico City 2025 (The Clancy World Tour)</em></p><p>Renseigne Ville, Tournée et le sous-titre, puis clique sur « Suggérer ». L\'artiste a son propre champ : il n\'apparaît pas dans le titre. Les plateaux TV et les compilations gardent un titre libre.</p>',
       f_src_label:"Source (texte)",f_src_url:"Source (URL)",
       f_guests:"Artistes invités",artist_ph:"Rechercher : Coldplay…",city_ph:"Rechercher : New York…",festival_ph:"Rechercher ou créer : Glastonbury…",guests_ph:"Ajouter un invité…",
       save_all:"Enregistrer",
@@ -477,7 +525,7 @@ const TT={
       fix_url_hint:u=>`Adapter l'URL aux infos actuelles : ${u}`,
       fix_url_confirm:u=>`Changer l'URL de l'album en ${u} ?\n\nL'ancienne adresse redirigera automatiquement. Les favoris, commentaires et pochettes sont conservés.`,
       fix_url_done:"URL corrigée ✓",fix_dlg_yes:"Oui, corriger",fix_dlg_no:"Annuler",
-      saved:"Enregistré",tracks_h:"Pistes",labels:"Labels",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
+      saved:"Enregistré",tracks_h:"Pistes",cover:"Pochette",cover_del:"Supprimer la pochette",traycard:"Tray card",
       meta_badge_title:"Ce champ est écrit dans les métadonnées (tags ID3) des fichiers MP3",
       date_ph:"AAAA-MM-JJ",date_cal:"Choisir dans le calendrier",cal_clear:"Effacer",cal_today:"Aujourd'hui",
       date_invalid:"Date non reconnue — essayez « AAAA-MM-JJ » (ou « juin 2024 », « 03/06/2024 »…) ou le calendrier.",
@@ -486,9 +534,16 @@ const TT={
       no_cover:"Aucune pochette",no_traycard:"Aucune tray card",
       import_traycard:"Importer une tray card (PDF)",replace_traycard:"Remplacer la tray card",
       cover_hint:"Importer une pochette",cover_replace:"Remplacer la pochette",
-      new_track:"Nouveau titre…",add_label:"Ajouter un label…",
+      new_track:"Nouveau titre…",
       del_t:"Supprimer",ptc_label:"Dissocier les pistes",tc_upload:"Importer la pochette de cette piste",tc_change:"Changer la pochette",tc_delete:"Supprimer",tc_meta_title:"Titre",tc_meta_artist:"Artiste (optionnel)",tc_meta_save:"Enregistrer",tc_meta_cancel:"Annuler",
       publish_h:"Publication",publish_btn:"Publier",unpublish_btn:"Dépublier",
+      publish_label:"Visibilité",scope_label:"Environnement",
+      publish_ok:"Album publié",unpublish_ok:"Album dépublié",
+      publish_err:"Impossible de modifier la visibilité. Réessayez.",
+      suggest_title:"Suggérer un titre au format conseillé",
+      dl_mp3:"MP3 (ZIP)",dl_mp4:"MP4 (ZIP)",
+      dl_mp3_t:"Archive ZIP : toutes les pistes MP3 + les pochettes",
+      dl_mp4_t:"Archive ZIP : la vidéo du concert + les pochettes",
       promote_btn:"Pousser en prod",demote_btn:"Retirer de la prod",
       scope_preprod:"Album de preprod — invisible en production",
       scope_prod:"Visible en production",
@@ -548,7 +603,7 @@ const TT={
       rc_play:"Lire",rc_preview:"Écouter la piste"},
   en:{back:"Gallery",meta:"Album info",f_title:"Title",f_artist:"Artist",f_date:"Date",
       f_venue:"Venue",f_city:"City",f_festival:"Festival",f_tour:"Tour",f_subtitle:"Subtitle (bonus)",suggest:"Suggest",
-      naming_hint:'Recommended format for a concert: <code>Artist - Live in City YYYY (Tour - bonus)</code>. E.g. <em>Twenty One Pilots - Live in Mexico City 2025 (The Clancy World Tour)</em>. Fill in City, Tour and the subtitle, then "Suggest". TV shows / compilations keep a free title.',
+      naming_hint:'<p class="nh-lead">Recommended format for a concert</p><p><code>Live in <var>City/venue/festival</var> <var>YYYY</var> (<var>Tour</var> - <var>optional bonus text</var>)</code></p><p>Example: <em>Live in Mexico City 2025 (The Clancy World Tour)</em></p><p>Fill in City, Tour and the subtitle, then click “Suggest”. The artist has its own field: it does not go in the title. TV shows and compilations keep a free title.</p>',
       f_src_label:"Source (text)",f_src_url:"Source (URL)",
       f_guests:"Featured artists",artist_ph:"Search: Coldplay…",city_ph:"Search: New York…",festival_ph:"Search or create: Glastonbury…",guests_ph:"Add a guest…",
       save_all:"Save",
@@ -556,7 +611,7 @@ const TT={
       fix_url_hint:u=>`Match the URL to the current info: ${u}`,
       fix_url_confirm:u=>`Change this album's URL to ${u}?\n\nThe old address will redirect automatically. Favorites, comments and covers are kept.`,
       fix_url_done:"URL fixed ✓",fix_dlg_yes:"Yes, fix it",fix_dlg_no:"Cancel",
-      saved:"Saved",tracks_h:"Tracks",labels:"Labels",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
+      saved:"Saved",tracks_h:"Tracks",cover:"Cover",cover_del:"Delete cover",traycard:"Tray card",
       meta_badge_title:"This field is written to the MP3 files' metadata (ID3 tags)",
       date_ph:"YYYY-MM-DD",date_cal:"Pick from calendar",cal_clear:"Clear",cal_today:"Today",
       date_invalid:"Date not recognised — try “YYYY-MM-DD” (or “June 2024”, “06/03/2024”…) or the calendar.",
@@ -565,8 +620,15 @@ const TT={
       no_cover:"No cover",no_traycard:"No tray card",
       import_traycard:"Import tray card (PDF)",replace_traycard:"Replace tray card",
       cover_hint:"Import cover",cover_replace:"Replace cover",
-      new_track:"New title…",add_label:"Add a label…",del_t:"Remove",ptc_label:"Split tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
+      new_track:"New title…",del_t:"Remove",ptc_label:"Split tracks",tc_upload:"Import this track's cover",tc_change:"Change cover",tc_delete:"Remove",tc_meta_title:"Title",tc_meta_artist:"Artist (optional)",tc_meta_save:"Save",tc_meta_cancel:"Cancel",
       publish_h:"Publication",publish_btn:"Publish",unpublish_btn:"Unpublish",
+      publish_label:"Visibility",scope_label:"Environment",
+      publish_ok:"Album published",unpublish_ok:"Album unpublished",
+      publish_err:"Could not change the visibility. Please try again.",
+      suggest_title:"Suggest a title in the recommended format",
+      dl_mp3:"MP3 (ZIP)",dl_mp4:"MP4 (ZIP)",
+      dl_mp3_t:"ZIP archive: all the MP3 tracks + the covers",
+      dl_mp4_t:"ZIP archive: the concert video + the covers",
       promote_btn:"Push to production",demote_btn:"Pull from production",
       scope_preprod:"Preprod album — not visible in production",
       scope_prod:"Visible in production",
@@ -628,7 +690,9 @@ const TT={
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
 function applyLang(){
   const t=TT[L()];
-  if(document.getElementById("t-publish-h")){document.getElementById("t-publish-h").textContent=t.publish_h;}
+  document.getElementById("t-publish-h").textContent=t.publish_h;
+  document.getElementById("t-publish-label").textContent=t.publish_label;
+  document.getElementById("t-scope-label").textContent=t.scope_label;
   refreshPublishBtn();
   document.getElementById("lang-label").textContent=L().toUpperCase();
   document.getElementById("t-back").textContent=t.back;
@@ -654,14 +718,15 @@ function applyLang(){
   document.getElementById("t-f-tour").textContent=t.f_tour;
   document.getElementById("t-f-subtitle").textContent=t.f_subtitle;
   document.getElementById("t-suggest").textContent=t.suggest;
-  document.getElementById("naming-hint").innerHTML=t.naming_hint;
+  document.getElementById("naming-hint-body").innerHTML=t.naming_hint;
+  const sBtn=document.getElementById("btn-suggest-title");
+  sBtn.setAttribute("aria-label",t.suggest_title);sBtn.title=t.suggest_title;
   // Placeholders des autocompletes (mis à jour au changement de langue).
   const acPh=(id,ph)=>{const i=document.querySelector(`#${id} input`);if(i)i.placeholder=ph;};
   acPh("e-artist",t.artist_ph);acPh("e-city",t.city_ph);acPh("e-festival",t.festival_ph);acPh("e-guest-add",t.guests_ph);
   document.getElementById("t-f-src-label").textContent=t.f_src_label;
   document.getElementById("t-f-src-url").textContent=t.f_src_url;
   document.getElementById("t-tracks-h").textContent=t.tracks_h;
-  document.getElementById("t-labels").textContent=t.labels;
   document.getElementById("t-no-cover").textContent=t.no_cover;
   document.getElementById("t-ptc-label").textContent=t.ptc_label;
   const tChg=document.getElementById("t-tc-change");if(tChg)tChg.textContent=t.tc_change;
@@ -674,7 +739,6 @@ function applyLang(){
   const chint=document.getElementById("t-cover-hint");
   if(chint) chint.textContent=DATA&&DATA.has_cover?t.cover_replace:t.cover_hint;
   document.getElementById("new-track").placeholder=t.new_track;
-  document.getElementById("newlabel").placeholder=t.add_label;
   document.getElementById("t-btn-open-editor").textContent=t.open_editor;
   document.getElementById("t-fu-toggle").textContent=t.fu_toggle;
   document.getElementById("t-at-title").textContent=t.at_title;
@@ -726,10 +790,15 @@ function refreshScopeRow(){
   const lbl=document.getElementById("t-btn-promote");
   const ic=btn.querySelector(".material-symbols-outlined");
   const st=document.getElementById("scope-status");
+  const pill=document.getElementById("scope-pill");
+  const pic=document.getElementById("scope-icon");
   if(isPreprod){
     st.textContent=t.scope_preprod;
+    pill.dataset.state="off"; pic.textContent="lock";
     lbl.textContent=t.promote_btn; ic.textContent="rocket_launch";
-    btn.className="primary";
+    // Une seule action primaire par bloc : « Pousser en prod » ne l'est que si
+    // l'album est publié (sinon c'est « Publier », l'étape d'avant).
+    btn.className="pub-act "+(albumPublished?"primary":"icon-btn");
     btn.classList.remove("hidden");
   }else{
     // Album déjà servi par la production : on l'indique, sans proposer de l'en
@@ -738,6 +807,7 @@ function refreshScopeRow(){
     // La route `POST /api/albums/{slug}/demote` existe toujours pour un
     // rattrapage en ligne de commande.
     st.textContent=t.scope_prod;
+    pill.dataset.state="on"; pic.textContent="public";
     btn.classList.add("hidden");
   }
 }
@@ -772,15 +842,21 @@ function refreshPublishBtn(){
   const ic=btn.querySelector(".material-symbols-outlined");
   const lbl=document.getElementById("t-btn-publish");
   const status=document.getElementById("publish-status");
+  const pill=document.getElementById("publish-pill");
+  const pic=document.getElementById("publish-icon");
   if(albumPublished){
+    // « Dépublier » : action secondaire (pas de style qui crie).
     ic.textContent="visibility_off"; lbl.textContent=t.unpublish_btn;
-    btn.className=""; status.textContent=t.status_pub;
+    btn.className="pub-act icon-btn"; status.textContent=t.status_pub;
+    pill.dataset.state="on"; pic.textContent="visibility";
   } else {
     ic.textContent="visibility"; lbl.textContent=t.publish_btn;
-    btn.className="primary"; status.textContent=t.status_draft;
+    btn.className="pub-act primary"; status.textContent=t.status_draft;
+    pill.dataset.state="off"; pic.textContent="visibility_off";
   }
+  refreshScopeRow();   // l'action primaire du bloc dépend de l'état de publication
 }
-let DATA=null,labels=[],tracks=[],PENDING_COVER_DELETE=false;
+let DATA=null,tracks=[],PENDING_COVER_DELETE=false;
 // Autocompletes canoniques (artiste principal + festival) et invités (id Deezer).
 let artistAC=null,cityAC=null,festivalAC=null,guests=[];
 function renderGuests(){
@@ -1124,7 +1200,7 @@ function fuWatch(token,n,title,url){
       clearInterval(FU_POLL);
       fuEl("fu-add").disabled=false;
       // La piste est ajoutée localement plutôt que par un rechargement complet :
-      // les modifications en cours (titres, labels) ne doivent pas être perdues.
+      // les modifications en cours (titres, pistes) ne doivent pas être perdues.
       if(!tracks.some(x=>x.n===n)){
         tracks.push({n,title,start:null,end:null,locked:false,source:{url}});
       }
@@ -1170,7 +1246,7 @@ fuEl("fx-file").onchange=async()=>{
     const d=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error(d.detail||`HTTP ${r.status}`);
     // Ajout local plutôt que rechargement : les modifications en cours de
-    // saisie (titres, labels) ne doivent pas être perdues.
+    // saisie (titres, pistes) ne doivent pas être perdues.
     (d.added||[]).forEach(a=>{
       if(!tracks.some(x=>x.n===a.n))
         tracks.push({n:a.n,title:a.title,start:null,end:null,locked:false,
@@ -1211,21 +1287,6 @@ function openRequestedPanel(){
   history.replaceState(null,"",location.pathname);
 }
 
-// Labels
-function renderChips(){
-  const box=document.getElementById("chips");
-  const derived=(DATA.derived_labels||[]).map(l=>
-    `<span class="lchip derived" title="auto"><span class="material-symbols-outlined" style="font-size:14px">lock</span>${l}</span>`).join("");
-  const edit=labels.map((l,i)=>
-    `<span class="lchip">${l}<button data-i="${i}"><span class="material-symbols-outlined">close</span></button></span>`).join("");
-  box.innerHTML=derived+edit;
-  box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{labels.splice(+b.dataset.i,1);renderChips();});
-}
-function addLabel(){
-  const inp=document.getElementById("newlabel"),v=inp.value.trim();
-  if(v&&!labels.map(x=>x.toLowerCase()).includes(v.toLowerCase())){labels.push(v);renderChips();}inp.value="";}
-document.getElementById("add-label").onclick=addLabel;
-document.getElementById("newlabel").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addLabel();}});
 // Date : saisie manuelle libre, reformulée automatiquement vers un format ISO
 // partiel (AAAA, AAAA-MM ou AAAA-MM-JJ). Le bouton calendrier ouvre un sélecteur
 // personnalisé (aux couleurs du site). Une saisie non interprétable est refusée.
@@ -1335,16 +1396,17 @@ function validateDate(){
 })();
 
 // Bouton « Suggérer » : compose le titre au formalisme maison depuis les champs
-// courants (artiste, ville, année, tournée, sous-titre) — miroir de
-// backend/titles.suggest_concert_title. Le résultat n'est qu'une proposition,
-// éditable ensuite.
+// courants : `Live in Ville/lieu/festival AAAA (Tournée - sous-titre)`, SANS le nom de
+// l'artiste (il a son propre champ). Le lieu est, par ordre de préférence, la ville,
+// le lieu ou le festival renseigné. Miroir de backend/titles.suggest_concert_title.
+// Le résultat n'est qu'une proposition, éditable ensuite.
 function composeConcertTitle(){
   const g=id=>(document.getElementById(id)?.value||"").trim();
-  const artist=(artistAC&&artistAC.get?artistAC.get().label:"")||g("e-artist")||"";
-  const city=(cityAC&&cityAC.get?cityAC.get().label:"")||"";
+  const pick=ac=>((ac&&ac.get?ac.get().label:"")||"").trim();
+  const place=pick(cityAC)||g("e-venue")||pick(festivalAC);
   const year=(g("e-date").match(/(\d{4})/)||[])[1]||"";
   const extra=[g("e-tour"),g("e-subtitle")].filter(Boolean).join(" - ");
-  let s=(artist?artist+" - ":"")+(city?("Live in "+city):"Live");
+  let s=place?("Live in "+place):"Live";
   if(year) s+=" "+year;
   if(extra) s+=" ("+extra+")";
   return s.trim();
@@ -1379,25 +1441,25 @@ document.getElementById("save-all").onclick=async()=>{
     if(rDel.ok){DATA.has_cover=false;PENDING_COVER_DELETE=false;}
     else{savingError("save-all");toast("Erreur suppression pochette ("+rDel.status+")",true);return;}
   }
-  // Sérialisé (et non Promise.all) : les trois endpoints rechargent et
+  // Sérialisé (et non Promise.all) : les endpoints rechargent et
   // réécrivent le même manifest.yaml ; en parallèle, le dernier write écrase les
   // autres (perte de champs, ex. la date). On enchaîne donc les écritures.
   const rMeta=await fetch(`/api/albums/${SLUG}/meta`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
   const rTracks=await fetch(`/api/albums/${SLUG}/tracks`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tracks:tracks.map(t=>({n:t.n,title:t.title,...(t.artist?{artist:t.artist}:{})}))})});
-  const rLabels=await fetch(`/api/albums/${SLUG}/labels`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({labels})});
   if(rMeta.ok) document.title=`live2mp3 — ${p.title}`;
-  if(rLabels.ok){const d=await rLabels.json();labels=d.labels;renderChips();}
-  if(rMeta.ok&&rTracks.ok&&rLabels.ok){showSaved("save-all");}
+  if(rMeta.ok&&rTracks.ok){showSaved("save-all");}
   else{savingError("save-all");toast("Erreur lors de l'enregistrement",true);}
 };
 
 // Downloads
 function renderDL(){
   const t=TT[L()],dl=document.getElementById("dl");let h="";
-  if(DATA.has_mp3)h+=`<a class="icon-btn" href="/download/${SLUG}/mp3"><span class="material-symbols-outlined">music_note</span> MP3</a>`;
-  if(DATA.has_mp4)h+=`<a class="icon-btn" href="/download/${SLUG}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
-  if(DATA.has_cover&&!PENDING_COVER_DELETE)h+=`<a class="icon-btn" href="/download/${SLUG}/cover"><span class="material-symbols-outlined">image</span> ${t.cover}</a>`;
-  if(DATA.has_traycard)h+=`<a class="icon-btn" href="/download/${SLUG}/traycard"><span class="material-symbols-outlined">description</span> ${t.traycard}</a>`;
+  // /download/<slug>/mp3|mp4 livrent une archive ZIP (médias + pochettes), pas un fichier
+  // unique : le libellé et l'infobulle le disent.
+  if(DATA.has_mp3)h+=`<a class="icon-btn" href="/download/${SLUG}/mp3" title="${t.dl_mp3_t}"><span class="material-symbols-outlined" aria-hidden="true">music_note</span> ${t.dl_mp3}</a>`;
+  if(DATA.has_mp4)h+=`<a class="icon-btn" href="/download/${SLUG}/mp4" title="${t.dl_mp4_t}"><span class="material-symbols-outlined" aria-hidden="true">movie</span> ${t.dl_mp4}</a>`;
+  if(DATA.has_cover&&!PENDING_COVER_DELETE)h+=`<a class="icon-btn" href="/download/${SLUG}/cover"><span class="material-symbols-outlined" aria-hidden="true">image</span> ${t.cover}</a>`;
+  if(DATA.has_traycard)h+=`<a class="icon-btn" href="/download/${SLUG}/traycard"><span class="material-symbols-outlined" aria-hidden="true">description</span> ${t.traycard}</a>`;
   dl.innerHTML=h;}
 
 // Tray card
@@ -1433,12 +1495,19 @@ document.getElementById("traycard-file").addEventListener("change",async e=>{
 
 document.addEventListener("DOMContentLoaded",()=>{
   document.getElementById("btn-publish").onclick=async()=>{
-    const newVal=!albumPublished;
-    const r=await fetch(`/api/albums/${SLUG}/published`,{
-      method:"PATCH",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({published:newVal})
-    });
-    if(r.ok){albumPublished=newVal;refreshPublishBtn();}
+    const btn=document.getElementById("btn-publish");
+    const newVal=!albumPublished,t=TT[L()];
+    btn.disabled=true;   // retour immédiat : pas de double clic pendant l'appel
+    try{
+      const r=await fetch(`/api/albums/${SLUG}/published`,{
+        method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({published:newVal})
+      });
+      if(!r.ok)throw new Error(r.status);
+      albumPublished=newVal;refreshPublishBtn();
+      toast(newVal?t.publish_ok:t.unpublish_ok);
+    }catch(e){toast(t.publish_err,true);}
+    finally{btn.disabled=false;}
   };
 });
 
@@ -1779,14 +1848,12 @@ async function load(){
     onPick:(p)=>{if(p&&p.id){if(!guests.some(g=>g.id===p.id)){guests.push({id:p.id,name:p.label});renderGuests();}setTimeout(()=>guestAC.clear(),0);}}});
   document.getElementById("e-src-url").value=DATA.source_url||"";
   document.getElementById("e-src-label").value=DATA.source_label||"";
-  labels=(DATA.labels||[]).slice();
   tracks=(DATA.tracks||[]).map(t=>({...t}));
-  document.getElementById("suggest").innerHTML=(DATA.all_labels||[]).map(l=>`<option value="${l}">`).join("");
   albumPublished=DATA.published!==false;
   PER_TRACK=DATA.per_track_covers===true;
   document.getElementById("ptc-chk").checked=PER_TRACK;
   if(PER_TRACK)await loadTrackCovers();
-  renderCover();renderTraycard();renderChips();renderTracks();renderDL();applyLang();
+  renderCover();renderTraycard();renderTracks();renderDL();applyLang();
   _bindTcvEvents();
   refreshUrlBtn();
   openRequestedPanel();

@@ -29,7 +29,8 @@
       city_ph: "Commencez à taper : Dijon…", artist_ph: "Commencez à taper : Coldplay…",
       pick_hint: "Choisissez une entrée dans la liste",
       save_err: "Enregistrement impossible. Réessayez.",
-      sort_by: "Trier", sort_date: "Date du concert", sort_new: "Publication",
+      sort_by: "Trier par", sort_date: "Date du concert", sort_new: "Publication",
+      sort_artist: "Artiste", sort_liked: "Aimés récemment",
     },
     en: {
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
@@ -54,7 +55,8 @@
       confirm_role: "Warning: are you sure you want to assign the role “{r}” to this user?",
       yes: "Yes", no: "No", role_err: "Action failed. Please try again.",
       city: "City", artist: "Favourite artist/band",
-      sort_by: "Sort", sort_date: "Concert date", sort_new: "Published",
+      sort_by: "Sort by", sort_date: "Concert date", sort_new: "Published",
+      sort_artist: "Artist", sort_liked: "Recently liked",
       city_ph: "Start typing: Dijon…", artist_ph: "Start typing: Coldplay…",
       pick_hint: "Pick an entry from the list",
       save_err: "Could not save. Please try again.",
@@ -73,24 +75,16 @@
     if (ll) ll.textContent = LANG().toUpperCase();
     document.getElementById("t-back").textContent = t("back");
   }
-  function onLangChanged() { applyStaticI18n(); if (DATA) renderProfile(); }
+  function onLangChanged() {
+    applyStaticI18n(); if (DATA) renderProfile();
+    document.dispatchEvent(new Event("naerod:langchange"));   // <nrd-density>
+  }
 
   const USERNAME = decodeURIComponent((location.pathname.split("/u/")[1] || "").replace(/\/$/, ""));
-  let DATA = null, ME = { authenticated: false }, activeTab = "publications", pubSort = "imported";
-
-  function albumCard(a) {
-    const cover = a.has_cover
-      ? `<div class="cv is-load"><img class="cv-img" loading="lazy" decoding="async" alt=""
-           src="/cover/${a.slug}?v=${a.cover_v||0}&w=320"
-           srcset="/cover/${a.slug}?v=${a.cover_v||0}&w=320 1x, /cover/${a.slug}?v=${a.cover_v||0}&w=640 2x"
-           onload="this.parentNode.classList.remove('is-load');this.classList.add('rdy')"></div>`
-      : `<div class="cv"><span class="material-symbols-outlined">album</span></div>`;
-    return `<a class="prof-alb" href="/album/${encodeURIComponent(a.slug)}">
-      ${cover}
-      <div class="b"><div class="t">${esc(a.title || a.slug)}</div>
-        <div class="a">${esc(a.artist || "")}</div></div>
-    </a>`;
-  }
+  let DATA = null, ME = { authenticated: false }, activeTab = "publications";
+  // Tri de chaque grille d'albums (mémorisé le temps de la visite).
+  const SORT = { publications: "imported", likes: "liked" };
+  L2MAlbums.init({ me: () => ME });
 
   function commentItem(c) {
     return `<a class="prof-cmt" href="/album/${encodeURIComponent(c.slug)}#comments" style="display:block">
@@ -213,20 +207,55 @@
     });
   }
 
-  function sortedPubs() {
-    const arr = [...DATA.publications];
-    if (pubSort === "imported") arr.sort((a, b) => (b.imported_at || "").localeCompare(a.imported_at || ""));
-    else arr.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    return arr;
+  // ── Grilles d'albums (Publications, Likes) : mêmes fiches, même densité, même
+  //    regroupement que la vitrine (albums.js + <nrd-density>) ─────────────────
+  // Tri « artiste » → groupes par artiste ; tri « date » → groupes par année.
+  const SORT_OPTS = {
+    publications: ["imported", "date", "artist"],
+    likes: ["liked", "date", "artist"],
+  };
+  const SORT_KEY = { imported: "sort_new", liked: "sort_liked", date: "sort_date", artist: "sort_artist" };
+  const GRID_SORT = { date: "date_concert", artist: "artist" };   // vocabulaire de albums.js
+
+  function orderAlbums(list, sort) {
+    const arr = [...list];
+    const byDate = (a, b) => (b.date || "").localeCompare(a.date || "");
+    if (sort === "imported") {
+      const pub = (a) => a.first_published_at || a.imported_at || "";
+      arr.sort((a, b) => pub(b).localeCompare(pub(a)));
+    } else if (sort === "date" || sort === "artist") arr.sort(byDate);
+    return arr;                                    // « liked » : ordre du serveur
+  }
+
+  function albumsTab(kind) {
+    const list = kind === "publications" ? DATA.publications : DATA.likes;
+    if (!list.length) return `<div class="soc-empty">${t(kind === "publications" ? "no_pubs" : "no_likes")}</div>`;
+    const opts = SORT_OPTS[kind].map((k) =>
+      `<option value="${k}"${SORT[kind] === k ? " selected" : ""}>${t(SORT_KEY[k])}</option>`).join("");
+    return `<div class="alb-tools">
+        <div class="sort-block">
+          <label class="sort-label" for="alb-sort"><span class="material-symbols-outlined" aria-hidden="true">sort</span>${t("sort_by")}</label>
+          <select id="alb-sort" class="sort-select">${opts}</select>
+        </div>
+        <nrd-density target="#prof-albums" storage-key="l2m-density"></nrd-density>
+      </div>
+      <div id="prof-albums" data-density="${L2MAlbums.mode()}"></div>`;
+  }
+
+  // Remplit la grille de l'onglet courant (sans toucher à la barre d'outils).
+  function paintAlbums() {
+    const wrap = document.getElementById("prof-albums");
+    if (!wrap) return;
+    const kind = activeTab, sort = SORT[kind];
+    const list = kind === "publications" ? DATA.publications : DATA.likes;
+    L2MAlbums.render(wrap, orderAlbums(list, sort), {
+      sort: GRID_SORT[sort] || "",
+      card: (a) => L2MAlbums.card(a, { user: ME }),
+    });
   }
 
   function tabContent() {
-    if (activeTab === "publications") {
-      const sort = `<div class="prof-sort"><span class="material-symbols-outlined" style="font-size:14px;color:var(--muted)">sort</span><select id="pub-sort"><option value="date"${pubSort==="date"?' selected':''}>${t("sort_date")}</option><option value="imported"${pubSort==="imported"?' selected':''}>${t("sort_new")}</option></select></div>`;
-      return DATA.publications.length
-        ? sort + `<div class="prof-albums">${sortedPubs().map(albumCard).join("")}</div>`
-        : `<div class="soc-empty">${t("no_pubs")}</div>`;
-    }
+    if (activeTab === "publications" || activeTab === "likes") return albumsTab(activeTab);
     if (activeTab === "comments") {
       return DATA.comments.length
         ? DATA.comments.map(commentItem).join("")
@@ -234,9 +263,7 @@
     }
     if (activeTab === "following") return followingContent();
     if (activeTab === "followers") return followersContent();
-    return DATA.likes.length
-      ? `<div class="prof-albums">${DATA.likes.map(albumCard).join("")}</div>`
-      : `<div class="soc-empty">${t("no_likes")}</div>`;
+    return "";
   }
 
   function chips(p) {
@@ -247,12 +274,9 @@
   }
 
   function wirePubSort() {
-    const sel = document.getElementById("pub-sort");
-    if (sel) sel.onchange = () => {
-      pubSort = sel.value;
-      document.getElementById("tab-content").innerHTML = tabContent();
-      wirePubSort();
-    };
+    const sel = document.getElementById("alb-sort");
+    if (sel) sel.onchange = () => { SORT[activeTab] = sel.value; paintAlbums(); };
+    paintAlbums();
   }
 
   // Rôles gérables et leur icône Material (mêmes que le badge de rôle).
@@ -506,6 +530,7 @@
       return;
     }
     DATA = await r.json();
+    L2MAlbums.loadSocial(ME.authenticated);
     document.title = `live2mp3 — ${DATA.profile.display_name}`;
     renderProfile();
   }
