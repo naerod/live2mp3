@@ -637,7 +637,10 @@ def test_manifest_cover_materialisee_en_ligne_covers(client):
     assert len(covers) == 1
     win = covers[0]
     assert win["id"] > 0            # un vrai id → fiche pochette, likes, pin
-    assert win["auto"] is True      # un import manuel doit passer devant
+    # Auteur inconnu, et surtout PAS « automatique » : une pochette antérieure
+    # à la table `covers` a été faite à la main (incident 2026-09-27).
+    assert win["auto"] is False
+    assert win["username"] == ""
     # L'image est bien servie par le pipeline social.
     assert c.get(f"/cover-img/{win['id']}").status_code == 200
 
@@ -676,3 +679,87 @@ def test_zip_des_visuels(client):
 
     # Anonyme : refusé comme les autres téléchargements.
     assert c.get(f"/download/{slug}/artwork").status_code in (401, 403)
+
+
+def test_vitrine_sert_la_gagnante_en_base_pas_le_manifest(client):
+    """`/cover/{slug}` (vitrine) et la fiche doivent montrer la même image,
+    même si le manifest partagé pointe ailleurs (réécrit par l'autre
+    environnement). Incident 2026-09-26 : Falling In Reverse."""
+    c, projects = client
+    slug = _album(c)
+    r = _post_cover(c, slug, USER, color=(0, 0, 255))
+    win = r.json()["covers"][0]
+    # L'autre environnement repointe le manifest partagé sur une autre image.
+    art = projects / slug / "artwork"
+    (art / "autre.png").write_bytes(_png((0, 255, 0)))
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    m = Manifest.load(mpath)
+    m.data["album"]["cover"] = "artwork/autre.png"
+    m.save()
+    assert (c.get(f"/cover/{slug}", headers=USER).content
+            == c.get(f"/cover-img/{win['id']}").content)
+
+
+def test_preprod_ne_reecrit_pas_le_manifest_partage(client, monkeypatch):
+    """Un album de prod n'est jamais repointé depuis la preprod."""
+    c, projects = client
+    slug = _album(c)
+    from backend import covers
+    from backend.manifest import Manifest
+    mpath = projects / slug / "manifest.yaml"
+    before = Manifest.load(mpath).data.get("album", {}).get("cover")
+    monkeypatch.setattr(covers, "APP_ENV", "preprod")
+    _post_cover(c, slug, USER)
+    assert Manifest.load(mpath).data.get("album", {}).get("cover") == before
+    # Un album créé en preprod reste, lui, piloté par la preprod.
+    m = Manifest.load(mpath)
+    m.data["origin_env"] = "preprod"
+    m.save()
+    _post_cover(c, slug, USER, color=(0, 255, 0))
+    assert Manifest.load(mpath).data["album"]["cover"].startswith("artwork/covers/")
+
+
+def test_manifest_cover_reprend_auteur_et_auto_de_l_autre_env(client):
+    """La ligne de l'autre environnement (même clé de fichier) fait foi : une
+    miniature d'import y est `auto=1`, une pochette proposée y a son auteur.
+    Les lignes elles-mêmes matérialisées (auteur vide / « auto ») sont ignorées."""
+    import sqlite3
+    from backend import db
+    from backend.manifest import Manifest
+    c, projects = client
+    other_dir = db.DATA_DIR.parent / ("preprod" if covers_env() == "prod" else "prod")
+    other_dir.mkdir(parents=True, exist_ok=True)
+    other = sqlite3.connect(other_dir / "live2mp3.db")
+    other.executescript(db.SCHEMA)
+
+    def album_with_key(title, key):
+        slug = _album(c, title=title, date=f"2026-01-0{title[-1]}")
+        d = projects / slug / "artwork" / "covers"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{key}_cover.png").write_bytes(_png())
+        m = Manifest.load(projects / slug / "manifest.yaml")
+        m.data["album"]["cover"] = f"artwork/covers/{key}_cover.png"
+        m.save()
+        return slug
+
+    cases = {"a" * 32: ("nathan", 0), "b" * 32: ("dorian", 1), "c" * 32: ("auto", 1)}
+    slugs = {}
+    for i, (key, (user, auto)) in enumerate(cases.items()):
+        slugs[key] = album_with_key(f"Live {i + 1}", key)
+        other.execute("INSERT INTO covers(slug, username, file_key, cover_ext, auto, "
+                      "created_at, updated_at) VALUES(?,?,?,'.png',?,'t','t')",
+                      (slugs[key], user, key, auto))
+    other.commit(); other.close()
+
+    def win(key):
+        return c.get(f"/api/social/albums/{slugs[key]}/covers",
+                     headers=USER).json()["covers"][0]
+    assert (win("a" * 32)["username"], win("a" * 32)["auto"]) == ("nathan", False)
+    assert (win("b" * 32)["username"], win("b" * 32)["auto"]) == ("dorian", True)
+    assert (win("c" * 32)["username"], win("c" * 32)["auto"]) == ("", False)
+
+
+def covers_env():
+    from backend import covers
+    return covers.APP_ENV

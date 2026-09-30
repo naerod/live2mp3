@@ -161,6 +161,7 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
                 _dl.purge_master(project_dir)
             except Exception:
                 pass
+        _clear_rerender_flag(project_dir)
         try:
             notifications.notify_render_done(slug, requested_by)
         except Exception:
@@ -198,6 +199,19 @@ def render_job(*, slug: str, media: str, gap: float, video: bool,
         renderqueue.clear_pct(slug)
         renderqueue.clear_step(slug)
         renderqueue.clear_meta(slug)
+
+
+def _clear_rerender_flag(project_dir) -> None:
+    """Le redécoupage depuis une nouvelle source (`albumvideo`, mode recut)
+    pose `rerender_pending` pour forcer le rendu même sur un album dépublié ;
+    une fois les MP3 refaits, il n'a plus lieu d'être."""
+    from .manifest import Manifest
+    try:
+        m = Manifest.load(Path(project_dir) / "manifest.yaml")
+        if m.data.pop("rerender_pending", None) is not None:
+            m.save(touch=False)
+    except Exception as exc:
+        log.warning("drapeau rerender_pending de %s : %s", project_dir, exc)
 
 
 def render_video_job(*, slug: str, republish: bool) -> dict:
@@ -303,6 +317,9 @@ def _has_video_source(project_dir: Path) -> bool:
         m = Manifest.load(Path(project_dir) / "manifest.yaml")
     except Exception:
         return False
+    from .pipeline.render import attached_video
+    if attached_video(Path(project_dir), m) is not None:
+        return True   # vidéo rattachée : rendue en entier, sans timecodes
     mkv = Path(project_dir) / m.data.get("source", {}).get("master_mkv", "")
     has_tracks = any(t.get("start") is not None and t.get("end") is not None
                      for t in m.tracks)

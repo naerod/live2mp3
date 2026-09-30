@@ -52,11 +52,13 @@ from .db import get_conn, init_db
 from . import addtrack
 from .addtrack import router as addtrack_router
 from .recut import router as recut_router
+from .albumvideo import router as albumvideo_router
 from .import_album import router as import_router
 from .manifest import PROJECTS_DIR, Manifest, new_manifest, download_stem
 from . import slugrename
 from .pipeline import boundaries, bundle, download, preanalyze
 from .covers import (
+    owns_shared_files,
     COVER_EXTS,
     _ensure_auto_cover,
     _ensure_auto_thumbnail,
@@ -124,6 +126,7 @@ app.include_router(import_router)
 app.include_router(addtrack_router)
 # Re-couper une piste à la waveform avec ses 2 voisines + cadenas de liaison.
 app.include_router(recut_router)
+app.include_router(albumvideo_router)
 
 # Création d'album depuis un lien (analyse yt-dlp + IA) — routes /api/tool/*.
 app.include_router(linktool.router)
@@ -457,6 +460,12 @@ def catalogue_detail(slug: str, identity: dict = Depends(roles)) -> dict:
         # lien, sinon album créé/renseigné manuellement.
         "import_source": meta.get("import_source", "") or "",
         "cover_auto": cover_auto,
+        # Îlot vidéo (fiche) : import proposé aux gestionnaires, et seulement
+        # dans l'environnement qui possède l'album (volume partagé).
+        "video_can_import": bool(identity.get("is_gestionnaire"))
+                            and owns_shared_files(m.data),
+        "video_job": (renderqueue.active_status(slug, renderqueue.KIND_VIDEO)
+                      if identity.get("is_gestionnaire") else None),
         "source_url": src.get("url", "") or "",
         # Attribution setlist.fm — obligatoire partout où la donnée est affichée.
         "setlistfm_url": meta.get("setlistfm_url", "") or "",
@@ -487,10 +496,19 @@ def catalogue_nav(slug: str, identity: dict = Depends(roles)) -> dict:
 def get_cover(slug: str, identity: dict = Depends(roles),
               w: int = 0, v: str = "") -> FileResponse:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    if not cover_rel:
-        raise HTTPException(404, "pas de pochette")
-    cover = PROJECTS_DIR / slug / cover_rel
+    # Même source que la fiche (`/cover-img/{id}`) : la gagnante de la base
+    # sociale de CET environnement. Le manifest, partagé avec l'autre
+    # environnement, ne sert que de repli (albums sans ligne `covers`).
+    cover = None
+    with get_conn() as conn:
+        win = top_cover(conn, slug, "cover")
+    if win:
+        cover = cover_file(slug, win["file_key"], win["cover_ext"])
+    if cover is None or not cover.exists():
+        cover_rel = m.data.get("album", {}).get("cover")
+        if not cover_rel:
+            raise HTTPException(404, "pas de pochette")
+        cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
     # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
@@ -1971,6 +1989,9 @@ def start_render(slug: str, media: str = "audio", gap: float = 2.0,
     # garderait sinon son ancien découpage. En création, published est encore
     # False à ce stade → comportement idempotent existant inchangé.
     republish = bool(m.data.get("published"))
+    # Redécoupage depuis une nouvelle source (cf. albumvideo) : les noms de
+    # fichiers ne changent pas, un rendu idempotent garderait les anciens MP3.
+    republish = republish or bool(m.data.get("rerender_pending"))
     progress.reset(slug)
     try:
         renderqueue.enqueue(slug, media=media, gap=gap, video=video,

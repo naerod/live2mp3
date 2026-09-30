@@ -29,7 +29,8 @@ from fastapi.responses import FileResponse, Response
 from mutagen.id3 import ID3
 from .albumfiles import MIME_EXT, _file_track_n
 from .auth import current_identity, require_gestionnaire, require_user
-from .db import get_conn
+from . import db as _db
+from .db import _APP_ENV as APP_ENV, get_conn
 from .manifest import PROJECTS_DIR, Manifest
 from .printable import cover_pdf, traycard_pdf
 from . import thumbs
@@ -108,6 +109,16 @@ def rank_covers(conn: sqlite3.Connection, slug: str,
     ).fetchall()
 
 
+def owns_shared_files(data: dict) -> bool:
+    """Cet environnement peut-il écrire les fichiers partagés de l'album ?
+
+    La prod possède tous les albums sauf ceux créés en preprod et pas encore
+    poussés (`origin_env`) ; la preprod ne possède que ces derniers.
+    """
+    origin = data.get("origin_env") or "prod"
+    return origin == APP_ENV
+
+
 def top_cover(conn: sqlite3.Connection, slug: str,
               kind: str = "cover") -> sqlite3.Row | None:
     rows = rank_covers(conn, slug, kind)
@@ -137,9 +148,16 @@ def _on_covers_changed(slug: str, *, kind: str = "cover",
         return
     from .manifest import Manifest
 
+    m = Manifest.load(mpath)
+    if not owns_shared_files(m.data):
+        # Manifest et médias sont PARTAGÉS entre prod et preprod, la base
+        # sociale ne l'est pas : un like ou un import en preprod réécrivait
+        # le manifest (et les APIC) de la prod avec la gagnante *preprod*,
+        # d'où vitrine ≠ fiche en prod (incident 2026-09-26). Chaque
+        # environnement lit désormais sa gagnante en base (`/cover/{slug}`).
+        return
     with get_conn() as conn:
         win = top_cover(conn, slug, kind)
-    m = Manifest.load(mpath)
     album = m.data.setdefault("album", {})
     # Pointeur legacy dans le manifest : `album.cover` pour la pochette,
     # `album.banner`/`poster`/`thumbnail` pour les visuels Jellyfin. Permet aux
@@ -274,6 +292,30 @@ def _ensure_auto_thumbnail(slug: str) -> None:
     _on_covers_changed(slug, kind="thumbnail", force=True)
 
 
+def _sibling_cover_origin(slug: str, key: str) -> tuple[str, int] | None:
+    """(auteur, auto) de la même pochette dans la base de l'autre environnement.
+
+    Lecture seule, best-effort. Les lignes elles-mêmes matérialisées (auteur
+    vide ou l'ancien « auto ») sont ignorées : elles ne savent rien de plus.
+    """
+    other = _db.DATA_DIR.parent / ("preprod" if APP_ENV == "prod" else "prod") / "live2mp3.db"
+    if not other.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{other}?mode=ro", uri=True, timeout=2.0)
+        try:
+            row = conn.execute(
+                "SELECT username, auto FROM covers WHERE slug=? AND file_key=? "
+                "AND kind='cover' AND username NOT IN ('', 'auto') LIMIT 1",
+                (slug, key)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        log.warning("pochette de %s : base %s illisible (%s)", slug, other, exc)
+        return None
+    return (row[0], int(row[1])) if row else None
+
+
 _COVERS_REL = re.compile(r"^artwork/covers/([0-9a-f]{32})_cover(\.[a-z0-9]+)$")
 
 
@@ -295,8 +337,13 @@ def _ensure_auto_cover(slug: str) -> None:
       aucun fichier n'est dupliqué.
     - Sinon la source est copiée sous une clé **déterministe** (dérivée du
       chemin), pour que les deux environnements convergent sur le même fichier.
-    - `auto=1` : un import manuel passe aussitôt devant, comme pour la
-      miniature automatique.
+    - Auteur et marqueur `auto` : repris de la ligne de l'AUTRE environnement
+      si elle existe (même clé de fichier) — c'est elle qui sait si la
+      pochette est une miniature d'import (`auto=1`) ou l'œuvre de quelqu'un.
+      À défaut, auteur inconnu (`username=''`, aucun crédit affiché) et
+      `auto=0`. ⚠️ Ne JAMAIS supposer `auto=1` : un album importé avant la
+      table `covers` a une pochette faite à la main, et la marquer
+      « automatique » a crédité à tort 24 albums (incident 2026-09-27).
     - On ne touche NI au manifest NI aux médias : c'est une matérialisation de
       ce qui est déjà affiché, pas un changement de pochette. Repointer le
       manifest ré-embarquerait les APIC de toutes les pistes sur le volume
@@ -340,14 +387,15 @@ def _ensure_auto_cover(slug: str) -> None:
             except Exception as exc:
                 log.warning("pochette auto de %s impossible : %s", slug, exc)
                 return
+    username, auto = _sibling_cover_origin(slug, key) or ("", 0)
     now = _now()
     try:
         with get_conn() as conn:
             conn.execute(
                 "INSERT INTO covers(slug, username, file_key, cover_ext, "
                 "traycard_ext, caption, kind, auto, created_at, updated_at) "
-                "VALUES(?,?,?,?,?,?,'cover',1,?,?)",
-                (slug, "auto", key, ext, "", "", now, now),
+                "VALUES(?,?,?,?,?,?,'cover',?,?,?)",
+                (slug, username, key, ext, "", "", auto, now, now),
             )
     except Exception as exc:
         log.warning("pochette auto de %s non enregistrée : %s", slug, exc)

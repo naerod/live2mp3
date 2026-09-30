@@ -273,6 +273,27 @@ def video_filename(m: Manifest, project_slug: str) -> str:
     return f"{jellyfin_stem(m.data, project_slug)}.mp4"
 
 
+def attached_video(project_dir: Path, m: Manifest) -> Path | None:
+    """Vidéo rattachée (`source.video_attached`) si elle est bien sur disque."""
+    rel = m.data.get("source", {}).get("video_attached")
+    if not rel:
+        return None
+    path = Path(project_dir) / rel
+    return path if path.is_file() else None
+
+
+def media_seconds(path: Path) -> float:
+    """Durée d'un média, mesurée par ffprobe (0 si illisible)."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nokey=1:noprint_wrappers=1", str(path)],
+        capture_output=True, text=True)
+    try:
+        return float((out.stdout or "").strip() or 0.0)
+    except ValueError:
+        return 0.0
+
+
 def video_dir(project_dir: Path) -> Path:
     """Dossier du MP4 concert complet — cf. l'avertissement en tête de module."""
     return Path(project_dir) / "build" / VIDEO_FULL_DIRNAME
@@ -377,8 +398,18 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
     # ⚠️ Aucune purge de `build/video-full` quand `video` est faux : le job audio
     # de phase 1 tourne précisément avec `video=False` et détruirait sinon le MP4
     # déjà produit — c'est la régression que le découplage rendait possible.
-    if video and master_mkv.exists() and todo:
-        v_start, v_end = todo[0]["start"], todo[-1]["end"]
+    # Vidéo rattachée à un album existant (`albumvideo`, mode « garder les
+    # MP3 ») : elle prime sur le master et se rend EN ENTIER — ses timecodes
+    # n'ont aucun rapport avec ceux des pistes, dont l'audio peut venir d'une
+    # autre captation.
+    attached = attached_video(project_dir, m)
+    if video and attached is not None:
+        v_src, v_start, v_end = attached, 0.0, media_seconds(attached)
+    elif video and master_mkv.exists() and todo:
+        v_src, v_start, v_end = master_mkv, todo[0]["start"], todo[-1]["end"]
+    else:
+        v_src = None
+    if v_src is not None:
         v_name = video_filename(m, project_dir.name)
         # Avant toute purge : récupérer un MP4 déjà encodé (ancien dossier ou
         # ancien nom). Sans ça, la purge le détruirait et on réencoderait
@@ -388,7 +419,7 @@ def run(project_dir: str | Path, force: bool = False, video: bool = True,
         _purge_orphans(video_full_dir, {v_name}, only_media=True)
         v_out = video_full_dir / v_name
         if force or not v_out.exists():
-            _render_or_cleanup(render_video, master_mkv, v_start, v_end,
+            _render_or_cleanup(render_video, v_src, v_start, v_end,
                                v_out, cancel, paused, on_progress=on_video)
         elif on_video:
             on_video(1.0)
