@@ -27,7 +27,8 @@
         "Mobile : en vignettes moyennes, les badges « Nouveau » et « Mis à jour » passent en icône seule et ne chevauchent plus l'icône vidéo.",
         "Gestion d'un album : le bouton « Suggérer » a la hauteur du champ titre (icône seule sur petit écran) ; l'aide au format du titre est lisible et corrigée, sans l'artiste (« Live in Ville/lieu/festival AAAA (Tournée - bonus) ») ; la suggestion ne préfixe plus le nom de l'artiste.",
         "Gestion d'un album : la section « Publication » est refaite (état en pastille avec icône, une seule action principale) et la section « Labels » est retirée ; les boutons de téléchargement indiquent qu'ils livrent un ZIP ; plus de débordement horizontal à 320 px.",
-        "Fiche album : sans vidéo, l'emplacement se réduit à un bandeau d'une ligne."
+        "Fiche album : sans vidéo, l'emplacement se réduit à un bandeau d'une ligne.",
+        "Animations : le panneau « Filtres » se déplie en douceur, et la grille glisse vers sa nouvelle disposition quand on filtre, trie ou change de recherche, au lieu de se téléporter. Coupé si votre appareil demande moins de mouvement."
       ],
       "en": [
         "Covers: the catalogue and an album's page always show the same cover.",
@@ -48,7 +49,8 @@
         "Mobile: in medium thumbnails, the “New” and “Updated” badges become icon-only and no longer overlap the video icon.",
         "Album management: the “Suggest” button is as tall as the title field (icon-only on small screens); the title format help is readable and corrected, without the artist (“Live in City/venue/festival YYYY (Tour - bonus)”); the suggestion no longer prefixes the artist name.",
         "Album management: the “Publication” section is redesigned (status pill with icon, a single primary action) and the “Labels” section is removed; download buttons say they deliver a ZIP; no more horizontal overflow at 320 px.",
-        "Album page: with no video, the slot shrinks to a one-line banner."
+        "Album page: with no video, the slot shrinks to a one-line banner.",
+        "Animations: the “Filters” panel now unfolds smoothly, and the grid glides to its new layout when you filter, sort or search, instead of jumping. Disabled if your device asks for reduced motion."
       ]
     },
     {
