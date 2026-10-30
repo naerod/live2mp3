@@ -9,12 +9,10 @@
         "en": "Smoother animations"
       },
       "fr": [
-        "Animations : le panneau « Filtres » se déplie en douceur, et la grille glisse vers sa nouvelle disposition quand on filtre, trie ou change de recherche, au lieu de se téléporter. Coupé si votre appareil demande moins de mouvement.",
-        "Nouvelle icône du site : une guitare et une disquette."
+        "Animations : le panneau « Filtres » se déplie en douceur, et la grille glisse vers sa nouvelle disposition quand on filtre, trie ou change de recherche, au lieu de se téléporter. Coupé si votre appareil demande moins de mouvement."
       ],
       "en": [
-        "Animations: the “Filters” panel now unfolds smoothly, and the grid glides to its new layout when you filter, sort or search, instead of jumping. Disabled if your device asks for reduced motion.",
-        "New site icon: a guitar and a floppy disk."
+        "Animations: the “Filters” panel now unfolds smoothly, and the grid glides to its new layout when you filter, sort or search, instead of jumping. Disabled if your device asks for reduced motion."
       ]
     },
     {
