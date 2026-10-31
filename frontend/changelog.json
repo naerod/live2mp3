@@ -2,6 +2,20 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.28",
+      "date": "2026-10-09",
+      "title": {
+        "fr": "Des animations plus fluides",
+        "en": "Smoother animations"
+      },
+      "fr": [
+        "Animations : le panneau « Filtres » se déplie en douceur, et la grille glisse vers sa nouvelle disposition quand on filtre, trie ou change de recherche, au lieu de se téléporter. Coupé si votre appareil demande moins de mouvement."
+      ],
+      "en": [
+        "Animations: the “Filters” panel now unfolds smoothly, and the grid glides to its new layout when you filter, sort or search, instead of jumping. Disabled if your device asks for reduced motion."
+      ]
+    },
+    {
       "v": "1.27",
       "date": "2026-09-27",
       "title": {

@@ -202,7 +202,36 @@
     return null;
   }
 
+  // Animation de réorganisation (FLIP) : on mesure les fiches avant le rendu, puis on
+  // fait glisser chacune de son ancienne position vers la nouvelle ; les fiches qui
+  // apparaissent se fondent. Coupée si l'utilisateur demande moins de mouvement.
+  function snapshot(wrap) {
+    const m = new Map();
+    wrap.querySelectorAll(".album[data-slug]").forEach((el) => m.set(el.dataset.slug, el.getBoundingClientRect()));
+    return m;
+  }
+  function animate(wrap, before) {
+    if (!before.size || !wrap.animate || matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+    const vh = innerHeight;
+    wrap.querySelectorAll(".album[data-slug]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.bottom < -200 || r.top > vh + 200) return; // hors écran : inutile
+      const p = before.get(el.dataset.slug);
+      const kf = p
+        ? [{ transform: `translate(${p.left - r.left}px,${p.top - r.top}px)` }, { transform: "none" }]
+        : [{ opacity: 0, transform: "translateY(8px) scale(.97)" }, { opacity: 1, transform: "none" }];
+      if (p && Math.abs(p.left - r.left) < 1 && Math.abs(p.top - r.top) < 1) return;
+      el.animate(kf, { duration: 280, easing: "ease-in-out" });
+    });
+  }
+
   function render(wrap, albums, o) {
+    const before = snapshot(wrap);
+    renderNow(wrap, albums, o);
+    animate(wrap, before);
+  }
+
+  function renderNow(wrap, albums, o) {
     const cardFn = (o && o.card) || card;
     const g = groups(albums, o && o.sort);
     if (!g) {

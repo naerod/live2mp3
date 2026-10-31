@@ -112,9 +112,16 @@
     color:var(--fg);font-weight:500;margin-top:4px;width:fit-content}
   .album .date-pill .material-symbols-outlined{font-size:13px;color:var(--muted)}
   /* Filtre panel */
-  .filter-panel{display:none;background:var(--card);border:1px solid var(--border);
-    border-radius:12px;padding:14px 16px;margin-top:8px;gap:12px;flex-wrap:wrap;align-items:flex-end}
-  .filter-panel.open{display:flex}
+  .filter-panel{display:flex;background:var(--card);border:1px solid var(--border);
+    border-radius:12px;padding:0 16px;margin-top:0;gap:12px;flex-wrap:wrap;align-items:flex-end;
+    max-height:0;opacity:0;overflow:hidden;visibility:hidden;border-width:0;transform:translateY(-6px);
+    transition:max-height .28s ease,opacity .2s ease,transform .28s ease,padding .28s ease,
+      margin .28s ease,visibility 0s linear .28s}
+  .filter-panel.open{max-height:520px;opacity:1;visibility:visible;transform:none;border-width:1px;
+    padding:14px 16px;margin-top:8px;
+    transition:max-height .28s ease,opacity .2s ease,transform .28s ease,padding .28s ease,
+      margin .28s ease,visibility 0s}
+  @media (prefers-reduced-motion:reduce){.filter-panel,.filter-panel.open{transition:opacity .15s ease;transform:none}}
   .filter-group{display:flex;flex-direction:column;gap:5px;min-width:150px}
   .filter-group label{font-size:11.5px;color:var(--muted);font-weight:500}
   .filter-group select{height:34px;padding:0 32px 0 10px;font-size:13px;cursor:pointer;
