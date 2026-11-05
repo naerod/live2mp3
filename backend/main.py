@@ -42,6 +42,7 @@ from .albumfiles import (
 )
 from .auth import (
     GROUP_APP_ADMIN,
+    ProxyHeaderGuard,
     SUPERUSER_GROUPS,
     is_gestionnaire_identity,
     require_gestionnaire,
@@ -95,6 +96,8 @@ BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
 
 app = FastAPI(title="live2mp3", docs_url="/api/docs")
+# Ignore les en-têtes X-authentik-* qui ne viennent pas du proxy (cf. auth.py).
+app.add_middleware(ProxyHeaderGuard)
 
 
 @app.middleware("http")
