@@ -335,3 +335,33 @@ def test_username_trop_long_ignore(client):
     c, _ = client
     h = {"X-authentik-username": "a" * 151, "X-authentik-groups": "live2mp3-admin"}
     assert c.get("/api/me", headers=h).json()["authenticated"] is False
+
+
+# --- 10. Avatars : SVG refusé, seuls les formats raster passent ------------
+@pytest.mark.parametrize("name,ctype,data", [
+    ("a.svg", "image/svg+xml",
+     b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+    ("a.png", "image/png",            # SVG déguisé en PNG
+     b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"/>'),
+    ("a.png", "image/png", b"pas une image"),
+])
+def test_avatar_svg_ou_invalide_refuse(client, name, ctype, data):
+    c, root = client
+    r = c.post("/api/social/profile/avatar", files={"file": (name, data, ctype)},
+               headers=USER)
+    assert r.status_code == 400
+    assert c.get("/avatar/alice").status_code == 404
+
+
+def test_avatar_png_accepte_et_reencode(client):
+    import io
+    from PIL import Image
+    c, _ = client
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (200, 10, 10)).save(buf, "PNG")
+    r = c.post("/api/social/profile/avatar",
+               files={"file": ("a.png", buf.getvalue(), "image/png")}, headers=USER)
+    assert r.status_code == 200
+    got = c.get("/avatar/alice")
+    assert got.headers["content-type"] == "image/webp"
+    assert Image.open(io.BytesIO(got.content)).size == (512, 512)
