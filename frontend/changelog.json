@@ -2,6 +2,24 @@
   "_comment": "SOURCE DE VÉRITÉ UNIQUE du changelog live2mp3. Servi tel quel à /static/changelog.json et rendu par changelog.html. À chaque nouvelle version du site, AJOUTER une entrée EN TÊTE de 'versions' (fr + en). Ne dupliquer nulle part ailleurs.",
   "versions": [
     {
+      "v": "1.28.1",
+      "date": "2026-11-05",
+      "title": {
+        "fr": "Sécurité et accessibilité",
+        "en": "Security and accessibility"
+      },
+      "fr": [
+        "Sécurité renforcée du site et des téléchargements.",
+        "Les boutons-icônes ont désormais un nom lu par les lecteurs d'écran.",
+        "Tout compte connecté peut aimer, commenter et suivre ; le téléchargement reste réservé aux membres."
+      ],
+      "en": [
+        "Stronger security for the site and downloads.",
+        "Icon buttons now have a name read by screen readers.",
+        "Any signed-in account can like, comment and follow; downloads remain members-only."
+      ]
+    },
+    {
       "v": "1.28",
       "date": "2026-10-09",
       "title": {
