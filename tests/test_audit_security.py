@@ -95,3 +95,44 @@ def test_album_preprod_introuvable_en_prod_par_url(client, monkeypatch):
     # La preprod, elle, le voit.
     monkeypatch.setattr(catalogue, "APP_ENV", "preprod")
     assert c.get(f"/api/catalogue/{slug}").status_code == 200
+
+
+# --- 3. Pas d'écriture sociale sur un album invisible ----------------------
+def test_ecritures_sociales_refusees_sur_brouillon(client):
+    c, root = client
+    slug = _make_album(c)
+    cid = c.post(f"/api/social/albums/{slug}/comments", json={"body": "hello"},
+                 headers=USER).json()["id"]
+    c.post(f"/api/social/albums/{slug}/comments",
+           json={"body": "re", "parent_id": cid}, headers=USER2)
+    # Dépublication : l'album n'existe plus pour un simple utilisateur.
+    c.patch(f"/api/albums/{slug}/published", json={"published": False}, headers=GEST)
+    assert c.post(f"/api/social/albums/{slug}/like", headers=USER).status_code == 404
+    assert c.post(f"/api/social/albums/{slug}/comments", json={"body": "x"},
+                  headers=USER).status_code == 404
+    assert c.post(f"/api/social/comments/{cid}/like", headers=USER).status_code == 404
+    assert c.get(f"/api/social/comments/{cid}/replies").status_code == 404
+    import io
+    png = io.BytesIO()
+    from PIL import Image
+    Image.new("RGB", (10, 10)).save(png, "PNG")
+    r = c.post(f"/api/social/albums/{slug}/covers",
+               files={"cover": ("c.png", png.getvalue(), "image/png")}, headers=USER)
+    assert r.status_code == 404
+    # Le gestionnaire, lui, garde la main.
+    assert c.post(f"/api/social/albums/{slug}/like", headers=GEST).status_code == 200
+    assert c.get(f"/api/social/comments/{cid}/replies", headers=GEST).status_code == 200
+
+
+def test_offset_negatif_ignore(client):
+    c, _ = client
+    slug = _make_album(c)
+    for i in range(3):
+        c.post(f"/api/social/albums/{slug}/comments", json={"body": f"c{i}"},
+               headers=USER)
+    base = f"/api/social/albums/{slug}/comments?sort=new&limit=1"
+    r = c.get(base + "&offset=-1")
+    assert r.status_code == 200
+    # offset=-1 ≡ offset=0 (avant : la tranche Python renvoyait le dernier).
+    assert r.json()["comments"] == c.get(base + "&offset=0").json()["comments"]
+    assert r.json()["offset"] == 0

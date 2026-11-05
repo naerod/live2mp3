@@ -815,7 +815,7 @@ def album_social(slug: str, identity: dict = Depends(current_identity)) -> dict:
 @router.post("/api/social/albums/{slug}/like")
 def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
     username = identity["username"]
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     with get_conn() as conn:
         _ensure_profile(conn, username)
@@ -846,15 +846,17 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
 def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TOP_PAGE,
                   cover_id: int | None = None,
                   identity: dict = Depends(current_identity)) -> dict:
-    if not _album_visible(slug, identity):
-        raise HTTPException(404, "album introuvable")
     """Fil de l'album (`cover_id` absent) ou fil d'une pochette (`cover_id` posé).
 
     Les deux partagent la même table : `cover_id IS ?` sélectionne l'un ou
     l'autre sans jamais les mélanger (`IS` compare NULL correctement).
     """
+    if not _album_visible(slug, identity):
+        raise HTTPException(404, "album introuvable")
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
+    # Un offset négatif renverrait la fin de la liste (tranche Python).
+    offset = max(0, offset)
     # Un commentaire racine supprimé n'est affiché que s'il a au moins une
     # réponse non supprimée (préserver le contexte du fil).
     _TOP_FILTER = """
@@ -920,7 +922,14 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
                  identity: dict = Depends(current_identity)) -> dict:
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
+    offset = max(0, offset)
     with get_conn() as conn:
+        parent = conn.execute(
+            "SELECT slug FROM comments WHERE id=?", (comment_id,)
+        ).fetchone()
+        # Fil d'un album dépublié / d'un autre environnement : on ne révèle rien.
+        if not parent or not _album_visible(parent["slug"], identity):
+            raise HTTPException(404, "commentaire introuvable")
         rows = conn.execute(
             "SELECT * FROM comments WHERE parent_id=? ORDER BY created_at ASC "
             "LIMIT ? OFFSET ?",
@@ -937,7 +946,7 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
 def create_comment(slug: str, payload: CommentIn,
                    identity: dict = Depends(require_user)) -> dict:
     username = identity["username"]
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     body = payload.body.strip()
     if not body:
@@ -1036,7 +1045,7 @@ def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dic
         row = conn.execute(
             "SELECT id, deleted, username, slug FROM comments WHERE id=?", (comment_id,)
         ).fetchone()
-        if not row or row["deleted"]:
+        if not row or row["deleted"] or not _album_visible(row["slug"], identity):
             raise HTTPException(404, "commentaire introuvable")
         _ensure_profile(conn, username)
         if conn.execute(

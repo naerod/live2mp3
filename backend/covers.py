@@ -627,7 +627,7 @@ async def upload_cover(slug: str,
                        caption: str = Form(default=""),
                        identity: dict = Depends(require_user)) -> dict:
     """Import d'une proposition : cover obligatoire, tray card optionnelle."""
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     username = identity["username"]
     cdata, cext = await _read_upload(cover, COVER_EXTS, COVER_MAX_BYTES, "pochette")
@@ -687,7 +687,7 @@ async def upload_image(slug: str, kind: str,
                        identity: dict = Depends(require_user)) -> dict:
     """Import d'un visuel Jellyfin (bannière/poster/miniature) — sans tray card."""
     _check_image_kind(kind)
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     username = identity["username"]
     cdata, cext = await _read_upload(cover, COVER_EXTS, COVER_MAX_BYTES, "image")

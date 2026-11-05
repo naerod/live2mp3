@@ -710,6 +710,9 @@ def test_preprod_ne_reecrit_pas_le_manifest_partage(client, monkeypatch):
     mpath = projects / slug / "manifest.yaml"
     before = Manifest.load(mpath).data.get("album", {}).get("cover")
     monkeypatch.setattr(covers, "APP_ENV", "preprod")
+    # Un seul APP_ENV par déploiement : le catalogue (visibilité) suit.
+    from backend import catalogue
+    monkeypatch.setattr(catalogue, "APP_ENV", "preprod")
     _post_cover(c, slug, USER)
     assert Manifest.load(mpath).data.get("album", {}).get("cover") == before
     # Un album créé en preprod reste, lui, piloté par la preprod.
