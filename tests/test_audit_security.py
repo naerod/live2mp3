@@ -136,3 +136,40 @@ def test_offset_negatif_ignore(client):
     # offset=-1 ≡ offset=0 (avant : la tranche Python renvoyait le dernier).
     assert r.json()["comments"] == c.get(base + "&offset=0").json()["comments"]
     assert r.json()["offset"] == 0
+
+
+# --- 4. Pochette : pas de sortie du dossier projet -------------------------
+@pytest.mark.parametrize("cover", ["../../etc/passwd", "/etc/passwd",
+                                   "artwork/../../x", "a\\..\\b"])
+def test_job_refuse_cover_hors_projet(client, cover):
+    c, _ = client
+    payload = {"album": {"artist": "Z", "title": "T", "date": "2026-02-02",
+                         "cover": cover},
+               "tracks": [{"n": 1, "title": "S"}], "target": "data_disc"}
+    assert c.post("/api/jobs", json=payload, headers=GEST).status_code == 422
+
+
+def test_manifest_altere_ne_sert_pas_hors_projet(client):
+    """Défense en profondeur : un manifest déjà altéré ne fuit rien."""
+    from backend.manifest import Manifest
+    c, root = client
+    slug = _make_album(c)
+    secret = root / "secret.txt"
+    secret.write_text("TOP SECRET")
+    m = Manifest.load(root / slug / "manifest.yaml")
+    m.data["album"]["cover"] = "../secret.txt"
+    m.save(touch=False)
+    for url in (f"/download/{slug}/cover", f"/download/{slug}/cover/pdf",
+                f"/cover/{slug}"):
+        r = c.get(url, headers=USER)
+        assert r.status_code == 404, url
+        assert b"TOP SECRET" not in r.content
+
+
+def test_cover_relative_valide_acceptee(client):
+    c, root = client
+    payload = {"album": {"artist": "Z", "title": "T", "date": "2026-02-03",
+                         "cover": "artwork/cover.jpg"},
+               "tracks": [{"n": 1, "title": "S"}], "target": "data_disc"}
+    assert c.post("/api/jobs", json=payload, headers=GEST).status_code == 200
+

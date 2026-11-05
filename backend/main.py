@@ -13,7 +13,7 @@ import threading
 import time
 import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import os
@@ -27,7 +27,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 import re
 from uuid import uuid4
@@ -173,6 +173,26 @@ def _make_cb(slug: str):
     return progress.make_cb(slug)
 
 
+def _is_safe_relpath(rel: str) -> bool:
+    """Chemin relatif sans `..`, ni absolu, ni antislash/NUL."""
+    if not rel or "\x00" in rel or "\\" in rel:
+        return False
+    p = PurePosixPath(rel)
+    return not p.is_absolute() and ".." not in p.parts
+
+
+def _project_file(slug: str, rel: str | None) -> Path | None:
+    """Fichier `rel` du projet `slug`, ou None s'il sortirait du dossier projet
+    (manifest altéré, ancien import). Défense en profondeur côté lecture."""
+    if not rel:
+        return None
+    base = (PROJECTS_DIR / slug).resolve()
+    target = (base / rel).resolve()
+    if target != base and base not in target.parents:
+        return None
+    return target
+
+
 # --- Modèles --------------------------------------------------------------
 class TrackIn(BaseModel):
     title: str
@@ -194,6 +214,15 @@ class AlbumIn(BaseModel):
     venue: str | None = None
     festival: str | None = None
     cover: str | None = None
+
+    @field_validator("cover")
+    @classmethod
+    def _cover_relatif(cls, v: str | None) -> str | None:
+        # Chemin relatif au dossier projet, servi tel quel par /download/…/cover :
+        # interdit de sortir du projet (lecture de fichier arbitraire).
+        if v and not _is_safe_relpath(v):
+            raise ValueError("chemin de pochette invalide")
+        return v
 
 
 class ClipIn(BaseModel):
@@ -507,10 +536,9 @@ def get_cover(slug: str, identity: dict = Depends(roles),
     if win:
         cover = cover_file(slug, win["file_key"], win["cover_ext"])
     if cover is None or not cover.exists():
-        cover_rel = m.data.get("album", {}).get("cover")
-        if not cover_rel:
+        cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+        if cover is None:
             raise HTTPException(404, "pas de pochette")
-        cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
     # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
@@ -687,9 +715,8 @@ def download_artwork(slug: str, identity: dict = Depends(require_user)) -> FileR
 @app.get("/download/{slug}/cover")
 def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
-    if not cover or not cover.exists():
+    cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+    if not cover or not cover.is_file():
         raise HTTPException(404, "pas de pochette")
     return FileResponse(cover, filename=f"{download_stem(m.data, slug)}_cover{cover.suffix}")
 
@@ -764,9 +791,8 @@ from fastapi.responses import Response as _Response
 def download_cover_printable(slug: str,
                              identity: dict = Depends(require_user)) -> _Response:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
-    if not cover or not cover.exists():
+    cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+    if not cover or not cover.is_file():
         raise HTTPException(404, "pas de pochette")
     data = cover_pdf(cover)
     return _Response(data, media_type="application/pdf",
@@ -796,6 +822,9 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
+BULK_MAX_ALBUMS = 50
+
+
 @app.get("/download/bulk")
 def download_bulk(kind: str = "mp3",
                   slugs: list[str] = Query(default=[]),
@@ -818,6 +847,10 @@ def download_bulk(kind: str = "mp3",
     slugs = list(dict.fromkeys(slugs))
     if not slugs:
         raise HTTPException(400, "aucun album sélectionné")
+    # Chaque album peut déclencher la construction d'un zip de plusieurs Go :
+    # sans plafond, une seule requête monopolise disque et CPU.
+    if len(slugs) > BULK_MAX_ALBUMS:
+        raise HTTPException(400, f"{BULK_MAX_ALBUMS} albums maximum par téléchargement")
 
     entries: list[tuple[Path, str]] = []
     for slug in slugs:
