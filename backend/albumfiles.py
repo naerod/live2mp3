@@ -280,35 +280,3 @@ def _write_folder_cover(slug: str, m: Manifest) -> bool:
     _write_disc_cover(slug, m)
     return True
 
-
-def _extract_embedded_cover(slug: str, m: Manifest) -> str | None:
-    """Si aucune cover site mais un APIC embarqué existe, l'extrait vers artwork/cover.*.
-
-    Sert au rattrapage des albums importés (pochette déjà dans les MP3, absente du site).
-    Retourne le chemin relatif de la cover créée, ou None.
-    """
-    if m.data.get("album", {}).get("cover"):
-        return None
-    audio_dir = _projects_dir() / slug / "build" / "audio"
-    if not audio_dir.exists():
-        return None
-    for mp3_path in sorted(audio_dir.glob("*.mp3")):
-        try:
-            tags = ID3(str(mp3_path))
-        except Exception:
-            continue
-        apics = tags.getall("APIC")
-        if not apics:
-            continue
-        apic = apics[0]
-        ext = MIME_EXT.get(apic.mime, ".jpg")
-        art_dir = _projects_dir() / slug / "artwork"
-        art_dir.mkdir(exist_ok=True)
-        cover_path = art_dir / f"cover{ext}"
-        cover_path.write_bytes(apic.data)
-        m.data.setdefault("album", {})["cover"] = f"artwork/cover{ext}"
-        # Rattrapage automatique : repointage technique, pas une modification
-        # editoriale de l'album (cf. incident 2026-09-21).
-        m.save(touch=False)
-        return f"artwork/cover{ext}"
-    return None

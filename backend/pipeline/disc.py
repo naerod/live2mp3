@@ -11,7 +11,7 @@ import subprocess
 import wave
 from pathlib import Path
 
-from ..manifest import Manifest, clean_filename
+from ..manifest import Manifest
 
 RED_BOOK_RATE = 44100
 RED_BOOK_CHANNELS = 2
