@@ -366,12 +366,17 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
     from fastapi.responses import RedirectResponse
     if x_authentik_username and _AUTHENTIK_TOKEN:
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # `params=` encode le nom : interpolé brut, un « & » ou un « # »
+            # injectait des filtres dans la requête à l'API Authentik.
             r = await client.get(
-                f"{_AUTHENTIK_URL}/api/v3/core/users/?username={x_authentik_username}",
+                f"{_AUTHENTIK_URL}/api/v3/core/users/",
+                params={"username": x_authentik_username},
                 headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
             )
             if r.status_code == 200:
                 users = r.json().get("results", [])
+                # Correspondance exacte exigée : jamais les sessions d'un autre.
+                users = [u for u in users if u.get("username") == x_authentik_username]
                 if users:
                     user_pk = users[0]["pk"]
                     sr = await client.get(
@@ -822,9 +827,6 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
-BULK_MAX_ALBUMS = 50
-
-
 @app.get("/download/bulk")
 def download_bulk(kind: str = "mp3",
                   slugs: list[str] = Query(default=[]),
@@ -847,10 +849,6 @@ def download_bulk(kind: str = "mp3",
     slugs = list(dict.fromkeys(slugs))
     if not slugs:
         raise HTTPException(400, "aucun album sélectionné")
-    # Chaque album peut déclencher la construction d'un zip de plusieurs Go :
-    # sans plafond, une seule requête monopolise disque et CPU.
-    if len(slugs) > BULK_MAX_ALBUMS:
-        raise HTTPException(400, f"{BULK_MAX_ALBUMS} albums maximum par téléchargement")
 
     entries: list[tuple[Path, str]] = []
     for slug in slugs:

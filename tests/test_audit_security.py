@@ -173,3 +173,47 @@ def test_cover_relative_valide_acceptee(client):
                "tracks": [{"n": 1, "title": "S"}], "target": "data_disc"}
     assert c.post("/api/jobs", json=payload, headers=GEST).status_code == 200
 
+
+# --- 5. Logout : nom d'utilisateur encodé, correspondance exacte -----------
+def test_logout_encode_le_nom_et_exige_correspondance(client, monkeypatch):
+    from backend import main
+    calls = []
+
+    class _Resp:
+        def __init__(self, status, payload):
+            self.status_code, self._p = status, payload
+
+        def json(self):
+            return self._p
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, params=None, headers=None):
+            calls.append(("GET", url, params))
+            if url.endswith("/core/users/"):
+                # Authentik renvoie un autre compte : il ne doit pas être visé.
+                return _Resp(200, {"results": [{"pk": 7, "username": "victim"}]})
+            return _Resp(200, {"results": [{"uuid": "s1"}]})
+
+        async def delete(self, url, headers=None):
+            calls.append(("DELETE", url, None))
+            return _Resp(204, {})
+
+    monkeypatch.setattr(main, "_AUTHENTIK_TOKEN", "t")
+    monkeypatch.setattr(main.httpx, "AsyncClient", _Client)
+    c, _ = client
+    r = c.get("/api/logout", headers={"X-authentik-username": "a&is_superuser=true"},
+              follow_redirects=False)
+    assert r.status_code == 302
+    assert calls[0][1].endswith("/api/v3/core/users/")
+    assert calls[0][2] == {"username": "a&is_superuser=true"}
+    assert not [x for x in calls if x[0] == "DELETE"]
+
