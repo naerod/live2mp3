@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>document.documentElement.dataset.theme=localStorage.getItem("l2m-theme")||"dark";</script>
 <title>live2mp3 — nos albums</title>
+<meta name="description" content="Concerts live en albums : écoutez et téléchargez les captations découpées, taguées, avec pochettes imprimables.">
+<link rel="canonical" href="/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="live2mp3">
+<meta property="og:title" content="live2mp3 — nos albums">
+<meta property="og:description" content="Concerts live en albums : écoutez et téléchargez les captations découpées, taguées, avec pochettes imprimables.">
+<meta property="og:image" content="/static/favicon.svg">
+<meta name="twitter:card" content="summary">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
@@ -430,6 +438,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
       sel_pub_noop:"Rien à changer (déjà dans cet état).",
       sel_login:"Connectez-vous pour télécharger.",
+      sel_too_many:"50 albums maximum par téléchargement.",
       sel_err:"Échec de l'action groupée."},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
@@ -475,6 +484,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
       sel_pub_noop:"Nothing to change (already in that state).",
       sel_login:"Log in to download.",
+      sel_too_many:"50 albums max per download.",
       sel_err:"Bulk action failed."}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
@@ -485,8 +495,8 @@ let VIEW_AS="normal";
 const VIEW_PROFILES={
   normal:()=>ME,
   visitor:()=>({authenticated:false,is_gestionnaire:false,is_admin:false}),
-  user:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:false,is_admin:false}),
-  gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:true,is_admin:false})
+  user:()=>({authenticated:true,username:ME.username,is_user:true,can_download:true,is_gestionnaire:false,is_admin:false}),
+  gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,can_download:true,is_gestionnaire:true,is_admin:false})
 };
 function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
 // Le header injecté (L2M.initHeader) doit refléter la vue simulée :
@@ -495,7 +505,7 @@ function applyViewToHeader(){
   const md=meDisplay();
   const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
   // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
-  show("import-btn",md.authenticated);
+  show("import-btn",!!md.can_download);
   show("usermenu",md.authenticated);
   // La cloche de notifications n'existe que pour un compte connecté : en vue
   // visiteur simulée, elle doit disparaître (et se refermer si elle était ouverte).
@@ -645,7 +655,9 @@ function updateBulkBar(){
 function bulkDownload(kind){
   const t=T[L()];
   if(!picked.size)return;
-  if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  if(!meDisplay().can_download){selToast(t.sel_login,true);return;}
+  // Même plafond que le serveur (BULK_MAX_ALBUMS).
+  if(picked.size>50){selToast(t.sel_too_many,true);return;}
   // Téléchargement natif du navigateur : lien GET direct (le navigateur streame
   // et affiche sa propre barre de progression). Le clic synchrone conserve le
   // « geste utilisateur » et évite de bufferiser tout le zip en mémoire.

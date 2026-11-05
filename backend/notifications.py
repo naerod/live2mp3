@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import entities
-from .auth import current_identity, require_user
+from .auth import current_identity, require_login
 from .db import get_conn
 from .manifest import PROJECTS_DIR, Manifest
 
@@ -99,7 +99,7 @@ class PrefsIn(BaseModel):
 
 
 @router.get("/api/social/notif-prefs")
-def get_prefs(identity: dict = Depends(require_user)) -> dict:
+def get_prefs(identity: dict = Depends(require_login)) -> dict:
     with get_conn() as conn:
         prefs = _prefs_map(conn, identity["username"])
     return {"categories": NOTIF_CATEGORIES, "groups": NOTIF_GROUPS, "prefs": prefs,
@@ -107,7 +107,7 @@ def get_prefs(identity: dict = Depends(require_user)) -> dict:
 
 
 @router.put("/api/social/notif-prefs")
-def put_prefs(payload: PrefsIn, identity: dict = Depends(require_user)) -> dict:
+def put_prefs(payload: PrefsIn, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         for key, val in payload.prefs.items():
@@ -493,7 +493,7 @@ class ReadIn(BaseModel):
 
 
 @router.post("/api/social/notifications/read")
-def mark_read(payload: ReadIn, identity: dict = Depends(require_user)) -> dict:
+def mark_read(payload: ReadIn, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         if payload.all:

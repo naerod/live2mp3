@@ -2,12 +2,15 @@
    Sections : Publications (albums publiés), Commentaires, Likes (albums aimés).
    Édition du pseudo / bio / avatar réservée au propriétaire du profil. */
 (function () {
+  // Profil central naerod : seul endroit où le pseudo se modifie.
+  // URL à confirmer (cf. PR) — surchargeable via window.NAEROD_PROFILE_URL.
+  const PROFILE_PORTAL = window.NAEROD_PROFILE_URL || "https://naerod.com/profil";
   const T = {
     fr: {
       albums: "Albums", tool: "Outil", login: "Connexion", logout: "Déconnexion",
       publications: "Publications", comments: "Commentaires", likes: "Likes",
       edit: "Modifier le profil", save: "Enregistrer", cancel: "Annuler",
-      pseudo: "Pseudo", bio: "Bio", change_photo: "Changer la photo", remove_photo: "Retirer",
+      pseudo: "Pseudo", pseudo_central: "Modifier sur le profil naerod", bio: "Bio", change_photo: "Changer la photo", remove_photo: "Retirer",
       member_since: "Membre depuis", no_pubs: "Aucune publication.",
       no_comments: "Aucun commentaire.", no_likes: "Aucun album aimé.",
       not_found: "Utilisateur introuvable.", on_album: "sur", edited: "modifié",
@@ -36,7 +39,7 @@
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
       publications: "Publications", comments: "Comments", likes: "Likes",
       edit: "Edit profile", save: "Save", cancel: "Cancel",
-      pseudo: "Nickname", bio: "Bio", change_photo: "Change photo", remove_photo: "Remove",
+      pseudo: "Nickname", pseudo_central: "Edit on your naerod profile", bio: "Bio", change_photo: "Change photo", remove_photo: "Remove",
       member_since: "Member since", no_pubs: "No publications yet.",
       no_comments: "No comments yet.", no_likes: "No liked albums yet.",
       not_found: "User not found.", on_album: "on", edited: "edited",
@@ -405,7 +408,8 @@
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
             <label style="flex:1;min-width:180px">${t("pseudo")}
-              <input id="e-pseudo" maxlength="40" value="${esc(p.display_name)}"></label>
+              <input id="e-pseudo" value="${esc(p.display_name)}" readonly aria-readonly="true">
+              <a class="prof-central-link" href="${PROFILE_PORTAL}" target="_blank" rel="noopener">${t("pseudo_central")}</a></label>
           </div>
           <label>${t("bio")}
             <textarea id="e-bio" maxlength="500" rows="3">${esc(p.bio)}</textarea></label>
@@ -477,16 +481,16 @@
     });
 
     document.getElementById("e-save").onclick = async () => {
-      const display_name = document.getElementById("e-pseudo").value.trim();
+      // Pseudo en lecture seule : il se modifie sur le profil central.
+      const display_name = DATA.profile.display_name;
       const bio = document.getElementById("e-bio").value.trim();
-      if (!display_name) return;
       const btn = document.getElementById("e-save"); btn.disabled = true;
       err.style.display = "none";
       try {
         const r = await fetch("/api/social/profile", {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            display_name, bio,
+            bio,
             city_id: city.get().id, artist_id: artist.get().id,
           }),
         });

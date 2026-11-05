@@ -22,6 +22,8 @@ from pathlib import Path
 from uuid import uuid4
 
 import requests
+
+from .netguard import safe_get
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -103,7 +105,8 @@ def probe_url(url: str) -> dict:
     cookies = os.environ.get("YTDLP_COOKIES")
     if cookies:
         cmd += ["--cookies", cookies]
-    cmd.append(url)
+    # « -- » : fin des options, l'URL ne peut pas être lue comme une option.
+    cmd += ["--", url]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               timeout=PROBE_TIMEOUT)
@@ -446,7 +449,8 @@ def register_thumbnail_cover(slug: str, thumb_url: str, username: str) -> int | 
         if row["c"]:
             return None
 
-    r = requests.get(thumb_url, timeout=20)
+    # thumbnail_url vient du client (POST /api/jobs) : filtrée contre la SSRF.
+    r = safe_get(thumb_url, timeout=20)
     r.raise_for_status()
     ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
     ext = {"image/jpeg": ".jpg", "image/png": ".png"}.get(ctype)

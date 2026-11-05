@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -285,10 +286,20 @@ def drive_list_folder(folder_id: str) -> list[dict]:
 
 def drive_download_to_ct110(file_id: str, dest: str, token: str) -> bool:
     url = f"{DRIVE_API}/files/{file_id}?alt=media"
-    cmd = f"curl -s -f -L -H 'Authorization: Bearer {token}' '{url}' -o '{dest}'"
+    # shlex.quote : la commande est réinterprétée par le shell distant ; un nom
+    # de fichier Drive contenant « ' » (« Don't Stop.mp3 ») cassait la quote,
+    # et un nom piégé y injectait une commande sur CT110.
+    cmd = (f"curl -s -f -L -H {shlex.quote('Authorization: Bearer ' + token)} "
+           f"{shlex.quote(url)} -o {shlex.quote(dest)}")
     r = subprocess.run(["ssh", "-o", "BatchMode=yes", CT110, cmd],
                        capture_output=True, text=True)
     return r.returncode == 0
+
+def drive_basename(name: str) -> str:
+    """Nom Drive → nom de fichier : un « / » (permis par Drive) ne doit pas
+    créer de sous-dossier ni remonter l'arborescence (« ../ »)."""
+    base = (name or "").replace("/", "_").replace("\0", "")
+    return base if base not in ("", ".", "..") else "_"
 
 # ── SSH helpers ────────────────────────────────────────────────────────────────
 
@@ -297,10 +308,10 @@ def ssh(cmd: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True)
 
 def ssh_mkdir(path: str) -> None:
-    ssh(f"mkdir -p '{path}'")
+    ssh(f"mkdir -p -- {shlex.quote(path)}")
 
 def ssh_write(content: str, dest: str) -> None:
-    subprocess.run(["ssh", "-o", "BatchMode=yes", CT110, f"cat > '{dest}'"],
+    subprocess.run(["ssh", "-o", "BatchMode=yes", CT110, f"cat > {shlex.quote(dest)}"],
                    input=content, text=True, check=True)
 
 # ── Filename helpers ───────────────────────────────────────────────────────────
@@ -489,7 +500,7 @@ def import_album(album_def: dict, dry_run: bool = False) -> bool:
     # — Télécharger la cover —
     if cover_info:
         token = get_token()
-        dest = f"{art_dst}/{cover_info['name']}"
+        dest = f"{art_dst}/{drive_basename(cover_info['name'])}"
         ok = drive_download_to_ct110(cover_info["id"], dest, token)
         if not ok:
             print(f"  ⚠  Cover download failed: {cover_info['name']}")
@@ -498,7 +509,7 @@ def import_album(album_def: dict, dry_run: bool = False) -> bool:
     # — Télécharger les fichiers audio —
     for i, f in enumerate(audio_files, 1):
         token = get_token()
-        dest = f"{audio_dst}/{f['name']}"
+        dest = f"{audio_dst}/{drive_basename(f['name'])}"
         ok = drive_download_to_ct110(f["id"], dest, token)
         print(f"  [Audio {i:3d}/{len(audio_files)}] {'✓' if ok else '✗'} {f['name'][:55]}")
         if not ok:
@@ -507,7 +518,7 @@ def import_album(album_def: dict, dry_run: bool = False) -> bool:
     # — Télécharger les fichiers vidéo —
     for i, f in enumerate(video_files, 1):
         token = get_token()
-        dest = f"{video_dst}/{f['name']}"
+        dest = f"{video_dst}/{drive_basename(f['name'])}"
         ok = drive_download_to_ct110(f["id"], dest, token)
         print(f"  [Video {i:3d}/{len(video_files)}] {'✓' if ok else '✗'} {f['name'][:55]}")
         if not ok:
@@ -528,7 +539,7 @@ def import_album(album_def: dict, dry_run: bool = False) -> bool:
     manifest = build_manifest(
         album_def,
         tracks,
-        cover_info["name"] if cover_info else None
+        drive_basename(cover_info["name"]) if cover_info else None
     )
     ssh_write(manifest, f"{base}/manifest.yaml")
     print(f"  📝 manifest.yaml écrit")

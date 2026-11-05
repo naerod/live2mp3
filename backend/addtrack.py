@@ -50,6 +50,8 @@ from typing import Any
 from uuid import uuid4
 
 import requests
+
+from .netguard import UnsafeURL, safe_get
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from mutagen.id3 import ID3
 from pydantic import BaseModel
@@ -229,9 +231,10 @@ def register_track_cover(slug: str, n: int, thumb_url: str,
     if not thumb_url:
         return None
     try:
-        r = requests.get(thumb_url, timeout=20)
+        # URL venant du client (yt-dlp) : filtrée contre la SSRF.
+        r = safe_get(thumb_url, timeout=20)
         r.raise_for_status()
-    except requests.RequestException:
+    except (requests.RequestException, UnsafeURL):
         return None
     ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip()
     ext = {"image/jpeg": ".jpg", "image/png": ".png",

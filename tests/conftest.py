@@ -16,6 +16,15 @@ TRACK_SPANS = [(0.0, 3.0), (3.0, 6.0), (6.0, 9.0), (9.0, 12.0)]
 
 
 @pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """Limiteur de débit et garde disque coupés par défaut : la suite enchaîne
+    des centaines de requêtes du même client. Activés dans test_ratelimit.py."""
+    monkeypatch.setenv("L2M_RATE_WRITE", "0")
+    monkeypatch.setenv("L2M_RATE_READ", "0")
+    monkeypatch.setenv("L2M_MIN_FREE_MB", "0")
+
+
+@pytest.fixture(autouse=True)
 def fake_redis(monkeypatch):
     """Redis en mémoire pour toute la suite.
 
