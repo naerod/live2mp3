@@ -430,7 +430,8 @@ async def analyze(files: list[UploadFile] = File(...),
                         if total > MAX_UPLOAD_BYTES:
                             raise HTTPException(413, "dépôt trop volumineux (max 4 Go)")
                         fh.write(chunk)
-                total += _extract_zip(tmp_zip, files_dir, warnings)
+                total += _extract_zip(tmp_zip, files_dir, warnings,
+                                      budget=MAX_UPLOAD_BYTES - total)
                 tmp_zip.unlink(missing_ok=True)
             elif ext in AUDIO_EXT | IMAGE_EXT:
                 dest = _unique_path(files_dir, _sanitize_filename(name) or f"file{ext}")
@@ -531,8 +532,16 @@ def _analyze_files_dir(token: str, files_dir: Path, warnings: list[str]) -> dict
     }
 
 
-def _extract_zip(zip_path: Path, files_dir: Path, warnings: list[str]) -> int:
+def _extract_zip(zip_path: Path, files_dir: Path, warnings: list[str],
+                 budget: int = MAX_UPLOAD_BYTES) -> int:
+    """Extrait les MP3/images d'un ZIP (noms aplatis, cf. _safe_member_name).
+
+    `budget` borne les octets **décompressés** : la taille du ZIP reçu ne dit
+    rien de son contenu (bombe de décompression → disque plein). Compté au fil
+    de l'eau, sans se fier aux tailles déclarées dans l'archive.
+    """
     written = 0
+    extracted = 0
     try:
         zf = zipfile.ZipFile(zip_path)
     except zipfile.BadZipFile:
@@ -542,10 +551,17 @@ def _extract_zip(zip_path: Path, files_dir: Path, warnings: list[str]) -> int:
             safe = _safe_member_name(member.filename)
             if safe is None:
                 continue
+            extracted += 1
+            if extracted > MAX_FILES:
+                raise HTTPException(413, f"trop de fichiers (max {MAX_FILES})")
             dest = _unique_path(files_dir, safe)
             with zf.open(member) as src, dest.open("wb") as out:
-                shutil.copyfileobj(src, out, 1024 * 1024)
-            written += dest.stat().st_size
+                while chunk := src.read(1024 * 1024):
+                    written += len(chunk)
+                    if written > budget:
+                        raise HTTPException(
+                            413, "archive trop volumineuse une fois décompressée")
+                    out.write(chunk)
         if not written:
             warnings.append("ZIP sans MP3 ni image exploitable")
     return written
