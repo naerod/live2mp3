@@ -293,3 +293,45 @@ def test_ytdlp_url_apres_fin_des_options(tmp_path, monkeypatch):
                         lambda cmd, **kw: seen.append(cmd) or _P())
     linktool.probe_url(url)
     assert seen[-1][-2:] == ["--", url]
+
+
+# --- 9. En-têtes X-authentik-* : seulement depuis le proxy de confiance ----
+def test_entetes_identite_ignores_hors_proxy(client, monkeypatch):
+    c, _ = client
+    # Sans configuration : comportement inchangé (déploiement existant).
+    assert c.get("/api/me", headers=APP_ADMIN).json()["is_admin"] is True
+    # TestClient se présente comme « testclient » (pas une IP) : non fiable.
+    monkeypatch.setenv("L2M_TRUSTED_PROXIES", "10.0.0.0/8")
+    me = c.get("/api/me", headers=APP_ADMIN).json()
+    assert me["authenticated"] is False and me["is_admin"] is False
+    assert c.get("/api/albums/x", headers=GEST).status_code == 401
+
+
+def test_secret_de_proxy_exige(client, monkeypatch):
+    c, _ = client
+    monkeypatch.setenv("L2M_PROXY_SECRET", "s3cr3t")
+    assert c.get("/api/me", headers=APP_ADMIN).json()["is_admin"] is False
+    bad = {**APP_ADMIN, "X-L2M-Proxy-Secret": "nope"}
+    assert c.get("/api/me", headers=bad).json()["is_admin"] is False
+    ok = {**APP_ADMIN, "X-L2M-Proxy-Secret": "s3cr3t"}
+    assert c.get("/api/me", headers=ok).json()["is_admin"] is True
+
+
+def test_proxy_de_confiance_par_ip():
+    from backend.auth import identity_headers_trusted
+    import os
+    os.environ["L2M_TRUSTED_PROXIES"] = "172.16.0.0/12, 127.0.0.1"
+    try:
+        h = {b"x-authentik-username": b"a"}
+        assert identity_headers_trusted("172.18.0.5", h)
+        assert identity_headers_trusted("127.0.0.1", h)
+        assert not identity_headers_trusted("192.168.1.20", h)
+        assert not identity_headers_trusted(None, h)
+    finally:
+        del os.environ["L2M_TRUSTED_PROXIES"]
+
+
+def test_username_trop_long_ignore(client):
+    c, _ = client
+    h = {"X-authentik-username": "a" * 151, "X-authentik-groups": "live2mp3-admin"}
+    assert c.get("/api/me", headers=h).json()["authenticated"] is False
