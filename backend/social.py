@@ -14,6 +14,7 @@ sont publiques (identité optionnelle pour l'état perso : vote, like) ; les
 from __future__ import annotations
 
 import io
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
@@ -287,8 +288,17 @@ class CommentEditIn(BaseModel):
     body: str = Field(min_length=1, max_length=BODY_MAX)
 
 
+# Champs d'identité gérés uniquement par le profil central (portail /profil) :
+# le site les affiche en lecture seule et ignore toute valeur envoyée.
+# Liste volontairement minimale (pseudo) — le reste est à arbitrer (cf. PR).
+LOCKED_PROFILE_FIELDS = ("display_name",)
+PROFILE_PORTAL_URL = os.environ.get("L2M_PROFILE_PORTAL_URL",
+                                    "https://naerod.com/profil")
+
+
 class ProfileIn(BaseModel):
-    display_name: str = Field(min_length=1, max_length=40)
+    # Accepté pour compatibilité avec d'anciens clients, mais ignoré (verrouillé).
+    display_name: str | None = Field(default=None, max_length=40)
     bio: str = Field(default="", max_length=500)
     # Identifiants canoniques uniquement (code INSEE / id Deezer) : le libellé
     # affiché est reconstruit côté serveur, jamais dicté par le client — c'est
@@ -331,6 +341,8 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
         "is_superadmin": is_super,     # superuser Authentik global
         "role": role,
+        "locked_fields": list(LOCKED_PROFILE_FIELDS),
+        "profile_portal_url": PROFILE_PORTAL_URL,
     }
 
 
@@ -572,6 +584,8 @@ def user_profile(username: str, identity: dict = Depends(current_identity)) -> d
     }
     return {
         "profile": prof,
+        "locked_fields": list(LOCKED_PROFILE_FIELDS),
+        "profile_portal_url": PROFILE_PORTAL_URL,
         "is_self": is_self,
         "counts": {
             "publications": len(publications),
@@ -683,14 +697,16 @@ def update_profile(payload: ProfileIn, identity: dict = Depends(require_member))
         city_id, city_label = _resolve_choice("city", payload.city_id, row)
         artist_id, artist_label = _resolve_choice("artist", payload.artist_id, row)
         conn.execute(
-            "UPDATE profiles SET display_name=?, bio=?, city_id=?, city_label=?, "
+            "UPDATE profiles SET bio=?, city_id=?, city_label=?, "
             "artist_id=?, artist_label=?, updated_at=? WHERE username=?",
-            (payload.display_name.strip(), payload.bio.strip(), city_id, city_label,
+            (payload.bio.strip(), city_id, city_label,
              artist_id, artist_label, _now(), username),
         )
     return {
         "ok": True,
-        "display_name": payload.display_name.strip(),
+        "display_name": row["display_name"],     # verrouillé : inchangé
+        "locked_fields": list(LOCKED_PROFILE_FIELDS),
+        "profile_portal_url": PROFILE_PORTAL_URL,
         "bio": payload.bio.strip(),
         "city_id": city_id, "city": city_label,
         "artist_id": artist_id, "artist": artist_label,

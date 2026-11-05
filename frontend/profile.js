@@ -7,7 +7,7 @@
       albums: "Albums", tool: "Outil", login: "Connexion", logout: "Déconnexion",
       publications: "Publications", comments: "Commentaires", likes: "Likes",
       edit: "Modifier le profil", save: "Enregistrer", cancel: "Annuler",
-      pseudo: "Pseudo", bio: "Bio", change_photo: "Changer la photo", remove_photo: "Retirer",
+      pseudo: "Pseudo", pseudo_locked: "Modifiable depuis votre profil central", edit_on_portal: "Modifier sur le portail", bio: "Bio", change_photo: "Changer la photo", remove_photo: "Retirer",
       member_since: "Membre depuis", no_pubs: "Aucune publication.",
       no_comments: "Aucun commentaire.", no_likes: "Aucun album aimé.",
       not_found: "Utilisateur introuvable.", on_album: "sur", edited: "modifié",
@@ -36,7 +36,7 @@
       albums: "Albums", tool: "Tool", login: "Log in", logout: "Log out",
       publications: "Publications", comments: "Comments", likes: "Likes",
       edit: "Edit profile", save: "Save", cancel: "Cancel",
-      pseudo: "Nickname", bio: "Bio", change_photo: "Change photo", remove_photo: "Remove",
+      pseudo: "Nickname", pseudo_locked: "Editable from your central profile", edit_on_portal: "Edit on the portal", bio: "Bio", change_photo: "Change photo", remove_photo: "Remove",
       member_since: "Member since", no_pubs: "No publications yet.",
       no_comments: "No comments yet.", no_likes: "No liked albums yet.",
       not_found: "User not found.", on_album: "on", edited: "edited",
@@ -379,6 +379,7 @@
     const p = DATA.profile, c = DATA.counts;
     const since = p.created_at ? new Date(p.created_at).toLocaleDateString(LANG(), { year: "numeric", month: "long" }) : "";
     // Bouton « Modifier le profil » dans la barre haute (comme « Gérer » sur un album).
+    const portalUrl = DATA.profile_portal_url || "https://naerod.com/profil";
     const topEdit = document.getElementById("edit-btn");
     if (topEdit) {
       topEdit.style.display = DATA.is_self ? "" : "none";
@@ -405,7 +406,12 @@
         <div class="prof-edit" id="edit-panel">
           <div class="row" style="gap:14px">
             <label style="flex:1;min-width:180px">${t("pseudo")}
-              <input id="e-pseudo" maxlength="40" value="${esc(p.display_name)}"></label>
+              <input id="e-pseudo" maxlength="40" value="${esc(p.display_name)}" readonly
+                aria-readonly="true" title="${esc(t("pseudo_locked"))}"
+                style="background:var(--nrd-surface-2,transparent);color:var(--nrd-text-muted,inherit);cursor:not-allowed">
+              <a class="prof-portal-link" href="${esc(portalUrl)}" target="_blank" rel="noopener"
+                style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:.85em;color:var(--nrd-accent,inherit)">
+                <span class="material-symbols-outlined" aria-hidden="true" style="font-size:1.1em">open_in_new</span>${t("edit_on_portal")}</a></label>
           </div>
           <label>${t("bio")}
             <textarea id="e-bio" maxlength="500" rows="3">${esc(p.bio)}</textarea></label>
@@ -477,16 +483,15 @@
     });
 
     document.getElementById("e-save").onclick = async () => {
-      const display_name = document.getElementById("e-pseudo").value.trim();
+      // Pseudo verrouillé (profil central) : jamais envoyé.
       const bio = document.getElementById("e-bio").value.trim();
-      if (!display_name) return;
       const btn = document.getElementById("e-save"); btn.disabled = true;
       err.style.display = "none";
       try {
         const r = await fetch("/api/social/profile", {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            display_name, bio,
+            bio,
             city_id: city.get().id, artist_id: artist.get().id,
           }),
         });

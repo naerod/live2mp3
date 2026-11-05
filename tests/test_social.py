@@ -128,9 +128,9 @@ def test_profile_me_and_update(client):
     assert me["authenticated"] and me["display_name"] == "alice"
     r = c.put("/api/social/profile",
               json={"display_name": "Alice ♥", "bio": "fan de live"}, headers=USER).json()
-    assert r["display_name"] == "Alice ♥"
+    assert r["display_name"] == "alice"  # pseudo verrouillé (portail /profil)
     prof = c.get("/api/social/users/alice").json()
-    assert prof["profile"]["display_name"] == "Alice ♥"
+    assert prof["profile"]["display_name"] == "alice"
     assert prof["profile"]["bio"] == "fan de live"
     assert c.get("/api/social/users/alice", headers=USER).json()["is_self"] is True
     # utilisateur sans aucune activité -> 404
