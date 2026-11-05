@@ -430,6 +430,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
       sel_pub_noop:"Rien à changer (déjà dans cet état).",
       sel_login:"Connectez-vous pour télécharger.",
+      sel_too_many:"50 albums maximum par téléchargement.",
       sel_err:"Échec de l'action groupée."},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
       ph:"Search by title, artist, venue, date…",count:n=>`${n} album${n>1?"s":""}`,
@@ -475,6 +476,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
       sel_pub_noop:"Nothing to change (already in that state).",
       sel_login:"Log in to download.",
+      sel_too_many:"50 albums max per download.",
       sel_err:"Bulk action failed."}
 };
 function L(){return localStorage.getItem("l2m-lang")||"fr";}
@@ -646,6 +648,8 @@ function bulkDownload(kind){
   const t=T[L()];
   if(!picked.size)return;
   if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  // Même plafond que le serveur (BULK_MAX_ALBUMS).
+  if(picked.size>50){selToast(t.sel_too_many,true);return;}
   // Téléchargement natif du navigateur : lien GET direct (le navigateur streame
   // et affiche sa propre barre de progression). Le clic synchrone conserve le
   // « geste utilisateur » et évite de bufferiser tout le zip en mémoire.
