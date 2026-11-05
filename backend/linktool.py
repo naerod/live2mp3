@@ -30,6 +30,7 @@ from .auth import require_gestionnaire
 from .covers import _now, _on_covers_changed, cover_file, covers_dir
 from .db import get_conn
 from .manifest import Manifest
+from .pipeline.download import ensure_http_url
 from .social import _ensure_profile
 
 router = APIRouter(prefix="/api/tool", tags=["tool"])
@@ -94,6 +95,10 @@ def probe_url(url: str) -> dict:
     `--no-playlist` : un lien YouTube copié depuis une lecture embarque souvent
     `&list=…` (radio/mix) — on ne veut que la vidéo pointée.
     """
+    try:
+        url = ensure_http_url(url)
+    except ValueError as e:
+        raise ProbeError(str(e)) from e
     # mytaratata : résolution maison vers le MP4 embarqué (yt-dlp ne gère pas
     # les pages du site, seulement le fichier MP4 final).
     if _MYTARATATA_PAGE.match(url) and "videos.mytaratata.com" not in url:
