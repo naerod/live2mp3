@@ -13,7 +13,7 @@ import threading
 import time
 import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import os
@@ -24,10 +24,13 @@ from starlette.background import BackgroundTask
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
+    PlainTextResponse,
+    Response,
     StreamingResponse,
 )
+from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 import re
 from uuid import uuid4
@@ -42,13 +45,15 @@ from .albumfiles import (
 )
 from .auth import (
     GROUP_APP_ADMIN,
-    GROUP_GESTIONNAIRE,
+    ProxyHeaderGuard,
     SUPERUSER_GROUPS,
+    is_gestionnaire_identity,
     require_gestionnaire,
     require_user,
     roles,
 )
 from .db import get_conn, init_db
+from .ratelimit import RateLimit
 from . import addtrack
 from .addtrack import router as addtrack_router
 from .recut import router as recut_router
@@ -94,7 +99,21 @@ DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
 BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
 
-app = FastAPI(title="live2mp3", docs_url="/api/docs")
+# Swagger / ReDoc / schéma OpenAPI : cartographie complète de l'API, inutile au
+# public. Coupés en prod (FastAPI exposait aussi /redoc et /openapi.json par
+# défaut) ; conservés en preprod, entièrement derrière Authentik.
+# L2M_API_DOCS=1 les rétablit ponctuellement.
+_API_DOCS = (os.environ.get("APP_ENV", "prod") != "prod"
+             or os.environ.get("L2M_API_DOCS") == "1")
+app = FastAPI(title="live2mp3",
+              docs_url="/api/docs" if _API_DOCS else None,
+              redoc_url=None,
+              openapi_url="/api/openapi.json" if _API_DOCS else None)
+# Ignore les en-têtes X-authentik-* qui ne viennent pas du proxy (cf. auth.py).
+app.add_middleware(RateLimit)
+# Ajouté en dernier = exécuté en premier : le limiteur voit des en-têtes
+# d'identité déjà filtrés.
+app.add_middleware(ProxyHeaderGuard)
 
 
 @app.middleware("http")
@@ -132,9 +151,37 @@ app.include_router(albumvideo_router)
 app.include_router(linktool.router)
 
 
+def purge_stale_tempfiles(max_age_s: float = 6 * 3600, root: str | None = None) -> int:
+    """Supprime les archives temporaires orphelines (téléchargement interrompu :
+    la tâche de fond qui les efface ne s'exécute pas toujours) de plus de
+    `max_age_s`. Ne touche qu'aux préfixes créés par l'application."""
+    root = Path(root or tempfile.gettempdir())
+    now = time.time()
+    removed = 0
+    for pat in ("l2m_art_*.zip", "l2m_bulk_*.zip", "bundle-*"):
+        for p in root.glob(pat):
+            try:
+                if now - p.stat().st_mtime < max_age_s:
+                    continue
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 @app.on_event("startup")
 def _startup() -> None:
     init_db()
+    try:
+        n = purge_stale_tempfiles()
+        if n:
+            log.info("%d fichier(s) temporaire(s) orphelin(s) supprimé(s)", n)
+    except Exception as exc:
+        log.warning("purge des temporaires impossible : %s", exc)
     # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
     try:
         notifications.ensure_seeded()
@@ -172,6 +219,26 @@ def _make_cb(slug: str):
     return progress.make_cb(slug)
 
 
+def _is_safe_relpath(rel: str) -> bool:
+    """Chemin relatif sans `..`, ni absolu, ni antislash/NUL."""
+    if not rel or "\x00" in rel or "\\" in rel:
+        return False
+    p = PurePosixPath(rel)
+    return not p.is_absolute() and ".." not in p.parts
+
+
+def _project_file(slug: str, rel: str | None) -> Path | None:
+    """Fichier `rel` du projet `slug`, ou None s'il sortirait du dossier projet
+    (manifest altéré, ancien import). Défense en profondeur côté lecture."""
+    if not rel:
+        return None
+    base = (PROJECTS_DIR / slug).resolve()
+    target = (base / rel).resolve()
+    if target != base and base not in target.parents:
+        return None
+    return target
+
+
 # --- Modèles --------------------------------------------------------------
 class TrackIn(BaseModel):
     title: str
@@ -194,12 +261,35 @@ class AlbumIn(BaseModel):
     festival: str | None = None
     cover: str | None = None
 
+    @field_validator("cover")
+    @classmethod
+    def _cover_relatif(cls, v: str | None) -> str | None:
+        # Chemin relatif au dossier projet, servi tel quel par /download/…/cover :
+        # interdit de sortir du projet (lecture de fichier arbitraire).
+        if v and not _is_safe_relpath(v):
+            raise ValueError("chemin de pochette invalide")
+        return v
+
+
+def _check_http_url(v: str) -> str:
+    """URL source transmise à yt-dlp : http(s) uniquement (ni option, ni
+    file://, ni autre schéma)."""
+    v = (v or "").strip()
+    if v and not re.match(r"^https?://[^\s]+$", v, re.IGNORECASE):
+        raise ValueError("URL invalide (http/https attendu)")
+    return v
+
 
 class ClipIn(BaseModel):
     url: str
     title: str
     artist: str | None = None
     duration: float | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _url_ok(cls, v: str) -> str:
+        return _check_http_url(v)
 
 
 class JobIn(BaseModel):
@@ -215,6 +305,11 @@ class JobIn(BaseModel):
     # Mode multi-liens : chaque clip devient une piste, sources concaténées
     # en un master unique à la préparation. Prime sur source_url/tracks.
     clips: list[ClipIn] = []
+
+    @field_validator("source_url")
+    @classmethod
+    def _source_ok(cls, v: str) -> str:
+        return _check_http_url(v)
 
 
 class SetlistTrackIn(BaseModel):
@@ -308,6 +403,36 @@ def version() -> dict:
     return {"version": APP_VERSION, "env": APP_ENV, "commit": GIT_COMMIT}
 
 
+# --- SEO : robots.txt / sitemap.xml ----------------------------------------
+_PUBLIC_URL = os.environ.get("L2M_PUBLIC_URL", "https://live2mp3.naerod.com").rstrip("/")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt() -> str:
+    """Prod : vitrine indexable, outil et API exclus. Hors prod : rien
+    d'indexable (la preprod ne doit jamais apparaître dans un moteur)."""
+    if os.environ.get("APP_ENV", "prod") != "prod":
+        return "User-agent: *\nDisallow: /\n"
+    return ("User-agent: *\n"
+            "Disallow: /api/\nDisallow: /app\nDisallow: /download/\n"
+            "Disallow: /notifications\nDisallow: /settings\n"
+            f"Sitemap: {_PUBLIC_URL}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml() -> Response:
+    """Vitrine + fiches des albums **publiés** de cet environnement uniquement."""
+    from xml.sax.saxutils import escape
+    urls = [f"{_PUBLIC_URL}/", f"{_PUBLIC_URL}/changelog"]
+    for a in catalogue.list_albums(include_drafts=False):
+        urls.append(f"{_PUBLIC_URL}/album/{quote(a['slug'])}")
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "".join(f"  <url><loc>{escape(u)}</loc></url>\n" for u in urls)
+            + "</urlset>\n")
+    return Response(body, media_type="application/xml")
+
+
 # --- Routes publiques (vitrine) -------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def vitrine() -> HTMLResponse:
@@ -336,12 +461,17 @@ async def logout(x_authentik_username: str | None = Header(default=None)):
     from fastapi.responses import RedirectResponse
     if x_authentik_username and _AUTHENTIK_TOKEN:
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # `params=` encode le nom : interpolé brut, un « & » ou un « # »
+            # injectait des filtres dans la requête à l'API Authentik.
             r = await client.get(
-                f"{_AUTHENTIK_URL}/api/v3/core/users/?username={x_authentik_username}",
+                f"{_AUTHENTIK_URL}/api/v3/core/users/",
+                params={"username": x_authentik_username},
                 headers={"Authorization": f"Bearer {_AUTHENTIK_TOKEN}"},
             )
             if r.status_code == 200:
                 users = r.json().get("results", [])
+                # Correspondance exacte exigée : jamais les sessions d'un autre.
+                users = [u for u in users if u.get("username") == x_authentik_username]
                 if users:
                     user_pk = users[0]["pk"]
                     sr = await client.get(
@@ -392,10 +522,7 @@ def _track_file(project_dir: Path, n: int, title: str = "") -> Path | None:
 
 def _is_gestionnaire_identity(identity: dict) -> bool:
     """Vrai pour un gestionnaire/admin, quel que soit le Depends d'origine."""
-    if identity.get("is_gestionnaire"):
-        return True
-    groups = identity.get("groups") or set()
-    return bool(set(groups) & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+    return is_gestionnaire_identity(identity)
 
 
 def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
@@ -408,6 +535,10 @@ def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    # Stockage partagé prod/preprod : un album né en preprod n'existe pas pour
+    # la prod (même règle que le catalogue), y compris par URL directe.
+    if catalogue.hidden_by_env(m.data):
+        raise HTTPException(404, "album introuvable")
     if not m.data.get("published", True) and not _is_gestionnaire_identity(identity):
         raise HTTPException(404, "album introuvable")
     return m
@@ -505,10 +636,9 @@ def get_cover(slug: str, identity: dict = Depends(roles),
     if win:
         cover = cover_file(slug, win["file_key"], win["cover_ext"])
     if cover is None or not cover.exists():
-        cover_rel = m.data.get("album", {}).get("cover")
-        if not cover_rel:
+        cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+        if cover is None:
             raise HTTPException(404, "pas de pochette")
-        cover = PROJECTS_DIR / slug / cover_rel
     if not cover.exists():
         raise HTTPException(404, "pochette absente")
     # `?w=` : vignette WebP dérivée (cf. thumbs.py). L'original ne part que si
@@ -685,9 +815,8 @@ def download_artwork(slug: str, identity: dict = Depends(require_user)) -> FileR
 @app.get("/download/{slug}/cover")
 def download_cover(slug: str, identity: dict = Depends(require_user)) -> FileResponse:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
-    if not cover or not cover.exists():
+    cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+    if not cover or not cover.is_file():
         raise HTTPException(404, "pas de pochette")
     return FileResponse(cover, filename=f"{download_stem(m.data, slug)}_cover{cover.suffix}")
 
@@ -762,9 +891,8 @@ from fastapi.responses import Response as _Response
 def download_cover_printable(slug: str,
                              identity: dict = Depends(require_user)) -> _Response:
     m = _ensure_album_visible(slug, identity)
-    cover_rel = m.data.get("album", {}).get("cover")
-    cover = PROJECTS_DIR / slug / cover_rel if cover_rel else None
-    if not cover or not cover.exists():
+    cover = _project_file(slug, m.data.get("album", {}).get("cover"))
+    if not cover or not cover.is_file():
         raise HTTPException(404, "pas de pochette")
     data = cover_pdf(cover)
     return _Response(data, media_type="application/pdf",
@@ -794,6 +922,9 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
+BULK_MAX_ALBUMS = 50
+
+
 @app.get("/download/bulk")
 def download_bulk(kind: str = "mp3",
                   slugs: list[str] = Query(default=[]),
@@ -816,6 +947,10 @@ def download_bulk(kind: str = "mp3",
     slugs = list(dict.fromkeys(slugs))
     if not slugs:
         raise HTTPException(400, "aucun album sélectionné")
+    # Chaque album peut déclencher la construction d'un zip de plusieurs Go :
+    # sans plafond, une seule requête monopolise disque et CPU.
+    if len(slugs) > BULK_MAX_ALBUMS:
+        raise HTTPException(400, f"{BULK_MAX_ALBUMS} albums maximum par téléchargement")
 
     entries: list[tuple[Path, str]] = []
     for slug in slugs:
@@ -830,6 +965,7 @@ def download_bulk(kind: str = "mp3",
     if not entries:
         raise HTTPException(404, f"aucun album téléchargeable ({kind})")
 
+    purge_stale_tempfiles()
     fd, tmp = tempfile.mkstemp(prefix="l2m_bulk_", suffix=".zip")
     os.close(fd)
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:

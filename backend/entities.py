@@ -33,15 +33,6 @@ def venue_slug(label: str) -> str:
     return slugify(label)
 
 
-def entity_id_for(etype: str, label: str) -> str:
-    """Slug canonique d'un festival/lieu à partir de son libellé libre."""
-    if etype == "festival":
-        return festival_slug(label)
-    if etype == "venue":
-        return venue_slug(label)
-    return (label or "").strip()
-
-
 def album_entities(album: dict[str, Any]) -> list[dict]:
     """Liste dédupliquée des entités `{type, id, label}` liées à un album.
 
@@ -83,7 +74,3 @@ def album_entities(album: dict[str, Any]) -> list[dict]:
 
     return out
 
-
-def entity_keys(album: dict[str, Any]) -> set[str]:
-    """Ensemble de clés `"type:id"` d'un album — filtrage rapide côté page."""
-    return {f"{e['type']}:{e['id']}" for e in album_entities(album)}

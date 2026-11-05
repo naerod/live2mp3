@@ -9,7 +9,7 @@ Modèle de commentaires (style Reddit/Dealabs, aplati à 1 niveau) :
 
 Identité fournie par le forward-auth Authentik (voir `auth.py`). Les lectures
 sont publiques (identité optionnelle pour l'état perso : vote, like) ; les
-écritures exigent une session authentifiée (`require_user`).
+écritures exigent une session authentifiée (`require_login` (tout compte Authentik)).
 """
 from __future__ import annotations
 
@@ -30,8 +30,9 @@ from .auth import (
     GROUP_USER,
     SUPERUSER_GROUPS,
     current_identity,
+    is_gestionnaire_identity,
     require_admin,
-    require_user,
+    require_login,
 )
 from .db import AVATARS_DIR, get_conn
 from .manifest import PROJECTS_DIR
@@ -48,6 +49,8 @@ BODY_MAX = 4000
 REPLY_PAGE = 3          # réponses affichées d'emblée sous une racine
 TOP_PAGE = 20           # commentaires racine par page
 AVATAR_MAX_BYTES = 8 * 1024 * 1024
+# Formats raster acceptés à l'entrée (toujours ré-encodés en WebP 512×512).
+AVATAR_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 MAX_LIKERS = 5          # avatars affichés dans la rangée de likes
 
 
@@ -57,7 +60,8 @@ def _now() -> str:
 
 
 def _is_moderator(groups: set[str]) -> bool:
-    return bool(groups & SUPERUSER_GROUPS) or GROUP_GESTIONNAIRE in groups
+    # Inclut l'admin applicatif (`live2mp3-admin`), oublié auparavant.
+    return is_gestionnaire_identity({"groups": groups})
 
 
 _ROLE_RANK = {"": 0, "user": 1, "gestionnaire": 2, "admin": 3}
@@ -122,19 +126,19 @@ def _album_visible(slug: str, identity: dict | None) -> bool:
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
         return False
+    from .catalogue import hidden_by_env
     from .manifest import Manifest
     try:
-        published = Manifest.load(path).data.get("published", True)
+        data = Manifest.load(path).data
     except Exception:
-        published = True
+        data = {}
+    # Album né en preprod : invisible depuis la prod (stockage partagé).
+    if hidden_by_env(data):
+        return False
+    published = data.get("published", True)
     if published:
         return True
-    from .auth import GROUP_GESTIONNAIRE, SUPERUSER_GROUPS
-    identity = identity or {}
-    if identity.get("is_gestionnaire"):
-        return True
-    groups = set(identity.get("groups") or [])
-    return bool(groups & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+    return is_gestionnaire_identity(identity)
 
 
 def _catalogue_map(include_drafts: bool = False) -> dict[str, dict]:
@@ -284,7 +288,9 @@ class CommentEditIn(BaseModel):
 
 
 class ProfileIn(BaseModel):
-    display_name: str = Field(min_length=1, max_length=40)
+    # Pseudo géré par le profil central naerod : accepté pour compatibilité
+    # avec les anciens clients, mais **ignoré** (jamais écrit ici).
+    display_name: str | None = Field(default=None, max_length=40)
     bio: str = Field(default="", max_length=500)
     # Identifiants canoniques uniquement (code INSEE / id Deezer) : le libellé
     # affiché est reconstruit côté serveur, jamais dicté par le client — c'est
@@ -310,9 +316,10 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     is_super = bool(groups & SUPERUSER_GROUPS)
     is_admin = is_super or GROUP_APP_ADMIN in groups
     is_gest = is_admin or GROUP_GESTIONNAIRE in groups
-    is_user = is_gest or GROUP_USER in groups
+    is_user = bool(username)   # tout compte connecté télécharge (règle 2026-11-05)
     return {
-        "authenticated": bool(username) and is_user,
+        "authenticated": bool(username),
+        "can_download": is_user,
         "username": username,
         "display_name": row["display_name"],
         "bio": row["bio"],
@@ -671,21 +678,21 @@ def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]
 
 
 @router.put("/api/social/profile")
-def update_profile(payload: ProfileIn, identity: dict = Depends(require_user)) -> dict:
+def update_profile(payload: ProfileIn, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = _ensure_profile(conn, username)
         city_id, city_label = _resolve_choice("city", payload.city_id, row)
         artist_id, artist_label = _resolve_choice("artist", payload.artist_id, row)
         conn.execute(
-            "UPDATE profiles SET display_name=?, bio=?, city_id=?, city_label=?, "
+            "UPDATE profiles SET bio=?, city_id=?, city_label=?, "
             "artist_id=?, artist_label=?, updated_at=? WHERE username=?",
-            (payload.display_name.strip(), payload.bio.strip(), city_id, city_label,
+            (payload.bio.strip(), city_id, city_label,
              artist_id, artist_label, _now(), username),
         )
     return {
         "ok": True,
-        "display_name": payload.display_name.strip(),
+        "display_name": row["display_name"],
         "bio": payload.bio.strip(),
         "city_id": city_id, "city": city_label,
         "artist_id": artist_id, "artist": artist_label,
@@ -714,14 +721,23 @@ def suggest_world_cities(q: str = "", identity: dict = Depends(current_identity)
 
 @router.post("/api/social/profile/avatar")
 async def upload_avatar(file: UploadFile = File(...),
-                        identity: dict = Depends(require_user)) -> dict:
+                        identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     raw = await file.read()
     if len(raw) > AVATAR_MAX_BYTES:
         raise HTTPException(413, "image trop lourde (max 8 Mo)")
+    # SVG refusé explicitement (script embarqué possible) — sans dépendre du
+    # fait que Pillow ne sache pas le décoder aujourd'hui.
+    head = raw[:512].lstrip().lower()
+    if ("svg" in (file.content_type or "").lower()
+            or (file.filename or "").lower().endswith((".svg", ".svgz"))
+            or head.startswith((b"<?xml", b"<svg", b"<!doctype svg"))):
+        raise HTTPException(400, "format non supporté (JPEG, PNG, WebP ou GIF)")
     try:
         from PIL import Image, ImageOps
         im = Image.open(io.BytesIO(raw))
+        if im.format not in AVATAR_FORMATS:
+            raise ValueError(im.format)
         im = ImageOps.exif_transpose(im)
         im = ImageOps.fit(im, (512, 512), method=Image.LANCZOS, centering=(0.5, 0.5))
         im = im.convert("RGB")
@@ -739,7 +755,7 @@ async def upload_avatar(file: UploadFile = File(...),
 
 
 @router.delete("/api/social/profile/avatar")
-def delete_avatar(identity: dict = Depends(require_user)) -> dict:
+def delete_avatar(identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     _avatar_path(username).unlink(missing_ok=True)
     with get_conn() as conn:
@@ -811,9 +827,9 @@ def album_social(slug: str, identity: dict = Depends(current_identity)) -> dict:
 
 
 @router.post("/api/social/albums/{slug}/like")
-def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
+def toggle_like(slug: str, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     with get_conn() as conn:
         _ensure_profile(conn, username)
@@ -844,15 +860,17 @@ def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
 def list_comments(slug: str, sort: str = "top", offset: int = 0, limit: int = TOP_PAGE,
                   cover_id: int | None = None,
                   identity: dict = Depends(current_identity)) -> dict:
-    if not _album_visible(slug, identity):
-        raise HTTPException(404, "album introuvable")
     """Fil de l'album (`cover_id` absent) ou fil d'une pochette (`cover_id` posé).
 
     Les deux partagent la même table : `cover_id IS ?` sélectionne l'un ou
     l'autre sans jamais les mélanger (`IS` compare NULL correctement).
     """
+    if not _album_visible(slug, identity):
+        raise HTTPException(404, "album introuvable")
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
+    # Un offset négatif renverrait la fin de la liste (tranche Python).
+    offset = max(0, offset)
     # Un commentaire racine supprimé n'est affiché que s'il a au moins une
     # réponse non supprimée (préserver le contexte du fil).
     _TOP_FILTER = """
@@ -918,7 +936,14 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
                  identity: dict = Depends(current_identity)) -> dict:
     viewer = identity.get("username")
     limit = max(1, min(limit, 50))
+    offset = max(0, offset)
     with get_conn() as conn:
+        parent = conn.execute(
+            "SELECT slug FROM comments WHERE id=?", (comment_id,)
+        ).fetchone()
+        # Fil d'un album dépublié / d'un autre environnement : on ne révèle rien.
+        if not parent or not _album_visible(parent["slug"], identity):
+            raise HTTPException(404, "commentaire introuvable")
         rows = conn.execute(
             "SELECT * FROM comments WHERE parent_id=? ORDER BY created_at ASC "
             "LIMIT ? OFFSET ?",
@@ -933,9 +958,9 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
 
 @router.post("/api/social/albums/{slug}/comments")
 def create_comment(slug: str, payload: CommentIn,
-                   identity: dict = Depends(require_user)) -> dict:
+                   identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
-    if not _album_exists(slug):
+    if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
     body = payload.body.strip()
     if not body:
@@ -989,7 +1014,7 @@ def create_comment(slug: str, payload: CommentIn,
 
 @router.patch("/api/social/comments/{comment_id}")
 def edit_comment(comment_id: int, payload: CommentEditIn,
-                 identity: dict = Depends(require_user)) -> dict:
+                 identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     body = payload.body.strip()
     if not body:
@@ -1011,7 +1036,7 @@ def edit_comment(comment_id: int, payload: CommentEditIn,
 
 
 @router.delete("/api/social/comments/{comment_id}")
-def delete_comment(comment_id: int, identity: dict = Depends(require_user)) -> dict:
+def delete_comment(comment_id: int, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
@@ -1028,13 +1053,13 @@ def delete_comment(comment_id: int, identity: dict = Depends(require_user)) -> d
 
 
 @router.post("/api/social/comments/{comment_id}/like")
-def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dict:
+def like_comment(comment_id: int, identity: dict = Depends(require_login)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute(
             "SELECT id, deleted, username, slug FROM comments WHERE id=?", (comment_id,)
         ).fetchone()
-        if not row or row["deleted"]:
+        if not row or row["deleted"] or not _album_visible(row["slug"], identity):
             raise HTTPException(404, "commentaire introuvable")
         _ensure_profile(conn, username)
         if conn.execute(

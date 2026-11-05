@@ -470,7 +470,7 @@
 <!-- Fiche d'une pochette : crédit, likes, tray card liée, fil de commentaires -->
 <div id="cm" class="cm hidden">
   <div class="cm-box">
-    <button class="icon-btn icon-only cm-close" id="cm-close"><span class="material-symbols-outlined">close</span></button>
+    <button class="icon-btn icon-only cm-close" id="cm-close" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     <div id="cm-body"></div>
     <div class="cm-comments" id="cm-comments"></div>
   </div>
@@ -480,7 +480,7 @@
      poster / miniature) — import, download, tri auto, épinglage, suppression. -->
 <div id="vm" class="cm hidden">
   <div class="cm-box vm-box">
-    <button class="icon-btn icon-only cm-close" id="vm-close"><span class="material-symbols-outlined">close</span></button>
+    <button class="icon-btn icon-only cm-close" id="vm-close" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     <div id="vm-body"></div>
   </div>
 </div>
@@ -489,7 +489,7 @@
      « Vidéo du concert », qui reste en place derrière. -->
 <div id="vs" class="cm vs hidden">
   <div class="cm-box vs-box">
-    <button class="icon-btn icon-only cm-close" id="vs-close"><span class="material-symbols-outlined">close</span></button>
+    <button class="icon-btn icon-only cm-close" id="vs-close" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     <div id="vs-body"></div>
   </div>
 </div>
@@ -684,7 +684,7 @@ function posterFor(username){
 function dlSplit(icon,label,pngUrl,pdfUrl){
   return `<div class="dl-split">
     <a class="icon-btn" href="${pngUrl}"><span class="material-symbols-outlined">${icon}</span> ${label}</a>
-    <button class="icon-btn dl-toggle" onclick="this.nextElementSibling.classList.toggle('open');event.stopPropagation()"><span class="material-symbols-outlined" style="font-size:16px">expand_more</span></button>
+    <button class="icon-btn dl-toggle" onclick="this.nextElementSibling.classList.toggle('open');event.stopPropagation()" aria-label="Plus d’options"><span class="material-symbols-outlined" style="font-size:16px" aria-hidden="true">expand_more</span></button>
     <div class="dl-menu">
       <a href="${pngUrl}"><span class="material-symbols-outlined">image</span> ${t('dl_png')}</a>
       <a href="${pdfUrl}"><span class="material-symbols-outlined">picture_as_pdf</span> ${t('dl_pdf')}</a>
@@ -699,7 +699,7 @@ function renderAlbum(d){
   const tcMap={};
   for(const tc of(d.track_covers||[]))tcMap[tc.track_n]=tc;
   const set=(d.tracks||[]).map(tr=>{
-    const dl=(ME.authenticated&&tr.dl)
+    const dl=(ME.can_download&&tr.dl)
       ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
     if(d.per_track_covers){
       const tc=tcMap[tr.n];
@@ -714,7 +714,7 @@ function renderAlbum(d){
   }).join('');
 
   let dlHtml='';
-  if(ME.authenticated){
+  if(ME.can_download){
     let links='';
     if(d.has_mp3)links+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t('full')}</a>`;
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
@@ -939,7 +939,7 @@ function renderCarousel(){
   const s=curSlide(), c=curCover(), multi=SLIDES.length>1;
   const kind=s?s.kind:'cover';
 
-  const uploadOverlay=ME.authenticated
+  const uploadOverlay=ME.can_download
     ?`<div class="cr-upload-overlay" id="cr-add" title="${t('cv_add')}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${t('cv_add')}</span></div>`
     :'';
 
@@ -948,8 +948,8 @@ function renderCarousel(){
       <div class="al-cover${kind==='traycard'?' is-tray':''}" id="cr-art">${faceHtml(c,kind)}</div>
       ${showPinBadge(c)&&kind==='cover'?`<span class="cr-pin" title="${t('cv_pinned')}"><span class="material-symbols-outlined">push_pin</span></span>`:''}
       ${multi?`<span class="cr-count">${IDX+1}/${SLIDES.length}</span>
-        <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}"><span class="material-symbols-outlined">chevron_left</span></button>
-        <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}"><span class="material-symbols-outlined">chevron_right</span></button>`:''}
+        <button class="cr-arrow prev" id="cr-prev" title="${t('cv_prev')}" aria-label="${t('cv_prev')}"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+        <button class="cr-arrow next" id="cr-next" title="${t('cv_next')}" aria-label="${t('cv_next')}"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>`:''}
       ${uploadOverlay}
     </div>
     ${multi?`<div class="cr-dots">${SLIDES.map((sl,i)=>
@@ -971,7 +971,7 @@ function renderCarousel(){
   if(next)next.onclick=()=>go(1);
   col.querySelectorAll('.cr-dot').forEach(d=>d.onclick=()=>{IDX=+d.dataset.i;renderCarousel();});
   const add=document.getElementById('cr-add');
-  if(add&&ME.authenticated)add.onclick=e=>{e.stopPropagation();openUpload();};
+  if(add&&ME.can_download)add.onclick=e=>{e.stopPropagation();openUpload();};
 }
 
 function go(step){
@@ -1713,19 +1713,19 @@ window.addEventListener('popstate',async()=>{
   _m.style.transition='opacity .25s ease';_m.style.opacity='1';
 });
 </script>
-  <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent"><span class="material-symbols-outlined">chevron_left</span></button>
-  <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant"><span class="material-symbols-outlined">chevron_right</span></button>
+  <button class="album-nav-btn prev" id="nav-prev" onclick="navAlbum(-1)" title="Album précédent" aria-label="Album précédent"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+  <button class="album-nav-btn next" id="nav-next" onclick="navAlbum(1)" title="Album suivant" aria-label="Album suivant"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
   <div class="site-foot" id="site-foot"></div>
   <!-- Track cover viewer modal -->
   <div class="tcv2-overlay" id="tcv2-overlay" onclick="closeTcv2(event)">
     <div class="tcv2-box">
-      <button class="tcv2-close" onclick="closeTcv2Modal()"><span class="material-symbols-outlined">close</span></button>
+      <button class="tcv2-close" onclick="closeTcv2Modal()" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       <div id="tcv2-media"></div>
     </div>
   </div>
   <!-- Lightbox cover/traycard -->
   <div class="lbx-overlay" id="lbx-overlay" onclick="closeLbx(event)">
-    <button class="lbx-close" onclick="closeLbx()"><span class="material-symbols-outlined">close</span></button>
+    <button class="lbx-close" onclick="closeLbx()" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
     <div class="lbx-inner" id="lbx-inner"></div>
   </div>
 </body>

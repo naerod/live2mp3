@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from .pipeline import artwork, disc, preanalyze, render, tags
+from .pipeline import artwork, disc, render, tags
 
 log = logging.getLogger(__name__)
 
@@ -325,29 +325,3 @@ def _has_video_source(project_dir: Path) -> bool:
                      for t in m.tracks)
     return mkv.is_file() and has_tracks
 
-
-def run_full_pipeline(project_dir: str | Path, *, download_fn=None,
-                      call_llm: bool = True, media: str = "audio",
-                      video: bool = True, gap_seconds: float = 2.0,
-                      progress: ProgressCb = _noop) -> dict:
-    """Pipeline complet : (download) -> preanalyze -> render pipeline.
-
-    `download_fn` est injecté (yt-dlp) ; None => on suppose master déjà présent
-    (respect du point d'arrêt D : aucun téléchargement non demandé).
-    """
-    project_dir = Path(project_dir)
-    results: dict = {}
-
-    if download_fn is not None:
-        progress("download", "running", {})
-        results["download"] = download_fn(project_dir)
-        progress("download", "done", {})
-
-    progress("ai_markers", "running", {})
-    results["preanalyze"] = preanalyze.run(project_dir, call_llm=call_llm)
-    progress("ai_markers", "done", results["preanalyze"])
-
-    results.update(run_render_pipeline(
-        project_dir, media=media, video=video,
-        gap_seconds=gap_seconds, progress=progress))
-    return results
