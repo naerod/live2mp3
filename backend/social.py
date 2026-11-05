@@ -49,6 +49,8 @@ BODY_MAX = 4000
 REPLY_PAGE = 3          # réponses affichées d'emblée sous une racine
 TOP_PAGE = 20           # commentaires racine par page
 AVATAR_MAX_BYTES = 8 * 1024 * 1024
+# Formats raster acceptés à l'entrée (toujours ré-encodés en WebP 512×512).
+AVATAR_FORMATS = {"JPEG", "PNG", "WEBP", "GIF"}
 MAX_LIKERS = 5          # avatars affichés dans la rangée de likes
 
 
@@ -721,9 +723,18 @@ async def upload_avatar(file: UploadFile = File(...),
     raw = await file.read()
     if len(raw) > AVATAR_MAX_BYTES:
         raise HTTPException(413, "image trop lourde (max 8 Mo)")
+    # SVG refusé explicitement (script embarqué possible) — sans dépendre du
+    # fait que Pillow ne sache pas le décoder aujourd'hui.
+    head = raw[:512].lstrip().lower()
+    if ("svg" in (file.content_type or "").lower()
+            or (file.filename or "").lower().endswith((".svg", ".svgz"))
+            or head.startswith((b"<?xml", b"<svg", b"<!doctype svg"))):
+        raise HTTPException(400, "format non supporté (JPEG, PNG, WebP ou GIF)")
     try:
         from PIL import Image, ImageOps
         im = Image.open(io.BytesIO(raw))
+        if im.format not in AVATAR_FORMATS:
+            raise ValueError(im.format)
         im = ImageOps.exif_transpose(im)
         im = ImageOps.fit(im, (512, 512), method=Image.LANCZOS, centering=(0.5, 0.5))
         im = im.convert("RGB")
