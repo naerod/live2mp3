@@ -50,6 +50,7 @@ from .auth import (
     roles,
 )
 from .db import get_conn, init_db
+from .ratelimit import RateLimit
 from . import addtrack
 from .addtrack import router as addtrack_router
 from .recut import router as recut_router
@@ -106,6 +107,9 @@ app = FastAPI(title="live2mp3",
               redoc_url=None,
               openapi_url="/api/openapi.json" if _API_DOCS else None)
 # Ignore les en-têtes X-authentik-* qui ne viennent pas du proxy (cf. auth.py).
+app.add_middleware(RateLimit)
+# Ajouté en dernier = exécuté en premier : le limiteur voit des en-têtes
+# d'identité déjà filtrés.
 app.add_middleware(ProxyHeaderGuard)
 
 
