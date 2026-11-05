@@ -397,18 +397,18 @@
           <div class="fg"><span class="fg-head"><label id="t-f-date">Date</label><span class="meta-badge material-symbols-outlined">sell</span></span>
             <div class="date-field">
               <input id="e-date" type="text" placeholder="AAAA-MM-JJ" inputmode="numeric" autocomplete="off">
-              <button type="button" class="date-cal-btn" id="date-cal-btn"><span class="material-symbols-outlined">calendar_month</span></button>
+              <button type="button" class="date-cal-btn" id="date-cal-btn" aria-label="Ouvrir le calendrier"><span class="material-symbols-outlined" aria-hidden="true">calendar_month</span></button>
               <div class="cal-pop" id="cal-pop" hidden>
                 <div class="cal-head">
                   <div class="cal-nav-row">
-                    <button type="button" class="cal-nav" data-y="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <button type="button" class="cal-nav" data-y="-1" aria-label="Précédent"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
                     <span class="cal-year" id="cal-year"></span>
-                    <button type="button" class="cal-nav" data-y="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                    <button type="button" class="cal-nav" data-y="1" aria-label="Suivant"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
                   </div>
                   <div class="cal-nav-row">
-                    <button type="button" class="cal-nav" data-m="-1"><span class="material-symbols-outlined">chevron_left</span></button>
+                    <button type="button" class="cal-nav" data-m="-1" aria-label="Précédent"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
                     <span class="cal-month" id="cal-month"></span>
-                    <button type="button" class="cal-nav" data-m="1"><span class="material-symbols-outlined">chevron_right</span></button>
+                    <button type="button" class="cal-nav" data-m="1" aria-label="Suivant"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
                   </div>
                 </div>
                 <div class="cal-wd" id="cal-wd"></div>
@@ -447,7 +447,7 @@
         <ul class="tracks-list" id="tracks-list"></ul>
         <div class="add-track-row">
           <input id="new-track" type="text" placeholder="Nouveau titre…">
-          <button class="icon-btn" id="add-track" style="margin:0;height:34px"><span class="material-symbols-outlined">add</span></button>
+          <button class="icon-btn" id="add-track" style="margin:0;height:34px" aria-label="Ajouter une piste"><span class="material-symbols-outlined" aria-hidden="true">add</span></button>
         </div>
 
         <!-- Ajout de pistes (lien vidéo ou MP3) : fenêtre ouverte uniquement
@@ -456,7 +456,7 @@
              brouillait l'import d'une vidéo, qui passe par la fiche album. -->
         <div class="rc-overlay at-overlay" id="at-overlay">
         <div class="rc-box at-box" role="dialog" aria-modal="true" aria-labelledby="t-at-title">
-          <button class="icon-btn icon-only at-close" id="at-close" type="button"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+          <button class="icon-btn icon-only at-close" id="at-close" type="button" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
           <h3 id="t-at-title"></h3>
           <p class="rc-sub" id="at-album"></p>
         <div class="from-url">
@@ -861,7 +861,7 @@ let DATA=null,tracks=[],PENDING_COVER_DELETE=false;
 let artistAC=null,cityAC=null,festivalAC=null,guests=[];
 function renderGuests(){
   const box=document.getElementById("guest-list");
-  box.innerHTML=guests.map((g,i)=>`<span class="guest-chip">${L2M.esc(g.name||g.label)}<button type="button" data-i="${i}" title="×"><span class="material-symbols-outlined">close</span></button></span>`).join("");
+  box.innerHTML=guests.map((g,i)=>`<span class="guest-chip">${L2M.esc(g.name||g.label)}<button type="button" data-i="${i}" title="×" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button></span>`).join("");
   box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=()=>{guests.splice(+b.dataset.i,1);renderGuests();});
 }
 
@@ -941,7 +941,7 @@ function renderTracks(){
       ${tc?`<img src="${tc.cover_url}?t=${Date.now()}" alt="">`:`<span class="tc-slot-ph"><span class="material-symbols-outlined">image</span></span>`}
       <div class="tc-slot-hint"><span class="material-symbols-outlined">zoom_in</span></div>
     </div>`:""
-    const gear=PER_TRACK?`<button class="track-gear" data-n="${tr.n}" data-i="${i}" title="Métadonnées"><span class="material-symbols-outlined">tune</span></button>`:"";
+    const gear=PER_TRACK?`<button class="track-gear" data-n="${tr.n}" data-i="${i}" title="Métadonnées" aria-label="Métadonnées"><span class="material-symbols-outlined" aria-hidden="true">tune</span></button>`:"";
     // Une piste ajoutée depuis un lien porte sa propre source : on la signale,
     // sinon rien ne distingue une compilation d'un concert découpé.
     const src=tr.source&&tr.source.url
@@ -953,13 +953,13 @@ function renderTracks(){
     // pour les pistes externes d'un album multi-liens : trop bruyant.
     const canRecut=(tr.source&&tr.source.url)||(!(tr.source)&&DATA&&DATA.has_editor_source);
     const recut=canRecut
-      ?`<button class="track-recut" data-n="${tr.n}" data-i="${i}" title="${t.rc_toggle}"><span class="material-symbols-outlined">content_cut</span></button>`
+      ?`<button class="track-recut" data-n="${tr.n}" data-i="${i}" title="${t.rc_toggle}" aria-label="${t.rc_toggle}"><span class="material-symbols-outlined" aria-hidden="true">content_cut</span></button>`
       :"";
     return `<li data-i="${i}">${slot}
     <span class="drag-handle" draggable="true" data-i="${i}"><span class="material-symbols-outlined">drag_indicator</span><span class="n">${String(i+1).padStart(2,"0")}</span></span>
     <input type="text" value="${esc(tr.title)}" data-i="${i}">
     ${src}${recut}${gear}
-    <button class="del-btn" data-i="${i}" title="${t.del_t}"><span class="material-symbols-outlined">delete</span></button>
+    <button class="del-btn" data-i="${i}" title="${t.del_t}" aria-label="${t.del_t}"><span class="material-symbols-outlined" aria-hidden="true">delete</span></button>
     </li>`;
   }).join("");
   ul.querySelectorAll("input[data-i]").forEach(inp=>{inp.oninput=()=>{tracks[+inp.dataset.i].title=inp.value;};});
@@ -1924,7 +1924,7 @@ applyLang();load();
   <!-- Cover viewer modal -->
   <div class="tcv-overlay" id="tcv-overlay" onclick="closeTcv(event)">
     <div class="tcv-box">
-      <button class="tcv-close" onclick="closeTcvModal()"><span class="material-symbols-outlined">close</span></button>
+      <button class="tcv-close" onclick="closeTcvModal()" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       <div id="tcv-media"></div>
       <div class="tcv-actions" id="tcv-actions">
         <label for="tcv-file" class="btn-secondary" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex:1">
@@ -1940,7 +1940,7 @@ applyLang();load();
   <!-- Recut modal : re-couper une piste avec ses 2 voisines + cadenas -->
   <div class="rc-overlay" id="rc-overlay" onclick="closeRc(event)">
     <div class="rc-box">
-      <button class="tcv-close" onclick="closeRcModal()"><span class="material-symbols-outlined">close</span></button>
+      <button class="tcv-close" onclick="closeRcModal()" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       <h3 id="rc-title"></h3>
       <p class="rc-sub" id="rc-sub"></p>
       <p class="rc-hint" id="rc-hint"></p>
@@ -1957,7 +1957,7 @@ applyLang();load();
   <!-- Track meta modal -->
   <div class="tm-overlay" id="tm-overlay" onclick="closeTmv(event)">
     <div class="tm-box">
-      <button class="tcv-close" onclick="closeTmModal()"><span class="material-symbols-outlined">close</span></button>
+      <button class="tcv-close" onclick="closeTmModal()" aria-label="Fermer"><span class="material-symbols-outlined" aria-hidden="true">close</span></button>
       <h3 id="tm-subtitle"></h3>
       <div class="tm-fields">
         <label id="t-tm-title-lbl"></label>
