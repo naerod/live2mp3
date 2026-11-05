@@ -827,6 +827,9 @@ def download_media(slug: str, kind: str,
                         media_type="application/zip")
 
 
+BULK_MAX_ALBUMS = 50
+
+
 @app.get("/download/bulk")
 def download_bulk(kind: str = "mp3",
                   slugs: list[str] = Query(default=[]),
@@ -849,6 +852,10 @@ def download_bulk(kind: str = "mp3",
     slugs = list(dict.fromkeys(slugs))
     if not slugs:
         raise HTTPException(400, "aucun album sélectionné")
+    # Chaque album peut déclencher la construction d'un zip de plusieurs Go :
+    # sans plafond, une seule requête monopolise disque et CPU.
+    if len(slugs) > BULK_MAX_ALBUMS:
+        raise HTTPException(400, f"{BULK_MAX_ALBUMS} albums maximum par téléchargement")
 
     entries: list[tuple[Path, str]] = []
     for slug in slugs:

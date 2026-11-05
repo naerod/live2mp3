@@ -217,3 +217,11 @@ def test_logout_encode_le_nom_et_exige_correspondance(client, monkeypatch):
     assert calls[0][2] == {"username": "a&is_superuser=true"}
     assert not [x for x in calls if x[0] == "DELETE"]
 
+
+# --- 6. Téléchargement groupé plafonné -------------------------------------
+def test_bulk_plafonne(client):
+    from backend import main
+    c, _ = client
+    qs = "&".join(f"slugs=s{i}" for i in range(main.BULK_MAX_ALBUMS + 1))
+    r = c.get(f"/download/bulk?kind=mp3&{qs}", headers=USER)
+    assert r.status_code == 400
