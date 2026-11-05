@@ -11,12 +11,14 @@
       "fr": [
         "Sécurité renforcée du site et des téléchargements.",
         "Les boutons-icônes ont désormais un nom lu par les lecteurs d'écran.",
-        "Tout compte connecté peut aimer, commenter et suivre ; le téléchargement reste réservé aux membres."
+        "Tout compte connecté peut aimer, commenter et suivre ; le téléchargement reste réservé aux membres.",
+        "Les liens de vidéos sont revérifiés juste avant chaque téléchargement."
       ],
       "en": [
         "Stronger security for the site and downloads.",
         "Icon buttons now have a name read by screen readers.",
-        "Any signed-in account can like, comment and follow; downloads remain members-only."
+        "Any signed-in account can like, comment and follow; downloads remain members-only.",
+        "Video links are re-checked right before each download."
       ]
     },
     {
