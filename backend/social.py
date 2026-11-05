@@ -288,7 +288,9 @@ class CommentEditIn(BaseModel):
 
 
 class ProfileIn(BaseModel):
-    display_name: str = Field(min_length=1, max_length=40)
+    # Pseudo géré par le profil central naerod : accepté pour compatibilité
+    # avec les anciens clients, mais **ignoré** (jamais écrit ici).
+    display_name: str | None = Field(default=None, max_length=40)
     bio: str = Field(default="", max_length=500)
     # Identifiants canoniques uniquement (code INSEE / id Deezer) : le libellé
     # affiché est reconstruit côté serveur, jamais dicté par le client — c'est
@@ -683,14 +685,14 @@ def update_profile(payload: ProfileIn, identity: dict = Depends(require_login)) 
         city_id, city_label = _resolve_choice("city", payload.city_id, row)
         artist_id, artist_label = _resolve_choice("artist", payload.artist_id, row)
         conn.execute(
-            "UPDATE profiles SET display_name=?, bio=?, city_id=?, city_label=?, "
+            "UPDATE profiles SET bio=?, city_id=?, city_label=?, "
             "artist_id=?, artist_label=?, updated_at=? WHERE username=?",
-            (payload.display_name.strip(), payload.bio.strip(), city_id, city_label,
+            (payload.bio.strip(), city_id, city_label,
              artist_id, artist_label, _now(), username),
         )
     return {
         "ok": True,
-        "display_name": payload.display_name.strip(),
+        "display_name": row["display_name"],
         "bio": payload.bio.strip(),
         "city_id": city_id, "city": city_label,
         "artist_id": artist_id, "artist": artist_label,

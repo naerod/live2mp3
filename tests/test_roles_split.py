@@ -55,3 +55,16 @@ def test_me_distingue_connexion_et_telechargement(client):
     assert me["authenticated"] is False and me["can_download"] is False
     sm = c.get("/api/social/me", headers=NEWBIE).json()
     assert sm["authenticated"] is True and sm["can_download"] is False
+
+
+def test_pseudo_non_modifiable_localement(client):
+    c, _ = client
+    before = c.get("/api/social/me", headers=USER).json()["display_name"]
+    r = c.put("/api/social/profile", json={"display_name": "Usurpateur", "bio": "salut"},
+              headers=USER)
+    assert r.status_code == 200
+    assert r.json()["display_name"] == before
+    me = c.get("/api/social/me", headers=USER).json()
+    assert me["display_name"] == before and me["bio"] == "salut"
+    # Client à jour : n'envoie plus le pseudo.
+    assert c.put("/api/social/profile", json={"bio": "b2"}, headers=USER).status_code == 200
