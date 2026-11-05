@@ -42,7 +42,6 @@ from .albumfiles import (
 )
 from .auth import (
     GROUP_APP_ADMIN,
-    GROUP_GESTIONNAIRE,
     SUPERUSER_GROUPS,
     is_gestionnaire_identity,
     require_gestionnaire,

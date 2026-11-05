@@ -61,7 +61,6 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import addtrack, jellyfin
-from . import manifest as _manifest_mod
 from .addtrack import (
     JOB_TTL_S,
     _JOBS,
