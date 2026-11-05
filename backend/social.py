@@ -316,7 +316,7 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     is_super = bool(groups & SUPERUSER_GROUPS)
     is_admin = is_super or GROUP_APP_ADMIN in groups
     is_gest = is_admin or GROUP_GESTIONNAIRE in groups
-    is_user = is_gest or GROUP_USER in groups
+    is_user = bool(username)   # tout compte connecté télécharge (règle 2026-11-05)
     return {
         "authenticated": bool(username),
         "can_download": is_user,

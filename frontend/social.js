@@ -506,7 +506,7 @@ const L2M = (function () {
     };
 
     // Le bouton n'a de sens que connecté (visiteurs non concernés par l'import).
-    // Proposer une pochette exige le groupe live2mp3-user (pas un simple compte).
+    // Proposer une pochette : tout compte connecté (règle 2026-11-05).
     document.getElementById("import-btn").style.display = meData.can_download ? "" : "none";
     document.getElementById("import-btn").onclick = () => {
       // `opts.rights` permet à la vitrine de refléter le mode « Voir en tant que ».

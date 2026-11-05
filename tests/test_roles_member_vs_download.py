@@ -53,16 +53,18 @@ def test_routes_telechargement(client, method, path, body):  # noqa: F811
     c, _ = client
     slug = _make_album(c)
     assert _call(c, method, path, body, ANON, slug).status_code == 401
-    assert _call(c, method, path, body, MEMBER, slug).status_code == 403
-    r = _call(c, method, path, body, DL, slug)
-    assert r.status_code not in (401, 403), r.text  # 404 : pas de fichier rendu
+    # Règle 2026-11-05 : tout compte connecté télécharge, avec ou sans groupe.
+    for who in (MEMBER, DL):
+        r = _call(c, method, path, body, who, slug)
+        assert r.status_code not in (401, 403), r.text  # 404 : pas de fichier rendu
 
 
 def test_me_distingue_connecte_et_telechargement(client):  # noqa: F811
     c, _ = client
     for url in ("/api/me", "/api/social/me"):
-        assert c.get(url).json()["authenticated"] is False
+        anon = c.get(url).json()
+        assert anon["authenticated"] is False and not anon.get("can_download")
         m = c.get(url, headers=MEMBER).json()
-        assert m["authenticated"] is True and m["can_download"] is False
+        assert m["authenticated"] is True and m["can_download"] is True
         u = c.get(url, headers=DL).json()
         assert u["authenticated"] is True and u["can_download"] is True

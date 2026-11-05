@@ -34,10 +34,12 @@ def test_nouvel_inscrit_peut_liker_commenter_suivre(client):
     assert c.post(f"/api/social/comments/{r.json()['id']}/like", headers=NEWBIE).status_code == 200
 
 
-def test_nouvel_inscrit_ne_telecharge_pas(client):
+def test_nouvel_inscrit_telecharge(client):
+    """Règle 2026-11-05 : tout compte connecté télécharge ; l'anonyme non."""
     c, slug = client
-    assert c.get(f"/download/{slug}/mp3", headers=NEWBIE).status_code == 403
-    assert c.get(f"/download/{slug}/track/1", headers=NEWBIE).status_code == 403
+    for path in (f"/download/{slug}/mp3", f"/download/{slug}/track/1"):
+        assert c.get(path, headers=NEWBIE).status_code not in (401, 403)
+        assert c.get(path).status_code == 401
 
 
 def test_anonyme_toujours_refuse(client):
@@ -48,13 +50,13 @@ def test_anonyme_toujours_refuse(client):
 def test_me_distingue_connexion_et_telechargement(client):
     c, _ = client
     me = c.get("/api/me", headers=NEWBIE).json()
-    assert me["authenticated"] is True and me["can_download"] is False
+    assert me["authenticated"] is True and me["can_download"] is True
     me = c.get("/api/me", headers=USER).json()
     assert me["authenticated"] is True and me["can_download"] is True
     me = c.get("/api/me").json()
     assert me["authenticated"] is False and me["can_download"] is False
     sm = c.get("/api/social/me", headers=NEWBIE).json()
-    assert sm["authenticated"] is True and sm["can_download"] is False
+    assert sm["authenticated"] is True and sm["can_download"] is True
 
 
 def test_pseudo_non_modifiable_localement(client):

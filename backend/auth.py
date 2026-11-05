@@ -5,7 +5,7 @@ puis transmet à l'app les en-têtes `X-authentik-username` / `X-authentik-group
 (valeurs issues de la sous-requête d'auth, donc non spoofables par le client).
 
 Rôles (groupes Authentik) :
-- `live2mp3-user`         → téléchargement
+- `live2mp3-user`         → badge « user » (le téléchargement est ouvert à tout compte depuis 2026-11-05)
 - `live2mp3-gestionnaire` → outil complet + IA
 - superuser / `authentik Admins` → tout
 """
@@ -66,12 +66,12 @@ def require_user(
     x_authentik_username: str | None = Header(default=None),
     x_authentik_groups: str | None = Header(default=None),
 ) -> dict:
-    groups = _groups(x_authentik_groups)
+    # Règle de Dorian (2026-11-05) : sans compte = navigation ; avec un compte
+    # Authentik = tout, téléchargement compris. Le groupe live2mp3-user n'est
+    # plus exigé (conservé pour la gestion des rôles).
     if not x_authentik_username:
         raise HTTPException(401, "authentification requise")
-    if _is_gestionnaire(groups) or GROUP_USER in groups:
-        return {"username": x_authentik_username, "groups": groups}
-    raise HTTPException(403, "accès téléchargement requis (live2mp3-user)")
+    return {"username": x_authentik_username, "groups": _groups(x_authentik_groups)}
 
 
 def require_login(
@@ -81,7 +81,7 @@ def require_login(
     """Tout compte Authentik connecté, sans groupe requis : favoris,
     commentaires, profil, suivis, notifications. Un nouvel inscrit (aucun
     groupe live2mp3) n'est plus refusé sur ces actions sociales ; le
-    téléchargement reste réservé à `require_user` (groupe live2mp3-user)."""
+    téléchargement passe par `require_user` (tout compte connecté, 2026-11-05)."""
     if not x_authentik_username:
         raise HTTPException(401, "authentification requise")
     return {"username": x_authentik_username, "groups": _groups(x_authentik_groups)}
@@ -123,9 +123,9 @@ def roles(
     is_super = _is_super(groups)
     is_admin = _is_admin(groups)
     is_gest = _is_gestionnaire(groups)
-    is_user = is_gest or GROUP_USER in groups
+    is_user = bool(x_authentik_username)   # tout compte connecté (règle 2026-11-05)
     return {
-        # Connecté = tout compte Authentik ; télécharger = groupe live2mp3-user.
+        # Connecté = tout compte Authentik = peut télécharger (règle 2026-11-05).
         "authenticated": bool(x_authentik_username),
         "username": x_authentik_username,
         "is_user": is_user,
