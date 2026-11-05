@@ -49,6 +49,9 @@ def _run_ytdlp(cmd: list[str], progress: ProgressCb | None) -> None:
 
 
 def _base_cmd(cookies: str | None) -> list[str]:
+    # NB : l'URL est toujours passée après « -- » par les appelants : une
+    # « URL » commençant par « - » (ex. --exec=…) serait sinon lue comme une
+    # option de yt-dlp (exécution de commande).
     cmd = ["yt-dlp", "--no-playlist", "--newline",
            # Résilience face aux HTTP 403 intermittents de YouTube (throttling
            # de l'IP quand on enchaîne beaucoup de téléchargements, cf. incident
@@ -66,7 +69,8 @@ def download_master(url: str, out_mkv: Path, cookies: str | None = None,
     out_mkv.parent.mkdir(parents=True, exist_ok=True)
     cmd = _base_cmd(cookies) + ["-f", "bv*+ba/best",
                                 "--merge-output-format", "mkv",
-                                "-o", str(out_mkv), url]
+                                "-o", str(out_mkv),
+                                "--", url]
     _run_ytdlp(cmd, progress)
     return out_mkv
 
@@ -81,7 +85,7 @@ def download_audio(url: str, source_dir: Path, cookies: str | None = None,
     """
     source_dir.mkdir(parents=True, exist_ok=True)
     pattern = source_dir / f"{stem}.%(ext)s"
-    cmd = _base_cmd(cookies) + ["-f", "ba/b", "-o", str(pattern), url]
+    cmd = _base_cmd(cookies) + ["-f", "ba/b", "-o", str(pattern), "--", url]
     _run_ytdlp(cmd, progress)
     candidates = sorted(source_dir.glob(f"{stem}.*"))
     if not candidates:

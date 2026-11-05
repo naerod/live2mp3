@@ -258,3 +258,38 @@ def test_zip_trop_de_membres(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as e:
         import_album._extract_zip(z, out, [])
     assert e.value.status_code == 413
+
+
+# --- 8. yt-dlp : l'URL ne peut jamais devenir une option -------------------
+@pytest.mark.parametrize("field", ["source_url", "clip"])
+@pytest.mark.parametrize("url", ["--exec=touch /tmp/pwn", "-o/etc/x",
+                                 "file:///etc/passwd", "javascript:alert(1)"])
+def test_job_refuse_url_non_http(client, field, url):
+    c, _ = client
+    payload = {"album": {"artist": "Y", "title": "T", "date": "2026-03-03"},
+               "tracks": [{"n": 1, "title": "S"}], "target": "data_disc"}
+    if field == "source_url":
+        payload["source_url"] = url
+    else:
+        payload["clips"] = [{"url": url, "title": "S"}]
+    assert c.post("/api/jobs", json=payload, headers=GEST).status_code == 422
+
+
+def test_ytdlp_url_apres_fin_des_options(tmp_path, monkeypatch):
+    from backend import linktool
+    from backend.pipeline import download
+    seen = []
+    monkeypatch.setattr(download, "_run_ytdlp", lambda cmd, progress: seen.append(cmd))
+    url = "-weird-but-harmless"
+    download.download_master(url, tmp_path / "m.mkv")
+    (tmp_path / "master_audio.m4a").write_bytes(b"x")
+    download.download_audio(url, tmp_path)
+    for cmd in seen:
+        assert cmd[-2:] == ["--", url]
+
+    class _P:
+        returncode, stdout, stderr = 0, "{}", ""
+    monkeypatch.setattr(linktool.subprocess, "run",
+                        lambda cmd, **kw: seen.append(cmd) or _P())
+    linktool.probe_url(url)
+    assert seen[-1][-2:] == ["--", url]
