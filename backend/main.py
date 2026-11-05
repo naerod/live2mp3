@@ -151,7 +151,6 @@ app.include_router(albumvideo_router)
 app.include_router(linktool.router)
 
 
-@app.on_event("startup")
 def purge_stale_tempfiles(max_age_s: float = 6 * 3600, root: str | None = None) -> int:
     """Supprime les archives temporaires orphelines (téléchargement interrompu :
     la tâche de fond qui les efface ne s'exécute pas toujours) de plus de
@@ -174,6 +173,7 @@ def purge_stale_tempfiles(max_age_s: float = 6 * 3600, root: str | None = None) 
     return removed
 
 
+@app.on_event("startup")
 def _startup() -> None:
     init_db()
     try:
