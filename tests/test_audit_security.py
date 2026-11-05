@@ -280,7 +280,9 @@ def test_ytdlp_url_apres_fin_des_options(tmp_path, monkeypatch):
     from backend.pipeline import download
     seen = []
     monkeypatch.setattr(download, "_run_ytdlp", lambda cmd, progress: seen.append(cmd))
-    url = "-weird-but-harmless"
+    # Une « URL » en « -… » est désormais refusée avant yt-dlp
+    # (cf. test_ytdlp_sink_guard) ; on vérifie ici le « -- » sur une URL valide.
+    url = "https://youtu.be/-dashid"
     download.download_master(url, tmp_path / "m.mkv")
     (tmp_path / "master_audio.m4a").write_bytes(b"x")
     download.download_audio(url, tmp_path)
