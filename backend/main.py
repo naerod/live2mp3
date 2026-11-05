@@ -406,6 +406,10 @@ def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
     if not path.exists():
         raise HTTPException(404, "album introuvable")
     m = Manifest.load(path)
+    # Stockage partagé prod/preprod : un album né en preprod n'existe pas pour
+    # la prod (même règle que le catalogue), y compris par URL directe.
+    if catalogue.hidden_by_env(m.data):
+        raise HTTPException(404, "album introuvable")
     if not m.data.get("published", True) and not _is_gestionnaire_identity(identity):
         raise HTTPException(404, "album introuvable")
     return m

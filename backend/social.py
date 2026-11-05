@@ -124,11 +124,16 @@ def _album_visible(slug: str, identity: dict | None) -> bool:
     path = PROJECTS_DIR / slug / "manifest.yaml"
     if not path.exists():
         return False
+    from .catalogue import hidden_by_env
     from .manifest import Manifest
     try:
-        published = Manifest.load(path).data.get("published", True)
+        data = Manifest.load(path).data
     except Exception:
-        published = True
+        data = {}
+    # Album né en preprod : invisible depuis la prod (stockage partagé).
+    if hidden_by_env(data):
+        return False
+    published = data.get("published", True)
     if published:
         return True
     return is_gestionnaire_identity(identity)
