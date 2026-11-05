@@ -24,8 +24,11 @@ from starlette.background import BackgroundTask
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
+    PlainTextResponse,
+    Response,
     StreamingResponse,
 )
+from urllib.parse import quote
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
@@ -398,6 +401,36 @@ def healthz() -> dict:
 @app.get("/api/version")
 def version() -> dict:
     return {"version": APP_VERSION, "env": APP_ENV, "commit": GIT_COMMIT}
+
+
+# --- SEO : robots.txt / sitemap.xml ----------------------------------------
+_PUBLIC_URL = os.environ.get("L2M_PUBLIC_URL", "https://live2mp3.naerod.com").rstrip("/")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt() -> str:
+    """Prod : vitrine indexable, outil et API exclus. Hors prod : rien
+    d'indexable (la preprod ne doit jamais apparaître dans un moteur)."""
+    if os.environ.get("APP_ENV", "prod") != "prod":
+        return "User-agent: *\nDisallow: /\n"
+    return ("User-agent: *\n"
+            "Disallow: /api/\nDisallow: /app\nDisallow: /download/\n"
+            "Disallow: /notifications\nDisallow: /settings\n"
+            f"Sitemap: {_PUBLIC_URL}/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml")
+def sitemap_xml() -> Response:
+    """Vitrine + fiches des albums **publiés** de cet environnement uniquement."""
+    from xml.sax.saxutils import escape
+    urls = [f"{_PUBLIC_URL}/", f"{_PUBLIC_URL}/changelog"]
+    for a in catalogue.list_albums(include_drafts=False):
+        urls.append(f"{_PUBLIC_URL}/album/{quote(a['slug'])}")
+    body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            + "".join(f"  <url><loc>{escape(u)}</loc></url>\n" for u in urls)
+            + "</urlset>\n")
+    return Response(body, media_type="application/xml")
 
 
 # --- Routes publiques (vitrine) -------------------------------------------
