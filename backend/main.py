@@ -95,7 +95,16 @@ DERIVED_LABELS = {"audio", "vidéo", "video", "audio + vidéo", "audio + video"}
 BASE = Path(__file__).resolve().parent.parent
 FRONTEND = BASE / "frontend"
 
-app = FastAPI(title="live2mp3", docs_url="/api/docs")
+# Swagger / ReDoc / schéma OpenAPI : cartographie complète de l'API, inutile au
+# public. Coupés en prod (FastAPI exposait aussi /redoc et /openapi.json par
+# défaut) ; conservés en preprod, entièrement derrière Authentik.
+# L2M_API_DOCS=1 les rétablit ponctuellement.
+_API_DOCS = (os.environ.get("APP_ENV", "prod") != "prod"
+             or os.environ.get("L2M_API_DOCS") == "1")
+app = FastAPI(title="live2mp3",
+              docs_url="/api/docs" if _API_DOCS else None,
+              redoc_url=None,
+              openapi_url="/api/openapi.json" if _API_DOCS else None)
 # Ignore les en-têtes X-authentik-* qui ne viennent pas du proxy (cf. auth.py).
 app.add_middleware(ProxyHeaderGuard)
 
