@@ -365,3 +365,28 @@ def test_avatar_png_accepte_et_reencode(client):
     got = c.get("/avatar/alice")
     assert got.headers["content-type"] == "image/webp"
     assert Image.open(io.BytesIO(got.content)).size == (512, 512)
+
+
+# --- 11. import_drive : commandes SSH distantes correctement quotées --------
+def test_import_drive_quote_le_shell_distant(monkeypatch):
+    import shlex
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import import_drive
+    seen = []
+
+    class _R:
+        returncode = 0
+    monkeypatch.setattr(import_drive.subprocess, "run",
+                        lambda cmd, **kw: seen.append(cmd) or _R())
+    evil = "/data/Don't $(touch pwn).mp3"
+    import_drive.drive_download_to_ct110("id", evil, "tok")
+    import_drive.ssh_mkdir(evil)
+    import_drive.ssh_write("x", evil)
+    for cmd in seen:
+        remote = cmd[-1]
+        # Le shell distant doit retrouver le chemin intact, en un seul mot.
+        assert evil in shlex.split(remote), remote
+    assert import_drive.drive_basename("../a/b.mp3") == ".._a_b.mp3"
+    assert import_drive.drive_basename("..") == "_"
