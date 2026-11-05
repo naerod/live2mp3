@@ -647,7 +647,7 @@ function updateBulkBar(){
 function bulkDownload(kind){
   const t=T[L()];
   if(!picked.size)return;
-  if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  if(!meDisplay().can_download){selToast(t.sel_login,true);return;}
   // Même plafond que le serveur (BULK_MAX_ALBUMS).
   if(picked.size>50){selToast(t.sel_too_many,true);return;}
   // Téléchargement natif du navigateur : lien GET direct (le navigateur streame

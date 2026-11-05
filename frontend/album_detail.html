@@ -699,7 +699,7 @@ function renderAlbum(d){
   const tcMap={};
   for(const tc of(d.track_covers||[]))tcMap[tc.track_n]=tc;
   const set=(d.tracks||[]).map(tr=>{
-    const dl=(ME.authenticated&&tr.dl)
+    const dl=(ME.can_download&&tr.dl)
       ?`<a href="/download/${slug}/track/${tr.n}" title="${t('dltrack')}"><span class="material-symbols-outlined">download</span></a>`:'';
     if(d.per_track_covers){
       const tc=tcMap[tr.n];
@@ -714,7 +714,7 @@ function renderAlbum(d){
   }).join('');
 
   let dlHtml='';
-  if(ME.authenticated){
+  if(ME.can_download){
     let links='';
     if(d.has_mp3)links+=`<a class="primary" href="/download/${slug}/mp3"><span class="material-symbols-outlined">library_music</span> ${t('full')}</a>`;
     if(d.has_mp4)links+=`<a class="icon-btn" href="/download/${slug}/mp4"><span class="material-symbols-outlined">movie</span> MP4</a>`;
@@ -939,7 +939,7 @@ function renderCarousel(){
   const s=curSlide(), c=curCover(), multi=SLIDES.length>1;
   const kind=s?s.kind:'cover';
 
-  const uploadOverlay=ME.authenticated
+  const uploadOverlay=ME.can_download
     ?`<div class="cr-upload-overlay" id="cr-add" title="${t('cv_add')}"><span class="material-symbols-outlined">add_photo_alternate</span><span>${t('cv_add')}</span></div>`
     :'';
 
@@ -971,7 +971,7 @@ function renderCarousel(){
   if(next)next.onclick=()=>go(1);
   col.querySelectorAll('.cr-dot').forEach(d=>d.onclick=()=>{IDX=+d.dataset.i;renderCarousel();});
   const add=document.getElementById('cr-add');
-  if(add&&ME.authenticated)add.onclick=e=>{e.stopPropagation();openUpload();};
+  if(add&&ME.can_download)add.onclick=e=>{e.stopPropagation();openUpload();};
 }
 
 function go(step){

@@ -74,6 +74,19 @@ def require_user(
     raise HTTPException(403, "accès téléchargement requis (live2mp3-user)")
 
 
+def require_login(
+    x_authentik_username: str | None = Header(default=None),
+    x_authentik_groups: str | None = Header(default=None),
+) -> dict:
+    """Tout compte Authentik connecté, sans groupe requis : favoris,
+    commentaires, profil, suivis, notifications. Un nouvel inscrit (aucun
+    groupe live2mp3) n'est plus refusé sur ces actions sociales ; le
+    téléchargement reste réservé à `require_user` (groupe live2mp3-user)."""
+    if not x_authentik_username:
+        raise HTTPException(401, "authentification requise")
+    return {"username": x_authentik_username, "groups": _groups(x_authentik_groups)}
+
+
 def require_gestionnaire(
     x_authentik_username: str | None = Header(default=None),
     x_authentik_groups: str | None = Header(default=None),
@@ -112,9 +125,11 @@ def roles(
     is_gest = _is_gestionnaire(groups)
     is_user = is_gest or GROUP_USER in groups
     return {
-        "authenticated": bool(x_authentik_username) and is_user,
+        # Connecté = tout compte Authentik ; télécharger = groupe live2mp3-user.
+        "authenticated": bool(x_authentik_username),
         "username": x_authentik_username,
         "is_user": is_user,
+        "can_download": bool(x_authentik_username) and is_user,
         "is_gestionnaire": is_gest,
         "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
         "is_superadmin": is_super,     # superuser Authentik global
