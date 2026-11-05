@@ -48,6 +48,22 @@ def _run_ytdlp(cmd: list[str], progress: ProgressCb | None) -> None:
         raise RuntimeError("yt-dlp a échoué :\n" + "\n".join(tail[-8:]))
 
 
+_HTTP_URL = re.compile(r"^https?://[^\s]+$", re.IGNORECASE)
+
+
+def ensure_http_url(url: str) -> str:
+    """Garde-fou au plus près de la commande externe : seule une URL http(s)
+    sans espace atteint yt-dlp (ni option « -… », ni file://, ni autre schéma).
+
+    Les routes valident déjà, mais certaines URL ne viennent pas de l'utilisateur
+    (MP4 extrait d'une page mytaratata, `webpage_url` renvoyée par une sonde,
+    manifest sur disque) : on revalide donc ici, à chaque appel."""
+    u = (url or "").strip()
+    if not _HTTP_URL.match(u):
+        raise ValueError("URL invalide (http/https attendu)")
+    return u
+
+
 def _base_cmd(cookies: str | None) -> list[str]:
     # NB : l'URL est toujours passée après « -- » par les appelants : une
     # « URL » commençant par « - » (ex. --exec=…) serait sinon lue comme une
@@ -66,6 +82,7 @@ def _base_cmd(cookies: str | None) -> list[str]:
 
 def download_master(url: str, out_mkv: Path, cookies: str | None = None,
                     progress: ProgressCb | None = None) -> Path:
+    url = ensure_http_url(url)
     out_mkv.parent.mkdir(parents=True, exist_ok=True)
     cmd = _base_cmd(cookies) + ["-f", "bv*+ba/best",
                                 "--merge-output-format", "mkv",
@@ -83,6 +100,7 @@ def download_audio(url: str, source_dir: Path, cookies: str | None = None,
     `stem` : base du nom de sortie — distincte par clip en mode multi-liens
     pour éviter que les téléchargements successifs ne s'écrasent.
     """
+    url = ensure_http_url(url)
     source_dir.mkdir(parents=True, exist_ok=True)
     pattern = source_dir / f"{stem}.%(ext)s"
     cmd = _base_cmd(cookies) + ["-f", "ba/b", "-o", str(pattern), "--", url]
