@@ -30,6 +30,7 @@ from .auth import (
     GROUP_USER,
     SUPERUSER_GROUPS,
     current_identity,
+    is_gestionnaire_identity,
     require_admin,
     require_user,
 )
@@ -57,7 +58,8 @@ def _now() -> str:
 
 
 def _is_moderator(groups: set[str]) -> bool:
-    return bool(groups & SUPERUSER_GROUPS) or GROUP_GESTIONNAIRE in groups
+    # Inclut l'admin applicatif (`live2mp3-admin`), oublié auparavant.
+    return is_gestionnaire_identity({"groups": groups})
 
 
 _ROLE_RANK = {"": 0, "user": 1, "gestionnaire": 2, "admin": 3}
@@ -129,12 +131,7 @@ def _album_visible(slug: str, identity: dict | None) -> bool:
         published = True
     if published:
         return True
-    from .auth import GROUP_GESTIONNAIRE, SUPERUSER_GROUPS
-    identity = identity or {}
-    if identity.get("is_gestionnaire"):
-        return True
-    groups = set(identity.get("groups") or [])
-    return bool(groups & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+    return is_gestionnaire_identity(identity)
 
 
 def _catalogue_map(include_drafts: bool = False) -> dict[str, dict]:
