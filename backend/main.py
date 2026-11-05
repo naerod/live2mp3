@@ -225,11 +225,25 @@ class AlbumIn(BaseModel):
         return v
 
 
+def _check_http_url(v: str) -> str:
+    """URL source transmise à yt-dlp : http(s) uniquement (ni option, ni
+    file://, ni autre schéma)."""
+    v = (v or "").strip()
+    if v and not re.match(r"^https?://[^\s]+$", v, re.IGNORECASE):
+        raise ValueError("URL invalide (http/https attendu)")
+    return v
+
+
 class ClipIn(BaseModel):
     url: str
     title: str
     artist: str | None = None
     duration: float | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _url_ok(cls, v: str) -> str:
+        return _check_http_url(v)
 
 
 class JobIn(BaseModel):
@@ -245,6 +259,11 @@ class JobIn(BaseModel):
     # Mode multi-liens : chaque clip devient une piste, sources concaténées
     # en un master unique à la préparation. Prime sur source_url/tracks.
     clips: list[ClipIn] = []
+
+    @field_validator("source_url")
+    @classmethod
+    def _source_ok(cls, v: str) -> str:
+        return _check_http_url(v)
 
 
 class SetlistTrackIn(BaseModel):

@@ -103,7 +103,8 @@ def probe_url(url: str) -> dict:
     cookies = os.environ.get("YTDLP_COOKIES")
     if cookies:
         cmd += ["--cookies", cookies]
-    cmd.append(url)
+    # « -- » : fin des options, l'URL ne peut pas être lue comme une option.
+    cmd += ["--", url]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               timeout=PROBE_TIMEOUT)
