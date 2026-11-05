@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, Response
 
 from mutagen.id3 import ID3
 from .albumfiles import MIME_EXT, _file_track_n
-from .auth import current_identity, require_gestionnaire, require_user
+from .auth import current_identity, require_gestionnaire, require_member, require_user
 from . import db as _db
 from .db import _APP_ENV as APP_ENV, get_conn
 from .manifest import PROJECTS_DIR, Manifest
@@ -625,7 +625,7 @@ async def upload_cover(slug: str,
                        cover: UploadFile = File(...),
                        traycard: UploadFile | None = File(default=None),
                        caption: str = Form(default=""),
-                       identity: dict = Depends(require_user)) -> dict:
+                       identity: dict = Depends(require_member)) -> dict:
     """Import d'une proposition : cover obligatoire, tray card optionnelle."""
     if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
@@ -684,7 +684,7 @@ def list_images(slug: str, kind: str,
 async def upload_image(slug: str, kind: str,
                        cover: UploadFile = File(...),
                        caption: str = Form(default=""),
-                       identity: dict = Depends(require_user)) -> dict:
+                       identity: dict = Depends(require_member)) -> dict:
     """Import d'un visuel Jellyfin (bannière/poster/miniature) — sans tray card."""
     _check_image_kind(kind)
     if not _album_visible(slug, identity):
@@ -710,7 +710,7 @@ async def upload_image(slug: str, kind: str,
 
 @router.put("/api/social/covers/{cover_id}/traycard")
 async def set_traycard(cover_id: int, traycard: UploadFile = File(...),
-                       identity: dict = Depends(require_user)) -> dict:
+                       identity: dict = Depends(require_member)) -> dict:
     """Ajoute ou remplace la tray card d'une cover existante.
 
     Pas de route de création de tray card seule : elle n'existe que rattachée.
@@ -742,7 +742,7 @@ async def set_traycard(cover_id: int, traycard: UploadFile = File(...),
 
 
 @router.delete("/api/social/covers/{cover_id}/traycard")
-def delete_traycard(cover_id: int, identity: dict = Depends(require_user)) -> dict:
+def delete_traycard(cover_id: int, identity: dict = Depends(require_member)) -> dict:
     with get_conn() as conn:
         row = _get_cover(conn, cover_id)
         if not _may_edit(row, identity):
@@ -822,7 +822,7 @@ def delete_album_cover_auto(slug: str, identity: dict = Depends(require_gestionn
 
 
 @router.delete("/api/social/covers/{cover_id}")
-def delete_cover(cover_id: int, identity: dict = Depends(require_user)) -> dict:
+def delete_cover(cover_id: int, identity: dict = Depends(require_member)) -> dict:
     """Supprime une cover, sa tray card et ses commentaires (ON DELETE CASCADE)."""
     with get_conn() as conn:
         row = _get_cover(conn, cover_id)
@@ -840,7 +840,7 @@ def delete_cover(cover_id: int, identity: dict = Depends(require_user)) -> dict:
 
 
 @router.post("/api/social/covers/{cover_id}/like")
-def toggle_cover_like(cover_id: int, identity: dict = Depends(require_user)) -> dict:
+def toggle_cover_like(cover_id: int, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = _get_cover(conn, cover_id)

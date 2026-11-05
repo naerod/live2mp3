@@ -499,7 +499,7 @@ const L2M = (function () {
     };
 
     // Le bouton n'a de sens que connecté (visiteurs non concernés par l'import).
-    document.getElementById("import-btn").style.display = meData.authenticated ? "" : "none";
+    document.getElementById("import-btn").style.display = (meData.authenticated && meData.is_user) ? "" : "none";
     document.getElementById("import-btn").onclick = () => {
       // `opts.rights` permet à la vitrine de refléter le mode « Voir en tant que ».
       const r = (opts.rights ? opts.rights() : null) || meData;

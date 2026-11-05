@@ -9,7 +9,7 @@ Modèle de commentaires (style Reddit/Dealabs, aplati à 1 niveau) :
 
 Identité fournie par le forward-auth Authentik (voir `auth.py`). Les lectures
 sont publiques (identité optionnelle pour l'état perso : vote, like) ; les
-écritures exigent une session authentifiée (`require_user`).
+écritures exigent une session authentifiée (`require_member` : tout compte Authentik ; le téléchargement reste `require_user`).
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .auth import (
     current_identity,
     is_gestionnaire_identity,
     require_admin,
-    require_user,
+    require_member,
 )
 from .db import AVATARS_DIR, get_conn
 from .manifest import PROJECTS_DIR
@@ -316,7 +316,7 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
     is_gest = is_admin or GROUP_GESTIONNAIRE in groups
     is_user = is_gest or GROUP_USER in groups
     return {
-        "authenticated": bool(username) and is_user,
+        "authenticated": bool(username),
         "username": username,
         "display_name": row["display_name"],
         "bio": row["bio"],
@@ -326,7 +326,8 @@ def social_me(identity: dict = Depends(current_identity)) -> dict:
         "is_moderator": _is_moderator(groups),
         # Droits (mêmes champs que /api/me) : permet au header de n'appeler que
         # cet endpoint, supprimant un aller-retour par navigation.
-        "is_user": is_user, "is_gestionnaire": is_gest,
+        "is_user": is_user, "can_download": is_user,
+        "is_gestionnaire": is_gest,
         "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
         "is_superadmin": is_super,     # superuser Authentik global
         "role": role,
@@ -675,7 +676,7 @@ def _resolve_choice(kind: str, new_id: str, row: sqlite3.Row) -> tuple[str, str]
 
 
 @router.put("/api/social/profile")
-def update_profile(payload: ProfileIn, identity: dict = Depends(require_user)) -> dict:
+def update_profile(payload: ProfileIn, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = _ensure_profile(conn, username)
@@ -718,7 +719,7 @@ def suggest_world_cities(q: str = "", identity: dict = Depends(current_identity)
 
 @router.post("/api/social/profile/avatar")
 async def upload_avatar(file: UploadFile = File(...),
-                        identity: dict = Depends(require_user)) -> dict:
+                        identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     raw = await file.read()
     if len(raw) > AVATAR_MAX_BYTES:
@@ -752,7 +753,7 @@ async def upload_avatar(file: UploadFile = File(...),
 
 
 @router.delete("/api/social/profile/avatar")
-def delete_avatar(identity: dict = Depends(require_user)) -> dict:
+def delete_avatar(identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     _avatar_path(username).unlink(missing_ok=True)
     with get_conn() as conn:
@@ -824,7 +825,7 @@ def album_social(slug: str, identity: dict = Depends(current_identity)) -> dict:
 
 
 @router.post("/api/social/albums/{slug}/like")
-def toggle_like(slug: str, identity: dict = Depends(require_user)) -> dict:
+def toggle_like(slug: str, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
@@ -955,7 +956,7 @@ def list_replies(comment_id: int, offset: int = 0, limit: int = 20,
 
 @router.post("/api/social/albums/{slug}/comments")
 def create_comment(slug: str, payload: CommentIn,
-                   identity: dict = Depends(require_user)) -> dict:
+                   identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     if not _album_visible(slug, identity):
         raise HTTPException(404, "album introuvable")
@@ -1011,7 +1012,7 @@ def create_comment(slug: str, payload: CommentIn,
 
 @router.patch("/api/social/comments/{comment_id}")
 def edit_comment(comment_id: int, payload: CommentEditIn,
-                 identity: dict = Depends(require_user)) -> dict:
+                 identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     body = payload.body.strip()
     if not body:
@@ -1033,7 +1034,7 @@ def edit_comment(comment_id: int, payload: CommentEditIn,
 
 
 @router.delete("/api/social/comments/{comment_id}")
-def delete_comment(comment_id: int, identity: dict = Depends(require_user)) -> dict:
+def delete_comment(comment_id: int, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM comments WHERE id=?", (comment_id,)).fetchone()
@@ -1050,7 +1051,7 @@ def delete_comment(comment_id: int, identity: dict = Depends(require_user)) -> d
 
 
 @router.post("/api/social/comments/{comment_id}/like")
-def like_comment(comment_id: int, identity: dict = Depends(require_user)) -> dict:
+def like_comment(comment_id: int, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     with get_conn() as conn:
         row = conn.execute(

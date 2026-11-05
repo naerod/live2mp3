@@ -430,6 +430,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} mis à jour.`,
       sel_pub_noop:"Rien à changer (déjà dans cet état).",
       sel_login:"Connectez-vous pour télécharger.",
+      sel_nodl:"Le téléchargement est réservé aux membres autorisés.",
       sel_too_many:"50 albums maximum par téléchargement.",
       sel_err:"Échec de l'action groupée."},
   en:{empty:"No album yet.",noresult:"No result.",titres:"tracks",
@@ -476,6 +477,7 @@ const T={
       sel_pub_done:n=>`${n} album${n>1?"s":""} updated.`,
       sel_pub_noop:"Nothing to change (already in that state).",
       sel_login:"Log in to download.",
+      sel_nodl:"Downloading is restricted to authorised members.",
       sel_too_many:"50 albums max per download.",
       sel_err:"Bulk action failed."}
 };
@@ -497,7 +499,7 @@ function applyViewToHeader(){
   const md=meDisplay();
   const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
   // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
-  show("import-btn",md.authenticated);
+  show("import-btn",md.authenticated&&md.is_user);
   show("usermenu",md.authenticated);
   // La cloche de notifications n'existe que pour un compte connecté : en vue
   // visiteur simulée, elle doit disparaître (et se refermer si elle était ouverte).
@@ -648,6 +650,8 @@ function bulkDownload(kind){
   const t=T[L()];
   if(!picked.size)return;
   if(!meDisplay().authenticated){selToast(t.sel_login,true);return;}
+  // Connecté ≠ autorisé à télécharger (groupe live2mp3-user).
+  if(!meDisplay().is_user){selToast(t.sel_nodl,true);return;}
   // Même plafond que le serveur (BULK_MAX_ALBUMS).
   if(picked.size>50){selToast(t.sel_too_many,true);return;}
   // Téléchargement natif du navigateur : lien GET direct (le navigateur streame

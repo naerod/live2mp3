@@ -5,7 +5,9 @@ puis transmet à l'app les en-têtes `X-authentik-username` / `X-authentik-group
 (valeurs issues de la sous-requête d'auth, donc non spoofables par le client).
 
 Rôles (groupes Authentik) :
-- `live2mp3-user`         → téléchargement
+- tout compte Authentik   → « connecté » : favoris, commentaires, suivis,
+                            profil, notifications (`require_member`)
+- `live2mp3-user`         → téléchargement (`require_user`)
 - `live2mp3-gestionnaire` → outil complet + IA
 - superuser / `authentik Admins` → tout
 """
@@ -62,6 +64,19 @@ def is_gestionnaire_identity(identity: dict | None) -> bool:
     return _is_gestionnaire(set(identity.get("groups") or ()))
 
 
+def require_member(
+    x_authentik_username: str | None = Header(default=None),
+    x_authentik_groups: str | None = Header(default=None),
+) -> dict:
+    """Utilisateur connecté, quel que soit son groupe : un nouvel inscrit
+    Authentik peut aimer, commenter, suivre et gérer son profil, sans pour
+    autant avoir le droit de télécharger."""
+    if not x_authentik_username:
+        raise HTTPException(401, "authentification requise")
+    return {"username": x_authentik_username,
+            "groups": _groups(x_authentik_groups)}
+
+
 def require_user(
     x_authentik_username: str | None = Header(default=None),
     x_authentik_groups: str | None = Header(default=None),
@@ -112,9 +127,12 @@ def roles(
     is_gest = _is_gestionnaire(groups)
     is_user = is_gest or GROUP_USER in groups
     return {
-        "authenticated": bool(x_authentik_username) and is_user,
+        # « connecté » = tout compte Authentik ; le téléchargement reste porté
+        # par `is_user` / `can_download` (groupe live2mp3-user ou supérieur).
+        "authenticated": bool(x_authentik_username),
         "username": x_authentik_username,
         "is_user": is_user,
+        "can_download": is_user,
         "is_gestionnaire": is_gest,
         "is_admin": is_admin,          # gestion des rôles (super ou admin appli)
         "is_superadmin": is_super,     # superuser Authentik global

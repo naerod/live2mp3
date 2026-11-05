@@ -6,7 +6,7 @@ Modèle façon X/YouTube :
   au moment du suivi et se coupe sans dé-suivre.
 
 Namespacé sous `/api/social/` : sur la prod, seul ce préfixe hérite du
-soft-auth nginx (identité optionnelle en lecture, `require_user` en écriture) —
+soft-auth nginx (identité optionnelle en lecture, `require_member` en écriture) —
 aucune modification nginx nécessaire à la promotion. Les pages HTML d'entités
 (`/artist`, `/festival`, `/venue`) sont servies par `location /` (coquille
 publique), l'état perso venant des appels `/api/social/*`.
@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from . import catalogue, entities, suggest
-from .auth import current_identity, require_user
+from .auth import current_identity, require_member
 from .db import get_conn
 
 router = APIRouter()
@@ -116,7 +116,7 @@ def _follow_state(conn, username: str | None, etype: str, eid: str) -> dict:
 #  SUIVI (écriture)
 # =====================================================================
 @router.post("/api/social/follow")
-def toggle_follow(payload: FollowIn, identity: dict = Depends(require_user)) -> dict:
+def toggle_follow(payload: FollowIn, identity: dict = Depends(require_member)) -> dict:
     username = identity["username"]
     etype = _valid_type(payload.target_type)
     eid = payload.target_id.strip()
@@ -151,7 +151,7 @@ def toggle_follow(payload: FollowIn, identity: dict = Depends(require_user)) -> 
 
 
 @router.patch("/api/social/follow/notify")
-def set_notify(payload: NotifyIn, identity: dict = Depends(require_user)) -> dict:
+def set_notify(payload: NotifyIn, identity: dict = Depends(require_member)) -> dict:
     """La cloche : active/coupe les notifications. Activer implique suivre."""
     username = identity["username"]
     etype = _valid_type(payload.target_type)
