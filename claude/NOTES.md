@@ -1515,3 +1515,49 @@ fait diverger les deux dépôts. Toujours `git push preprod-origin preprod`.
   `PUT /api/albums/{slug}/labels` et `all_labels`/`derived_labels` restent côté API (non supprimés).
 - Test local sans déployer : proxy Python servant `frontend/` depuis le working tree et relayant
   l'API vers le tunnel de la preprod (injection des en-têtes Authentik par port).
+
+## Check-list de mise en prod — durcissement audit 2026-11 (branche claude/audit-tests)
+
+> Rédigée par l'agent d'audit, **rien n'a été exécuté** sur la prod ni sur un `.env`.
+> À dérouler dans l'ordre, en preprod d'abord.
+
+### 1. nginx (CT110) — à vérifier AVANT d'activer quoi que ce soit
+- [ ] Sur **toutes** les `location` (y compris publiques/vitrine en soft-auth), les en-têtes
+      d'identité entrants sont **écrasés**, jamais transmis tels quels :
+      `proxy_set_header X-authentik-username $authentik_username;` (valeur issue
+      d'`auth_request_set`, vide si non connecté) — idem `X-authentik-groups`,
+      `-email`, `-name`, `-uid`. Test : `curl -H 'X-authentik-username: x'
+      -H 'X-authentik-groups: live2mp3-admin' https://<site>/api/me` → `is_admin: false`.
+- [ ] `proxy_set_header X-Forwarded-For $remote_addr;` (ne pas *ajouter* à une chaîne
+      fournie par le client) — le limiteur de débit lit le 1er saut.
+- [ ] Le port 8000 du conteneur n'est **pas** publié sur l'hôte/LAN (`docker compose ps`).
+- [ ] `/api/docs`, `/api/openapi.json` : 404 en prod après déploiement (coupés côté app).
+
+### 2. Variables d'environnement (`.env` prod/preprod — à poser à la main)
+- [ ] `L2M_TRUSTED_PROXIES=<IP/CIDR de nginx>` (ex. le réseau Docker de nginx) —
+      **ajouter aussi le réseau du conteneur showme** : preprod-showme relaie
+      `X-authentik-*` vers `/api/social/*`.
+- [ ] `L2M_PROXY_SECRET=<secret aléatoire>` + côté nginx
+      `proxy_set_header X-L2M-Proxy-Secret <secret>;` (et côté showme s'il relaie).
+      Optionnel si `L2M_TRUSTED_PROXIES` suffit ; les deux se cumulent.
+- [ ] Limites (valeurs par défaut raisonnables, à ajuster) : `L2M_RATE_WRITE=60`,
+      `L2M_RATE_READ=600` (par minute et par client), `L2M_MIN_FREE_MB=2048`.
+      ⚠ Limiteur en mémoire : avec N workers uvicorn, la limite effective est ×N.
+- [ ] `L2M_API_DOCS` : **ne pas** poser en prod.
+- [ ] Vérifier après redéploiement : `/api/me` connecté → `authenticated: true`,
+      `can_download` selon le groupe `live2mp3-user`.
+
+### 3. Versions / build
+- [ ] Rebuild complet (`docker compose build --no-cache`) : images épinglées par digest
+      (debian bookworm-20251020-slim, python 3.11.18-slim-bookworm), audiowaveform 1.10.3
+      (commit vérifié au build), requirements épinglés (numpy 2.4.6 pour Python 3.11).
+- [ ] yt-dlp volontairement non épinglé : vérifier `yt-dlp --version` dans l'image.
+- [ ] Le build Docker n'a **pas** été testé par l'agent (tests lancés hors image).
+
+### 4. Fonctionnel après déploiement
+- [ ] Un compte Authentik **sans** groupe live2mp3 peut liker/commenter, ne voit pas
+      les boutons de téléchargement, reçoit 403 sur `/download/*`.
+- [ ] Profil : pseudo en lecture seule + lien vers le profil central (URL à confirmer :
+      `https://naerod.com/profil` par défaut, surchargeable `window.NAEROD_PROFILE_URL`).
+- [ ] Miniature d'un job : une URL interne (`http://127.0.0.1…`) est ignorée (SSRF).
+- [ ] Promotion prod via `deploy-prod` habituel (merge preprod → main + tag).
