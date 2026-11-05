@@ -225,3 +225,36 @@ def test_bulk_plafonne(client):
     qs = "&".join(f"slugs=s{i}" for i in range(main.BULK_MAX_ALBUMS + 1))
     r = c.get(f"/download/bulk?kind=mp3&{qs}", headers=USER)
     assert r.status_code == 400
+
+
+# --- 7. Import ZIP : décompression bornée ----------------------------------
+def test_zip_bombe_refusee(tmp_path):
+    import zipfile as _zf
+    from fastapi import HTTPException
+    from backend import import_album
+    z = tmp_path / "bomb.zip"
+    with _zf.ZipFile(z, "w", _zf.ZIP_DEFLATED) as f:
+        f.writestr("01 - Song.mp3", b"\0" * (2 * 1024 * 1024))   # ~2 Ko compressé
+    out = tmp_path / "files"
+    out.mkdir()
+    with pytest.raises(HTTPException) as e:
+        import_album._extract_zip(z, out, [], budget=1024 * 1024)
+    assert e.value.status_code == 413
+    # Dans le budget : extraction normale.
+    assert import_album._extract_zip(z, out, [], budget=4 * 1024 * 1024) == 2 * 1024 * 1024
+
+
+def test_zip_trop_de_membres(tmp_path, monkeypatch):
+    import zipfile as _zf
+    from fastapi import HTTPException
+    from backend import import_album
+    monkeypatch.setattr(import_album, "MAX_FILES", 3)
+    z = tmp_path / "many.zip"
+    with _zf.ZipFile(z, "w") as f:
+        for i in range(5):
+            f.writestr(f"{i:02d} - s.mp3", b"x")
+    out = tmp_path / "files"
+    out.mkdir()
+    with pytest.raises(HTTPException) as e:
+        import_album._extract_zip(z, out, [])
+    assert e.value.status_code == 413
