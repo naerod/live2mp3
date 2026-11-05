@@ -51,6 +51,17 @@ def _is_gestionnaire(groups: set[str]) -> bool:
     return _is_admin(groups) or GROUP_GESTIONNAIRE in groups
 
 
+def is_gestionnaire_identity(identity: dict | None) -> bool:
+    """Vrai pour gestionnaire / admin applicatif / superuser, quelle que soit la
+    dépendance d'origine (`roles` pose `is_gestionnaire`, `require_*` et
+    `current_identity` ne posent que `groups`). Point unique de vérité : les
+    copies locales oubliaient l'admin applicatif (`live2mp3-admin`)."""
+    identity = identity or {}
+    if identity.get("is_gestionnaire"):
+        return True
+    return _is_gestionnaire(set(identity.get("groups") or ()))
+
+
 def require_user(
     x_authentik_username: str | None = Header(default=None),
     x_authentik_groups: str | None = Header(default=None),

@@ -44,6 +44,7 @@ from .auth import (
     GROUP_APP_ADMIN,
     GROUP_GESTIONNAIRE,
     SUPERUSER_GROUPS,
+    is_gestionnaire_identity,
     require_gestionnaire,
     require_user,
     roles,
@@ -392,10 +393,7 @@ def _track_file(project_dir: Path, n: int, title: str = "") -> Path | None:
 
 def _is_gestionnaire_identity(identity: dict) -> bool:
     """Vrai pour un gestionnaire/admin, quel que soit le Depends d'origine."""
-    if identity.get("is_gestionnaire"):
-        return True
-    groups = identity.get("groups") or set()
-    return bool(set(groups) & ({GROUP_GESTIONNAIRE} | SUPERUSER_GROUPS))
+    return is_gestionnaire_identity(identity)
 
 
 def _ensure_album_visible(slug: str, identity: dict) -> Manifest:
