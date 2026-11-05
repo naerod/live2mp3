@@ -71,3 +71,27 @@ def test_admin_applicatif_modere_les_commentaires(client):
     assert c.delete(f"/api/social/comments/{cid}", headers=USER2).status_code == 403
     r = c.delete(f"/api/social/comments/{cid}", headers=APP_ADMIN)
     assert r.status_code == 200 and r.json()["deleted"] is True
+
+
+# --- 2. Album né en preprod : invisible en prod, même par URL directe ------
+def _tag_preprod(root, slug):
+    from backend.manifest import Manifest
+    m = Manifest.load(root / slug / "manifest.yaml")
+    m.data["origin_env"] = "preprod"
+    m.save(touch=False)
+
+
+def test_album_preprod_introuvable_en_prod_par_url(client, monkeypatch):
+    from backend import catalogue
+    c, root = client
+    slug = _make_album(c)
+    _tag_preprod(root, slug)
+    monkeypatch.setattr(catalogue, "APP_ENV", "prod")
+    for url in (f"/api/catalogue/{slug}", f"/api/social/albums/{slug}",
+                f"/api/social/albums/{slug}/comments"):
+        assert c.get(url).status_code == 404, url
+        assert c.get(url, headers=GEST).status_code == 404, url
+    assert c.get(f"/download/{slug}/mp3", headers=USER).status_code == 404
+    # La preprod, elle, le voit.
+    monkeypatch.setattr(catalogue, "APP_ENV", "preprod")
+    assert c.get(f"/api/catalogue/{slug}").status_code == 200
