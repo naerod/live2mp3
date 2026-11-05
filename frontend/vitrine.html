@@ -495,8 +495,8 @@ let VIEW_AS="normal";
 const VIEW_PROFILES={
   normal:()=>ME,
   visitor:()=>({authenticated:false,is_gestionnaire:false,is_admin:false}),
-  user:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:false,is_admin:false}),
-  gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,is_gestionnaire:true,is_admin:false})
+  user:()=>({authenticated:true,username:ME.username,is_user:true,can_download:true,is_gestionnaire:false,is_admin:false}),
+  gestionnaire:()=>({authenticated:true,username:ME.username,is_user:true,can_download:true,is_gestionnaire:true,is_admin:false})
 };
 function meDisplay(){return VIEW_PROFILES[VIEW_AS]();}
 // Le header injecté (L2M.initHeader) doit refléter la vue simulée :
@@ -505,7 +505,7 @@ function applyViewToHeader(){
   const md=meDisplay();
   const show=(id,on)=>{const el=document.getElementById(id);if(el)el.style.display=on?"":"none";};
   // Le bouton Importer n'a de sens que connecté : masqué pour les visiteurs.
-  show("import-btn",md.authenticated);
+  show("import-btn",!!md.can_download);
   show("usermenu",md.authenticated);
   // La cloche de notifications n'existe que pour un compte connecté : en vue
   // visiteur simulée, elle doit disparaître (et se refermer si elle était ouverte).

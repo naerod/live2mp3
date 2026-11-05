@@ -379,9 +379,9 @@ const L2M = (function () {
     header.innerHTML = `
       <a class="brand" href="/"><img class="brand-icon" src="/static/favicon.svg" alt="" width="24" height="24"> live2mp3</a>
       <div class="tools">
-        <button id="import-btn" class="icon-btn"><span class="material-symbols-outlined">library_add</span><span data-hk="import"></span></button>
+        <button id="import-btn" class="icon-btn" data-hk-aria="import"><span class="material-symbols-outlined" aria-hidden="true">library_add</span><span data-hk="import"></span></button>
         <button id="lang" class="icon-btn"><span class="material-symbols-outlined">translate</span><span id="lang-label"></span></button>
-        <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined"></span></button>
+        <button id="theme" class="icon-btn icon-only"><span class="material-symbols-outlined" aria-hidden="true"></span></button>
         <a id="login" class="icon-btn" style="display:none"><span class="material-symbols-outlined">login</span><span data-hk="login"></span></a>
         <div id="notif-bell" class="notif-bell" style="display:none"></div>
         <div id="usermenu" class="usermenu" style="display:none"></div>
@@ -470,9 +470,16 @@ const L2M = (function () {
       const lang = getLang();
       const tx = HT[lang] || HT.fr;
       header.querySelectorAll("[data-hk]").forEach(el => { el.textContent = tx[el.dataset.hk] || ""; });
+      // Le libellé texte est masqué en mobile : nom accessible explicite.
+      header.querySelectorAll("[data-hk-aria]").forEach(el => el.setAttribute("aria-label", tx[el.dataset.hkAria] || ""));
       document.getElementById("lang-label").textContent = lang.toUpperCase();
       const themeIcon = document.querySelector("#theme .material-symbols-outlined");
       themeIcon.textContent = getTheme() === "dark" ? "dark_mode" : "light_mode";
+      // Nom accessible = action proposée (l'icône seule est lue « dark_mode »).
+      const themeLabel = getTheme() === "dark" ? t("theme_light") : t("theme_dark");
+      const themeBtn = document.getElementById("theme");
+      themeBtn.setAttribute("aria-label", themeLabel);
+      themeBtn.title = themeLabel;
     }
 
     document.getElementById("theme").onclick = () => {
@@ -495,11 +502,12 @@ const L2M = (function () {
     try { sm = await me(); } catch (e) {}
     const meData = {
       authenticated: !!sm.authenticated, username: sm.username,
-      is_user: !!sm.is_user, is_gestionnaire: !!sm.is_gestionnaire, is_admin: !!sm.is_admin,
+      can_download: !!sm.can_download, is_user: !!sm.is_user, is_gestionnaire: !!sm.is_gestionnaire, is_admin: !!sm.is_admin,
     };
 
     // Le bouton n'a de sens que connecté (visiteurs non concernés par l'import).
-    document.getElementById("import-btn").style.display = meData.authenticated ? "" : "none";
+    // Proposer une pochette exige le groupe live2mp3-user (pas un simple compte).
+    document.getElementById("import-btn").style.display = meData.can_download ? "" : "none";
     document.getElementById("import-btn").onclick = () => {
       // `opts.rights` permet à la vitrine de refléter le mode « Voir en tant que ».
       const r = (opts.rights ? opts.rights() : null) || meData;
