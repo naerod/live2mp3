@@ -149,8 +149,36 @@ app.include_router(linktool.router)
 
 
 @app.on_event("startup")
+def purge_stale_tempfiles(max_age_s: float = 6 * 3600, root: str | None = None) -> int:
+    """Supprime les archives temporaires orphelines (téléchargement interrompu :
+    la tâche de fond qui les efface ne s'exécute pas toujours) de plus de
+    `max_age_s`. Ne touche qu'aux préfixes créés par l'application."""
+    root = Path(root or tempfile.gettempdir())
+    now = time.time()
+    removed = 0
+    for pat in ("l2m_art_*.zip", "l2m_bulk_*.zip", "bundle-*"):
+        for p in root.glob(pat):
+            try:
+                if now - p.stat().st_mtime < max_age_s:
+                    continue
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    p.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 def _startup() -> None:
     init_db()
+    try:
+        n = purge_stale_tempfiles()
+        if n:
+            log.info("%d fichier(s) temporaire(s) orphelin(s) supprimé(s)", n)
+    except Exception as exc:
+        log.warning("purge des temporaires impossible : %s", exc)
     # Marque les posts déjà publiés comme « annoncés » (pas de fan-out rétroactif).
     try:
         notifications.ensure_seeded()
@@ -904,6 +932,7 @@ def download_bulk(kind: str = "mp3",
     if not entries:
         raise HTTPException(404, f"aucun album téléchargeable ({kind})")
 
+    purge_stale_tempfiles()
     fd, tmp = tempfile.mkstemp(prefix="l2m_bulk_", suffix=".zip")
     os.close(fd)
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
